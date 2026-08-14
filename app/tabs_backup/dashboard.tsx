@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import GradientButton from '../components/ui/GradientButton';
-import { Colors } from '../constants/colors';
+import GradientButton from '../../components/ui/GradientButton';
+import { Colors } from '../../constants/colors';
 
 export default function Index() {
   return (
@@ -33,7 +33,7 @@ export default function Index() {
         {/* Hero */}
         <View style={styles.heroCard}>
           <Image
-            source={require('../assets/illustrations/opsone-reference.png')}
+            source={require('../../assets/illustrations/opsone-reference.png')}
             style={styles.heroImage}
             resizeMode='cover'
           />
