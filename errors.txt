@@ -1,0 +1,12 @@
+app/(tabs)/dashboard.tsx(1,1): error TS1127: Invalid character.
+app/(tabs)/dashboard.tsx(1,2): error TS1128: Declaration or statement expected.
+app/(tabs)/dashboard.tsx(1,9): error TS1434: Unexpected keyword or identifier.
+app/(tabs)/dashboard.tsx(1,47): error TS1351: An identifier or keyword cannot immediately follow a numeric literal.
+app/(tabs)/dashboard.tsx(1,56): error TS1351: An identifier or keyword cannot immediately follow a numeric literal.
+app/(tabs)/dashboard.tsx(1,63): error TS1124: Digit expected.
+app/(tabs)/dashboard.tsx(1,76): error TS1351: An identifier or keyword cannot immediately follow a numeric literal.
+app/(tabs)/dashboard.tsx(1,82): error TS1127: Invalid character.
+app/(tabs)/dashboard.tsx(1,83): error TS1127: Invalid character.
+app/(tabs)/dashboard.tsx(1,84): error TS1128: Declaration or statement expected.
+app/(tabs)/dashboard.tsx(1,90): error TS1127: Invalid character.
+app/(tabs)/dashboard.tsx(62,41): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?

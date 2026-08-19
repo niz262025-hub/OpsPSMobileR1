@@ -1,122 +1,339 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
-  ScrollView,
-  StyleSheet,
   Text,
-  TouchableOpacity,
-  TextInput,
-  SafeAreaView,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Send, PackageCheck } from 'lucide-react-native';
-import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../theme';
-import { StatusBadge } from '../../components/StatusBadge';
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  doc,
+  updateDoc,
+} from 'firebase/firestore';
+import { db } from '../../firebase';
 
-export default function ShippingGenerateScreen() {
-  const [recipient, setRecipient] = useState('');
-  const [weight, setWeight] = useState('');
-  const [length, setLength] = useState('');
-  const [width, setWidth] = useState('');
-  const [height, setHeight] = useState('');
-  const [courier, setCourier] = useState<string>('');
-  const [shippingLabel, setShippingLabel] = useState<{ trackingNumber: string; awbNumber: string; status: string } | null>(null);
+type Order = {
+  id: string;
+  customerName?: string;
+  customerContact?: string;
+  customerAddress?: string;
+  productName?: string;
+  quantity?: number;
+  totalAmount?: number;
+  orderStatus?: string;
+  courier?: string;
+  trackingNumber?: string;
+};
 
-  const couriers = ['J&T Express', 'Pos Laju', 'Skynet', 'Lazada Logistics', 'GD Express'];
+const couriers = [
+  'J&T Express',
+  'Ninja Van',
+  'PosLaju',
+  'DHL eCommerce',
+];
 
-  const handleGenerateLabel = () => {
-    if (!recipient || !weight || !courier) {
-      alert('Please fill in all required fields');
+export default function GenerateShipment() {
+  const [packedOrders, setPackedOrders] =
+    useState<Order[]>([]);
+
+  const [selectedOrder, setSelectedOrder] =
+    useState('');
+
+  const [courier, setCourier] =
+    useState(couriers[0]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [generating, setGenerating] =
+    useState(false);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'orders'),
+      where(
+        'orderStatus',
+        '==',
+        'Packed'
+      )
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data: Order[] =
+          snapshot.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<Order, 'id'>),
+          }));
+
+        setPackedOrders(data);
+
+        if (
+          !selectedOrder &&
+          data.length > 0
+        ) {
+          setSelectedOrder(data[0].id);
+        }
+
+        setLoading(false);
+      },
+      (error) => {
+        console.error(
+          'Packed orders error:',
+          error
+        );
+
+        setLoading(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [selectedOrder]);
+
+  const handleGenerate = async () => {
+    if (!selectedOrder) {
+      alert(
+        'Please select a packed order.'
+      );
       return;
     }
 
-    const trackingNum = `TRK${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const awbNum = `AWB${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    try {
+      setGenerating(true);
 
-    setShippingLabel({
-      trackingNumber: trackingNum,
-      awbNumber: awbNum,
-      status: 'Generated',
-    });
+      const tracking =
+        `EP${Math.floor(
+          100000000 +
+          Math.random() * 900000000
+        )}MY`;
+
+      await updateDoc(
+        doc(
+          db,
+          'orders',
+          selectedOrder
+        ),
+        {
+          orderStatus:
+            'Pending to Ship',
+
+          courier,
+
+          trackingNumber:
+            tracking,
+        }
+      );
+
+      alert(
+        `Shipment Generated!\n\n` +
+        `Courier: ${courier}\n` +
+        `Tracking: ${tracking}`
+      );
+
+      router.replace(
+        '/pending-to-ship'
+      );
+    } catch (error) {
+      console.error(
+        'Generate shipment error:',
+        error
+      );
+
+      alert(
+        'Failed to generate shipment.'
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.5} />
-        </TouchableOpacity>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerLabel}>Shipping</Text>
-          <Text style={styles.headerTitle}>Generate label</Text>
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loading}>
+          <ActivityIndicator
+            size="large"
+            color="#5B2BD9"
+          />
+
+          <Text style={styles.loadingText}>
+            Loading packed orders...
+          </Text>
         </View>
-        <PackageCheck size={20} color="#FFFFFF" />
-      </View>
+      </SafeAreaView>
+    );
+  }
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-        {!shippingLabel && (
-          <View>
-            <Text style={styles.sectionTitle}>Recipient information</Text>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Recipient name *</Text>
-              <TextInput style={styles.input} placeholder="Enter recipient name" value={recipient} onChangeText={setRecipient} placeholderTextColor={THEME.text.light} />
-            </View>
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <Pressable
+          style={styles.backButton}
+          onPress={() =>
+            router.replace('/(tabs)/orders')
+          }
+        >
+          <Text style={styles.backText}>
+            ← Orders
+          </Text>
+        </Pressable>
 
-            <Text style={styles.sectionTitle}>Parcel details</Text>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Weight (kg) *</Text>
-              <TextInput style={styles.input} placeholder="Enter weight" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-            </View>
+        <Text style={styles.title}>
+          Generate Shipment
+        </Text>
 
-            <Text style={styles.subLabel}>Dimensions (optional)</Text>
-            <View style={styles.dimensionsRow}>
-              <TextInput style={[styles.input, styles.dimensionInput]} placeholder="Length" value={length} onChangeText={setLength} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-              <TextInput style={[styles.input, styles.dimensionInput]} placeholder="Width" value={width} onChangeText={setWidth} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-              <TextInput style={[styles.input, styles.dimensionInput]} placeholder="Height" value={height} onChangeText={setHeight} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-            </View>
+        <Text style={styles.subtitle}>
+          Prepare packed orders for shipping
+        </Text>
 
-            <Text style={styles.sectionTitle}>Courier</Text>
-            <View style={styles.courierGrid}>
-              {couriers.map((item) => (
-                <TouchableOpacity key={item} style={[styles.courierOption, courier === item && styles.courierOptionActive]} onPress={() => setCourier(item)}>
-                  <Text style={[styles.courierText, courier === item && styles.courierTextActive]}>{item}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+        {packedOrders.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>
+              📦
+            </Text>
 
-            <TouchableOpacity style={styles.generateButton} onPress={handleGenerateLabel}>
-              <Send size={18} color="#FFFFFF" strokeWidth={2} />
-              <Text style={styles.generateButtonText}>Generate label</Text>
-            </TouchableOpacity>
+            <Text style={styles.emptyTitle}>
+              No packed orders
+            </Text>
+
+            <Text style={styles.emptyText}>
+              Orders marked as Packed will
+              appear here.
+            </Text>
           </View>
-        )}
+        ) : (
+          <>
+            <Text style={styles.sectionTitle}>
+              Select Packed Order
+            </Text>
 
-        {shippingLabel && (
-          <View>
-            <View style={styles.successCard}>
-              <StatusBadge status="shipped" label="Label generated" />
-              <Text style={styles.successText}>Shipping label successfully generated.</Text>
-            </View>
+            {packedOrders.map((order) => (
+              <Pressable
+                key={order.id}
+                style={[
+                  styles.card,
+                  selectedOrder ===
+                    order.id &&
+                    styles.cardActive,
+                ]}
+                onPress={() =>
+                  setSelectedOrder(
+                    order.id
+                  )
+                }
+              >
+                <View style={styles.row}>
+                  <Text
+                    style={styles.orderId}
+                  >
+                    #{order.id}
+                  </Text>
 
-            <View style={styles.labelDetails}>
-              <View style={styles.detailRow}><Text style={styles.detailLabel}>Recipient</Text><Text style={styles.detailValue}>{recipient}</Text></View>
-              <View style={styles.detailRow}><Text style={styles.detailLabel}>Courier</Text><Text style={styles.detailValue}>{courier}</Text></View>
-              <View style={styles.detailRow}><Text style={styles.detailLabel}>Weight</Text><Text style={styles.detailValue}>{weight} kg</Text></View>
-              {(length || width || height) && <View style={styles.detailRow}><Text style={styles.detailLabel}>Dimensions</Text><Text style={styles.detailValue}>{length}×{width}×{height} cm</Text></View>}
-            </View>
+                  <Text
+                    style={styles.amount}
+                  >
+                    RM{' '}
+                    {Number(
+                      order.totalAmount ||
+                        0
+                    ).toFixed(2)}
+                  </Text>
+                </View>
 
-            <View style={styles.labelBox}>
-              <Text style={styles.labelBoxTitle}>Tracking number</Text>
-              <Text style={styles.trackingNumber}>{shippingLabel.trackingNumber}</Text>
-              <Text style={styles.labelBoxTitle}>AWB number</Text>
-              <Text style={styles.awbNumber}>{shippingLabel.awbNumber}</Text>
-            </View>
+                <Text
+                  style={styles.customer}
+                >
+                  {order.customerName ||
+                    'Customer'}
+                </Text>
 
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.copyButton}><Text style={styles.copyButtonText}>Copy tracking</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.newLabelButton} onPress={() => { setShippingLabel(null); setRecipient(''); setWeight(''); setCourier(''); setLength(''); setWidth(''); setHeight(''); }}><Text style={styles.newLabelButtonText}>Generate another</Text></TouchableOpacity>
-            </View>
-          </View>
+                <Text
+                  style={styles.product}
+                >
+                  {order.productName ||
+                    'Product'}{' '}
+                  × {order.quantity || 0}
+                </Text>
+
+                <Text
+                  style={styles.address}
+                >
+                  {order.customerAddress ||
+                    'No delivery address'}
+                </Text>
+
+                {selectedOrder ===
+                  order.id && (
+                  <Text
+                    style={styles.selectedText}
+                  >
+                    ✓ Selected
+                  </Text>
+                )}
+              </Pressable>
+            ))}
+
+            <Text style={styles.sectionTitle}>
+              Select Courier
+            </Text>
+
+            {couriers.map((item) => (
+              <Pressable
+                key={item}
+                style={[
+                  styles.courierButton,
+                  courier === item &&
+                    styles.courierButtonActive,
+                ]}
+                onPress={() =>
+                  setCourier(item)
+                }
+              >
+                <Text
+                  style={[
+                    styles.courierText,
+                    courier === item &&
+                      styles.courierTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </Pressable>
+            ))}
+
+            <Pressable
+              style={[
+                styles.primaryButton,
+                generating &&
+                  styles.buttonDisabled,
+              ]}
+              onPress={handleGenerate}
+              disabled={generating}
+            >
+              {generating ? (
+                <ActivityIndicator
+                  color="#FFFFFF"
+                />
+              ) : (
+                <Text
+                  style={styles.primaryText}
+                >
+                  Generate EasyParcel Shipment
+                </Text>
+              )}
+            </Pressable>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -124,233 +341,178 @@ export default function ShippingGenerateScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: '#F6F4FB',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: THEME.primary,
-    paddingHorizontal: SPACING['2xl'],
-    paddingVertical: SPACING.lg,
-    paddingTop: SPACING.xl,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
-  headerTextWrap: {
-    flex: 1,
-    marginHorizontal: SPACING.md,
-  },
-  headerLabel: {
-    color: '#EDE9FE',
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1.1,
-  },
-  headerTitle: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: SPACING.xs,
-  },
+
   content: {
+    padding: 24,
+    paddingBottom: 40,
+  },
+
+  loading: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  contentContainer: {
-    paddingHorizontal: SPACING['2xl'],
-    paddingVertical: SPACING.lg,
-    paddingBottom: SPACING['3xl'],
+
+  loadingText: {
+    marginTop: 10,
+    color: '#6B6B8A',
   },
+
+  backButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginBottom: 18,
+  },
+
+  backText: {
+    color: '#5B2BD9',
+    fontWeight: '800',
+  },
+
+  title: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#181145',
+  },
+
+  subtitle: {
+    color: '#6B6B8A',
+    marginTop: 6,
+    marginBottom: 20,
+  },
+
   sectionTitle: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: '700',
-    color: THEME.text.primary,
-    marginBottom: SPACING.md,
-    marginTop: SPACING.lg,
+    color: '#181145',
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 12,
   },
-  formGroup: {
-    marginBottom: SPACING.lg,
-  },
-  label: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
-    color: THEME.text.secondary,
-    marginBottom: SPACING.sm,
-  },
-  subLabel: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
-    color: THEME.text.secondary,
-    marginBottom: SPACING.md,
-  },
-  input: {
-    backgroundColor: THEME.surface,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    fontSize: FONT_SIZES.base,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    color: THEME.text.primary,
-  },
-  dimensionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.lg,
-  },
-  dimensionInput: {
-    flex: 1,
-    marginHorizontal: SPACING.xs,
-  },
-  courierGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.lg,
-  },
-  courierOption: {
-    width: '48%',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: THEME.surface,
-    borderRadius: BORDER_RADIUS.lg,
+
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 2,
-    borderColor: THEME.border,
-    marginBottom: SPACING.md,
+    borderColor: 'transparent',
+  },
+
+  cardActive: {
+    borderColor: '#5B2BD9',
+  },
+
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  courierOptionActive: {
-    backgroundColor: THEME.primary,
-    borderColor: THEME.primary,
+
+  orderId: {
+    color: '#5B2BD9',
+    fontWeight: '800',
+    fontSize: 12,
   },
+
+  amount: {
+    color: '#5B2BD9',
+    fontWeight: '900',
+  },
+
+  customer: {
+    color: '#181145',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 8,
+  },
+
+  product: {
+    color: '#6B6B8A',
+    marginTop: 6,
+    fontWeight: '700',
+  },
+
+  address: {
+    color: '#6B6B8A',
+    marginTop: 10,
+    lineHeight: 20,
+  },
+
+  selectedText: {
+    color: '#16A34A',
+    fontWeight: '900',
+    marginTop: 12,
+  },
+
+  courierButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+
+  courierButtonActive: {
+    backgroundColor: '#5B2BD9',
+  },
+
   courierText: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
-    color: THEME.text.secondary,
+    color: '#181145',
+    fontWeight: '800',
+    textAlign: 'center',
   },
+
   courierTextActive: {
     color: '#FFFFFF',
   },
-  generateButton: {
-    flexDirection: 'row',
-    backgroundColor: THEME.primary,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    justifyContent: 'center',
+
+  primaryButton: {
+    backgroundColor: '#16A34A',
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: SPACING.xl,
+    marginTop: 16,
   },
-  generateButtonText: {
+
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+
+  primaryText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: FONT_SIZES.base,
-    marginLeft: SPACING.sm,
+    fontWeight: '800',
+    fontSize: 16,
   },
-  successCard: {
-    backgroundColor: '#D1FAE5',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: THEME.status.success,
-  },
-  successText: {
-    fontSize: FONT_SIZES.base,
-    color: THEME.status.success,
-    marginTop: SPACING.md,
-    fontWeight: '600',
-  },
-  labelDetails: {
-    backgroundColor: THEME.surface,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    ...THEME.shadow.small,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
-  },
-  detailLabel: {
-    fontSize: FONT_SIZES.sm,
-    color: THEME.text.secondary,
-  },
-  detailValue: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
-    color: THEME.text.primary,
-  },
-  labelBox: {
-    backgroundColor: THEME.surface,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 2,
-    borderColor: THEME.primary,
-    ...THEME.shadow.small,
-  },
-  labelBoxTitle: {
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '600',
-    color: THEME.text.secondary,
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.md,
-  },
-  trackingNumber: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: '700',
-    color: THEME.primary,
-    fontFamily: 'monospace',
-    letterSpacing: 1,
-  },
-  awbNumber: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: '700',
-    color: THEME.primary,
-    fontFamily: 'monospace',
-    letterSpacing: 1,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-  },
-  copyButton: {
-    flex: 1,
-    backgroundColor: THEME.surface,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: THEME.primary,
-  },
-  copyButtonText: {
-    color: THEME.primary,
-    fontWeight: '700',
-    fontSize: FONT_SIZES.base,
-  },
-  newLabelButton: {
-    flex: 1,
-    backgroundColor: THEME.primary,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.md,
+
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 28,
     alignItems: 'center',
   },
-  newLabelButtonText: {
-    color: '#FFFFFF',
+
+  emptyIcon: {
+    fontSize: 42,
+    marginBottom: 10,
+  },
+
+  emptyTitle: {
+    color: '#181145',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+
+  emptyText: {
+    color: '#6B6B8A',
     fontWeight: '700',
-    fontSize: FONT_SIZES.base,
+    textAlign: 'center',
+    marginTop: 7,
+    lineHeight: 20,
   },
 });

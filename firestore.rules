@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwnerDocumentOwner() {
+      return isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    function isCreateOwner() {
+      return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    function isSameOwnerOnUpdate() {
+      return isSignedIn() &&
+        resource.data.ownerId == request.auth.uid &&
+        request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    match /users/{userId} {
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin()) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /trips/{tripId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /products/{productId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /orders/{orderId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /inventory/{inventoryId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /payments/{paymentId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /financeTransactions/{transactionId} {
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.account in ['bank', 'cash']
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0;
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /customerRequests/{requestId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /purchases/{purchaseId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /receipts/{receiptId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /shipping/{shipmentId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow create: if isCreateOwner();
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSameOwnerOnUpdate() || (isAdmin() && request.resource.data.ownerId == resource.data.ownerId);
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

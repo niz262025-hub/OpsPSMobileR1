@@ -1,13 +1,13 @@
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-export default function ShippingLayout() {
+export default function RootLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="generate" options={{ presentation: 'card' }} />
-    </Stack>
+    <>
+      <StatusBar style='dark' />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name='(tabs)' />
+      </Stack>
+    </>
   );
 }

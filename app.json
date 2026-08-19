@@ -1,13 +1,15 @@
 {
   "expo": {
-    "name": "BizPS Mobile",
-    "slug": "bizps-mobile",
+    "name": "OpsPS",
+    "slug": "opsps-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-sharing",
+      "@react-native-community/datetimepicker"
     ],
     "web": {
       "bundler": "metro",
@@ -19,12 +21,24 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/icon.png",
-        "backgroundImage": "./assets/icon.png",
-        "monochromeImage": "./assets/icon.png"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "splash": {
+        "image": "./assets/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#F6F4FB"
       },
       "predictiveBackGestureEnabled": true,
-      "package": "com.anonymous.bizpsmobile"
-    }
+      "package": "com.opsps.mobile"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "43631cdb-bec2-4936-95c8-80e04bfb1891"
+      }
+    },
+    "owner": "syaifulnizam83"
   }
 }

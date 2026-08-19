@@ -2,5 +2,26 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "constants/**/*.ts",
+    "constants/**/*.tsx",
+    "services/**/*.ts",
+    "services/**/*.tsx",
+    "currency.ts",
+    "firebase.ts",
+    "index.ts",
+    "mockData.ts",
+    "theme.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tabs_backup",
+    "app/tabs_backup"
+  ]
 }

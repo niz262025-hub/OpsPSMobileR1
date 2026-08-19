@@ -1,400 +1,299 @@
-export interface Product {
-  id: string;
-  name: string;
-  costPrice: number;
-  sellingPrice: number;
-  image?: string;
-  status: 'ready' | 'preorder';
-  sizes: {
-    size: 'S' | 'M' | 'L' | 'XL';
-    quantity: number;
-  }[];
-  totalQuantity: number;
-}
+export type OrderStatus =
+  | 'In Buy List'
+  | 'Awaiting Trip Return'
+  | 'New'
+  | 'Pending Payment'
+  | 'Ready to Pack'
+  | 'Packed'
+  | 'Pending to Ship'
+  | 'Shipped'
+  | 'Completed'
+  | 'Cancelled';
 
-export interface Order {
+export type Order = {
   id: string;
-  tripId: string;
-  orderId: string;
   customer: string;
-  total: number;
-  status: 'pending' | 'packing' | 'ready' | 'shipped' | 'delivered';
-  items: {
-    productId: string;
-    productName: string;
-    size: string;
-    quantity: number;
-    unitPrice: number;
-  }[];
-  address?: string;
-  paymentMethod?: string;
-  createdAt: string;
-  shippedAt?: string;
-  deliveredAt?: string;
-}
+  phone: string;
+  product: string;
+  qty: number;
+  amount: number;
+  status: OrderStatus;
+  date: string;
+  address: string;
+  notes?: string;
+  tracking?: string;
+  courier?: string;
+  source?: 'ready-stock' | 'trip';
+  tripId?: string;
+};
 
-export interface Trip {
+export type InventoryItem = {
   id: string;
   name: string;
-  createdAt: string;
-  status: 'active' | 'completed';
-  products: Product[];
-  orders: Order[];
-  totalProducts: number;
-  totalOrders: number;
-}
+  price: number;
+  stock: number;
+};
 
-export interface BuyListItem {
+export type BuyListItem = {
   id: string;
-  tripId: string;
-  productId: string;
-  productName: string;
-  size: string;
-  requiredQuantity: number;
-  currentStock: number;
-  toBuy: number;
-  status: 'pending' | 'bought';
-}
+  product: string;
+  qty: number;
+  bought: boolean;
+};
 
-export interface InventoryItem {
-  productId: string;
-  productName: string;
-  totalStock: number;
-  sizes: {
-    size: 'S' | 'M' | 'L' | 'XL';
-    quantity: number;
-  }[];
-  status: 'in-stock' | 'low-stock' | 'out-of-stock';
-}
-
-export interface FinanceRecord {
+export type Trip = {
   id: string;
-  type: 'capital' | 'cash' | 'bank' | 'expense';
-  category: string;
+  name: string;
+  location: string;
+  status: 'Open' | 'Live' | 'Closed';
+};
+
+export const trips: Trip[] = [
+  {
+    id: 'TRIP-101',
+    name: 'Mid Valley Mega Sale',
+    location: 'Mid Valley Megamall',
+    status: 'Live',
+  },
+];
+
+export const inventory: InventoryItem[] = [
+  {
+    id: 'INV-001',
+    name: 'Kebaya White',
+    price: 128,
+    stock: 4,
+  },
+  {
+    id: 'INV-002',
+    name: 'IKEA Storage Box',
+    price: 35,
+    stock: 12,
+  },
+];
+
+export const buyList: BuyListItem[] = [];
+
+export const orders: Order[] = [
+  {
+    id: 'ORD-2041',
+    customer: 'Aina',
+    phone: '+60123456789',
+    product: 'Kebaya White',
+    qty: 1,
+    amount: 128,
+    status: 'Pending to Ship',
+    date: '2026-08-15',
+    address: 'Jalan Bukit Bintang, Kuala Lumpur',
+    source: 'ready-stock',
+    tracking: 'EP123456789MY',
+    courier: 'J&T Express',
+  },
+];
+
+export function addToBuyList(product: string, qty: number) {
+  const existing = buyList.find((item) => item.product === product);
+
+  if (existing) {
+    existing.qty += qty;
+    return;
+  }
+
+  buyList.push({
+    id: `BL-${buyList.length + 1}`,
+    product,
+    qty,
+    bought: false,
+  });
+}
+
+export function addMarketplaceOrder(data: {
+  customer: string;
+  phone: string;
+  product: string;
+  qty: number;
   amount: number;
-  description: string;
-  date: string;
-  method?: 'cash' | 'bank' | 'qr';
+  address: string;
+  notes?: string;
+}) {
+  orders.unshift({
+    id: `ORD-${2040 + orders.length + 1}`,
+    customer: data.customer,
+    phone: data.phone,
+    product: data.product,
+    qty: data.qty,
+    amount: data.amount,
+    status: 'In Buy List',
+    date: '2026-08-15',
+    address: data.address,
+    notes: data.notes,
+    source: 'trip',
+  });
+
+  addToBuyList(data.product, data.qty);
 }
 
-// Mock Products
-export const MOCK_PRODUCTS: Product[] = [
-  {
-    id: '1',
-    name: 'Premium Cotton T-Shirt',
-    costPrice: 12,
-    sellingPrice: 25,
-    status: 'ready',
-    sizes: [
-      { size: 'S', quantity: 15 },
-      { size: 'M', quantity: 20 },
-      { size: 'L', quantity: 18 },
-      { size: 'XL', quantity: 10 },
-    ],
-    totalQuantity: 63,
-  },
-  {
-    id: '2',
-    name: 'Denim Jeans',
-    costPrice: 28,
-    sellingPrice: 55,
-    status: 'ready',
-    sizes: [
-      { size: 'S', quantity: 8 },
-      { size: 'M', quantity: 12 },
-      { size: 'L', quantity: 10 },
-      { size: 'XL', quantity: 6 },
-    ],
-    totalQuantity: 36,
-  },
-  {
-    id: '3',
-    name: 'Casual Polo Shirt',
-    costPrice: 15,
-    sellingPrice: 32,
-    status: 'preorder',
-    sizes: [
-      { size: 'S', quantity: 5 },
-      { size: 'M', quantity: 8 },
-      { size: 'L', quantity: 7 },
-      { size: 'XL', quantity: 3 },
-    ],
-    totalQuantity: 23,
-  },
-];
+export function addReadyStockOrder(data: {
+  customer: string;
+  phone: string;
+  product: string;
+  qty: number;
+  address: string;
+  notes?: string;
+}) {
+  const inventoryItem = inventory.find((item) => item.name === data.product);
 
-// Mock Orders
-export const MOCK_ORDERS: Order[] = [
-  {
-    id: '1',
-    tripId: '1',
-    orderId: 'ORD-001',
-    customer: 'Ahmad Hassan',
-    total: 155,
-    status: 'shipped',
-    items: [
-      {
-        productId: '1',
-        productName: 'Premium Cotton T-Shirt',
-        size: 'M',
-        quantity: 3,
-        unitPrice: 25,
-      },
-      {
-        productId: '2',
-        productName: 'Denim Jeans',
-        size: 'L',
-        quantity: 2,
-        unitPrice: 55,
-      },
-    ],
-    address: '123 Jalan Merdeka, KL',
-    paymentMethod: 'bank_transfer',
-    createdAt: '2024-08-08',
-    shippedAt: '2024-08-10',
-  },
-  {
-    id: '2',
-    tripId: '1',
-    orderId: 'ORD-002',
-    customer: 'Siti Nurhaliza',
-    total: 75,
-    status: 'packing',
-    items: [
-      {
-        productId: '1',
-        productName: 'Premium Cotton T-Shirt',
-        size: 'S',
-        quantity: 2,
-        unitPrice: 25,
-      },
-      {
-        productId: '3',
-        productName: 'Casual Polo Shirt',
-        size: 'M',
-        quantity: 1,
-        unitPrice: 32,
-      },
-    ],
-    address: '456 Persiaran Gurney, Penang',
-    paymentMethod: 'cash',
-    createdAt: '2024-08-09',
-  },
-  {
-    id: '3',
-    tripId: '1',
-    orderId: 'ORD-003',
-    customer: 'Muhammad Ali',
-    total: 110,
-    status: 'pending',
-    items: [
-      {
-        productId: '2',
-        productName: 'Denim Jeans',
-        size: 'M',
-        quantity: 2,
-        unitPrice: 55,
-      },
-    ],
-    address: '789 Jalan Sultan Ismail, Kuala Lumpur',
-    paymentMethod: 'qr_pay',
-    createdAt: '2024-08-11',
-  },
-  {
-    id: '4',
-    tripId: '1',
-    orderId: 'ORD-004',
-    customer: 'Fatimah Zahra',
-    total: 130,
-    status: 'ready',
-    items: [
-      {
-        productId: '1',
-        productName: 'Premium Cotton T-Shirt',
-        size: 'L',
-        quantity: 4,
-        unitPrice: 25,
-      },
-      {
-        productId: '3',
-        productName: 'Casual Polo Shirt',
-        size: 'XL',
-        quantity: 1,
-        unitPrice: 32,
-      },
-    ],
-    address: '321 Kompleks Sentosa, Johor Bahru',
-    paymentMethod: 'bank_transfer',
-    createdAt: '2024-08-08',
-  },
-];
+  if (!inventoryItem || inventoryItem.stock < data.qty) {
+    throw new Error('Selected product is out of stock.');
+  }
 
-// Mock Trips
-export const MOCK_TRIPS: Trip[] = [
-  {
-    id: '1',
-    name: 'Trip to Bangkok',
-    status: 'active',
-    createdAt: '2024-08-01',
-    products: MOCK_PRODUCTS,
-    orders: MOCK_ORDERS,
-    totalProducts: 3,
-    totalOrders: 4,
-  },
-  {
-    id: '2',
-    name: 'Trip to Vietnam',
-    status: 'active',
-    createdAt: '2024-07-20',
-    products: MOCK_PRODUCTS.slice(0, 2),
-    orders: MOCK_ORDERS.slice(0, 2),
-    totalProducts: 2,
-    totalOrders: 2,
-  },
-  {
-    id: '3',
-    name: 'Trip to Singapore',
-    status: 'completed',
-    createdAt: '2024-07-01',
-    products: MOCK_PRODUCTS.slice(1),
-    orders: MOCK_ORDERS.slice(1, 3),
-    totalProducts: 2,
-    totalOrders: 2,
-  },
-];
+  inventoryItem.stock -= data.qty;
 
-// Mock Buy List
-export const MOCK_BUY_LIST: BuyListItem[] = [
-  {
-    id: '1',
-    tripId: '1',
-    productId: '1',
-    productName: 'Premium Cotton T-Shirt',
-    size: 'S',
-    requiredQuantity: 20,
-    currentStock: 5,
-    toBuy: 15,
-    status: 'pending',
-  },
-  {
-    id: '2',
-    tripId: '1',
-    productId: '1',
-    productName: 'Premium Cotton T-Shirt',
-    size: 'L',
-    requiredQuantity: 25,
-    currentStock: 18,
-    toBuy: 7,
-    status: 'pending',
-  },
-  {
-    id: '3',
-    tripId: '1',
-    productId: '2',
-    productName: 'Denim Jeans',
-    size: 'M',
-    requiredQuantity: 15,
-    currentStock: 12,
-    toBuy: 3,
-    status: 'bought',
-  },
-  {
-    id: '4',
-    tripId: '1',
-    productId: '3',
-    productName: 'Casual Polo Shirt',
-    size: 'L',
-    requiredQuantity: 10,
-    currentStock: 2,
-    toBuy: 8,
-    status: 'pending',
-  },
-];
+  orders.unshift({
+    id: `ORD-${2040 + orders.length + 1}`,
+    customer: data.customer,
+    phone: data.phone,
+    product: data.product,
+    qty: data.qty,
+    amount: inventoryItem.price * data.qty,
+    status: 'Ready to Pack',
+    date: '2026-08-15',
+    address: data.address,
+    notes: data.notes,
+    source: 'ready-stock',
+  });
+}
 
-// Mock Inventory
-export const MOCK_INVENTORY: InventoryItem[] = [
-  {
-    productId: '1',
-    productName: 'Premium Cotton T-Shirt',
-    totalStock: 63,
-    sizes: [
-      { size: 'S', quantity: 15 },
-      { size: 'M', quantity: 20 },
-      { size: 'L', quantity: 18 },
-      { size: 'XL', quantity: 10 },
-    ],
-    status: 'in-stock',
-  },
-  {
-    productId: '2',
-    productName: 'Denim Jeans',
-    totalStock: 5,
-    sizes: [
-      { size: 'S', quantity: 1 },
-      { size: 'M', quantity: 2 },
-      { size: 'L', quantity: 1 },
-      { size: 'XL', quantity: 1 },
-    ],
-    status: 'low-stock',
-  },
-  {
-    productId: '3',
-    productName: 'Casual Polo Shirt',
-    totalStock: 0,
-    sizes: [
-      { size: 'S', quantity: 0 },
-      { size: 'M', quantity: 0 },
-      { size: 'L', quantity: 0 },
-      { size: 'XL', quantity: 0 },
-    ],
-    status: 'out-of-stock',
-  },
-];
+export function addTripOrder(data: {
+  customer: string;
+  phone: string;
+  product: string;
+  qty: number;
+  address: string;
+  tripId: string;
+  notes?: string;
+}) {
+  orders.unshift({
+    id: `ORD-${2040 + orders.length + 1}`,
+    customer: data.customer,
+    phone: data.phone,
+    product: data.product,
+    qty: data.qty,
+    amount: 0,
+    status: 'Awaiting Trip Return',
+    date: '2026-08-15',
+    address: data.address,
+    notes: data.notes,
+    source: 'trip',
+    tripId: data.tripId,
+  });
+}
 
-// Mock Finance
-export const MOCK_FINANCE: FinanceRecord[] = [
-  {
-    id: '1',
-    type: 'capital',
-    category: 'Initial Capital',
-    amount: 5000,
-    description: 'Starting capital for business',
-    date: '2024-07-01',
-  },
-  {
-    id: '2',
-    type: 'cash',
-    category: 'Sales',
-    amount: 340,
-    description: 'Cash sales from Trip 1',
-    date: '2024-08-08',
-    method: 'cash',
-  },
-  {
-    id: '3',
-    type: 'bank',
-    category: 'Sales',
-    amount: 265,
-    description: 'Bank transfer from customers',
-    date: '2024-08-09',
-    method: 'bank',
-  },
-  {
-    id: '4',
-    type: 'cash',
-    category: 'Expense',
-    amount: 150,
-    description: 'Transportation cost',
-    date: '2024-08-10',
-    method: 'cash',
-  },
-  {
-    id: '5',
-    type: 'bank',
-    category: 'Expense',
-    amount: 200,
-    description: 'Shipping and packaging',
-    date: '2024-08-11',
-    method: 'bank',
-  },
-];
+export function updateOrderStatus(orderId: string, newStatus: OrderStatus) {
+  const order = orders.find((item) => item.id === orderId);
+
+  if (order) {
+    order.status = newStatus;
+  }
+}
+
+export function markBuyListItemBought(product: string) {
+  const item = buyList.find((i) => i.product === product);
+
+  if (!item || item.bought) return;
+
+  item.bought = true;
+
+  let inventoryItem = inventory.find((inv) => inv.name === product);
+
+  if (!inventoryItem) {
+    inventoryItem = {
+      id: `INV-${inventory.length + 1}`,
+      name: product,
+      price: 100,
+      stock: 0,
+    };
+    inventory.push(inventoryItem);
+  }
+
+  inventoryItem.stock += item.qty;
+
+  orders
+    .filter((order) => order.product === product && order.status === 'In Buy List')
+    .forEach((order) => {
+      if (inventoryItem!.stock >= order.qty) {
+        inventoryItem!.stock -= order.qty;
+        order.status = 'Ready to Pack';
+      }
+    });
+}
+
+export function closeTrip() {
+  const trip = trips[0];
+
+  if (trip) {
+    trip.status = 'Closed';
+  }
+}
+
+export function closeTripAndTransferStock(tripId: string) {
+  closeTrip();
+
+  orders
+    .filter((order) => order.tripId === tripId || order.status === 'Awaiting Trip Return')
+    .forEach((order) => {
+      order.status = 'Ready to Pack';
+    });
+}
+
+export function packOrder(orderId: string) {
+  const order = orders.find((item) => item.id === orderId);
+
+  if (order && order.status === 'Ready to Pack') {
+    order.status = 'Packed';
+  }
+}
+
+export function generateShipment(orderId: string, courier: string) {
+  const order = orders.find((item) => item.id === orderId);
+
+  if (!order || order.status !== 'Packed') return;
+
+  order.courier = courier;
+  order.tracking = `EP${Math.floor(100000000 + Math.random() * 900000000)}MY`;
+  order.status = 'Pending to Ship';
+}
+
+export function markShipped(orderId: string) {
+  const order = orders.find((item) => item.id === orderId);
+
+  if (order && order.status === 'Pending to Ship') {
+    order.status = 'Shipped';
+  }
+}
+
+export function markCompleted(orderId: string) {
+  const order = orders.find((item) => item.id === orderId);
+
+  if (order && order.status === 'Shipped') {
+    order.status = 'Completed';
+  }
+}
+
+export function getDashboardStats() {
+  const today = '2026-08-15';
+  const todayOrders = orders.filter((order) => order.date === today);
+  const salesToday = todayOrders.reduce((sum, order) => sum + order.amount, 0);
+
+  return {
+    liveTrips: trips.filter((trip) => trip.status === 'Live').length,
+    buyList: buyList.filter((item) => !item.bought).length,
+    readyToPack: orders.filter((order) => order.status === 'Ready to Pack').length,
+    pendingToShip: orders.filter((order) => order.status === 'Pending to Ship').length,
+    shipped: orders.filter((order) => order.status === 'Shipped').length,
+    salesToday,
+    profitToday: Math.round(salesToday * 0.38),
+    profitMonth: Math.round(salesToday * 1.4),
+    totalOrdersToday: todayOrders.length,
+  };
+}
