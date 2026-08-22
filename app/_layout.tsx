@@ -19,6 +19,8 @@ export default function RootLayout() {
         <Stack.Screen name="shipping" />
         <Stack.Screen name="login" />
         <Stack.Screen name="order" />
+        <Stack.Screen name="packing" />
+        <Stack.Screen name="settings" />
         <Stack.Screen name="register" />
       </Stack>
     </LanguageProvider>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
+import { Pressable } from 'react-native';
+import { Tabs, router } from 'expo-router';
 import {
   Home,
   Truck,
@@ -44,9 +45,11 @@ export default function TabsLayout() {
           fontSize: 18,
         },
         headerRight: () => (
-          <User
-            {...({ ...iconProps, color: '#FFFFFF', style: { marginRight: 16 } } as any)}
-          />
+          <Pressable onPress={() => router.push('/settings')}>
+            <User
+              {...({ ...iconProps, color: '#FFFFFF', style: { marginRight: 16 } } as any)}
+            />
+          </Pressable>
         ),
       }}
     >

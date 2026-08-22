@@ -9,6 +9,8 @@ export type PaymentStatus = 'pending' | 'paid' | 'partial' | 'pay_later';
 export type PaymentMode = 'customer_pays_first' | 'ps_buy_first_pay_later';
 export type FinanceTransactionType = 'income' | 'expense';
 export type FinancePaymentMethod = 'bank' | 'cash';
+export type PurchaseClassification = 'customer_order' | 'extra_stock';
+export type CourierStatus = 'created' | 'shipped' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'failed';
 
 export interface Product {
   id: string;
@@ -52,7 +54,7 @@ export interface Order {
   packedAt?: string;
   shippedAt?: string;
   deliveredAt?: string;
-  shipment?: { courier: string; trackingNumber?: string; shipmentId?: string; status: 'mock_created' | 'shipped' | 'delivered' };
+  shipment?: { courier: string; trackingNumber?: string; shipmentId?: string; status: CourierStatus };
 }
 
 export interface OrderItem {
@@ -60,6 +62,20 @@ export interface OrderItem {
   orderId: string;
   productVariantId: string;
   quantity: number;
+  packedQuantity?: number;
+}
+
+export interface ExtraStockPurchase {
+  id: string;
+  tripId: string;
+  productId: string;
+  productVariantId: string;
+  quantity: number;
+  cost: number;
+  sellingPrice: number;
+  purchaseReceiptUri?: string;
+  purchaseDate: string;
+  financeTransactionId?: string;
 }
 
 export interface BuyListItem {
@@ -90,6 +106,7 @@ export interface MockDatabaseSnapshot {
   buyListItems: BuyListItem[];
   financeTransactions: FinanceTransaction[];
   paymentSettings: PaymentSettings;
+  extraStockPurchases: ExtraStockPurchase[];
 }
 
 export interface PaymentSettings {
@@ -97,6 +114,7 @@ export interface PaymentSettings {
   accountName: string;
   accountNumber: string;
   paymentReference: string;
+  qrImageUri?: string;
 }
 
 export interface FinanceTransaction {
@@ -243,6 +261,7 @@ let state: MockDatabaseSnapshot = {
     accountNumber: '',
     paymentReference: 'Order ID',
   },
+  extraStockPurchases: [],
 };
 
 const listeners = new Set<() => void>();
@@ -356,6 +375,16 @@ export function addFinanceTransaction(input: Omit<FinanceTransaction, 'id' | 'da
 
 export function addMonthlyExpense(input: { description: string; amount: number; category: string; paymentMethod: FinancePaymentMethod; notes?: string }) {
   return addFinanceTransaction({ description: input.notes ? `${input.description} - ${input.notes}` : input.description, amount: Math.abs(input.amount), type: 'expense', paymentMethod: input.paymentMethod, category: input.category, isMonthlyExpense: true });
+}
+
+export function updatePaymentSettings(settings: PaymentSettings) {
+  state.paymentSettings = { ...settings, bankName: settings.bankName.trim(), accountName: settings.accountName.trim(), accountNumber: settings.accountNumber.trim(), paymentReference: settings.paymentReference.trim() };
+  emit();
+  return true;
+}
+
+export function isPaymentConfigured(settings: PaymentSettings) {
+  return Boolean(settings.bankName.trim() && settings.accountName.trim() && settings.accountNumber.trim() && settings.paymentReference.trim());
 }
 
 export function updateFinanceTransaction(id: string, input: Partial<Omit<FinanceTransaction, 'id'>>) {
@@ -488,13 +517,23 @@ export function confirmPurchase(orderId: string, purchase: NonNullable<Order['pu
 }
 
 export function markOrderPacked(orderId: string) {
+  const items = state.orderItems.filter((item) => item.orderId === orderId);
+  if (!items.length || items.some((item) => (item.packedQuantity ?? 0) < item.quantity)) return false;
   state.orders = state.orders.map((order) => order.id === orderId ? { ...order, packedAt: new Date().toISOString(), status: 'ready' } : order);
   emit();
   return true;
 }
 
+export function setOrderItemPacked(orderItemId: string, packed: boolean) {
+  state.orderItems = state.orderItems.map((item) => item.id === orderItemId ? { ...item, packedQuantity: packed ? item.quantity : 0 } : item);
+  emit();
+  return true;
+}
+
 export function createMockShipment(orderId: string, courier: string) {
-  state.orders = state.orders.map((order) => order.id === orderId ? { ...order, shipment: { courier, shipmentId: `mock-shipment-${order.id}`, trackingNumber: `MOCK-${Date.now()}`, status: 'mock_created' } } : order);
+  const order = state.orders.find((entry) => entry.id === orderId);
+  if (!order || order.shipment) return Boolean(order?.shipment);
+  state.orders = state.orders.map((entry) => entry.id === orderId ? { ...entry, shipment: { courier, shipmentId: `mock-shipment-${entry.id}`, trackingNumber: `MOCK-${Date.now()}`, status: 'created' } } : entry);
   emit();
   return true;
 }
@@ -503,6 +542,17 @@ export function markOrderShipped(orderId: string, courier: string) {
   state.orders = state.orders.map((order) => order.id === orderId ? { ...order, shippedAt: new Date().toISOString(), shipment: { courier, shipmentId: order.shipment?.shipmentId ?? `mock-shipment-${order.id}`, trackingNumber: order.shipment?.trackingNumber ?? `MOCK-${Date.now()}`, status: 'shipped' }, status: 'shipped' } : order);
   emit();
   return true;
+}
+
+export function syncShipmentStatus(orderId: string): CourierStatus | null {
+  const order = state.orders.find((entry) => entry.id === orderId);
+  if (!order?.shipment) return null;
+  const progression: CourierStatus[] = ['created', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'];
+  const currentIndex = progression.indexOf(order.shipment.status);
+  const nextStatus = progression[Math.min(currentIndex + 1, progression.length - 1)];
+  state.orders = state.orders.map((entry) => entry.id === orderId ? { ...entry, shipment: { ...entry.shipment!, status: nextStatus }, ...(nextStatus === 'delivered' ? { status: 'delivered' as OrderStatus, deliveredAt: entry.deliveredAt ?? new Date().toISOString() } : {}) } : entry);
+  emit();
+  return nextStatus;
 }
 
 export function markOrderDeliveredFromCourier(orderId: string) {
@@ -702,6 +752,18 @@ export function markBuyListItemBought(itemId: string) {
 
   emit();
   return true;
+}
+
+export function confirmExtraStockPurchase(input: { tripId: string; productId: string; productVariantId: string; quantity: number; cost: number; sellingPrice: number; purchaseReceiptUri?: string; paymentMethod: FinancePaymentMethod }) {
+  const existing = state.extraStockPurchases.find((purchase) => purchase.productVariantId === input.productVariantId && purchase.purchaseReceiptUri === input.purchaseReceiptUri && purchase.quantity === input.quantity);
+  if (existing) return existing;
+  const purchase: ExtraStockPurchase = { id: `purchase-${Date.now()}`, tripId: input.tripId, productId: input.productId, productVariantId: input.productVariantId, quantity: Math.max(1, input.quantity), cost: Math.max(0, input.cost), sellingPrice: Math.max(0, input.sellingPrice), purchaseReceiptUri: input.purchaseReceiptUri, purchaseDate: new Date().toISOString() };
+  state.extraStockPurchases = [...state.extraStockPurchases, purchase];
+  state.productVariants = state.productVariants.map((variant) => variant.id === input.productVariantId ? { ...variant, stock: variant.stock + purchase.quantity } : variant);
+  const transaction = addFinanceTransaction({ description: 'Extra Stock Purchase', amount: purchase.cost, type: 'expense', paymentMethod: input.paymentMethod, category: 'Trip Purchase', referenceId: purchase.id, purchaseId: purchase.id, tripId: input.tripId, productId: input.productId });
+  purchase.financeTransactionId = transaction.id;
+  emit();
+  return purchase;
 }
 
 export function updateBuyListItemQuantity(itemId: string, quantity: number) {
