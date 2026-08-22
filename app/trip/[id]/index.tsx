@@ -1,25 +1,40 @@
 import React, { useMemo, useState } from 'react';
 import {
   View,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   Alert,
   SafeAreaView,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, CheckCircle2, Package, ShoppingBag } from 'lucide-react-native';
-import { useMockDatabase, markBuyListItemBought, getTripProducts, getTripOrders, getTripBuyListItems, getProductVariant, getProduct } from '../../../services/mockDatabase';
+import { useMockDatabase, markBuyListItemBought, createBuyListItem, updateBuyListItem, deleteBuyListItem, confirmOrderAvailability, setOrderPaymentMode, recordPayment, verifyPayment, confirmPurchase, markOrderPacked, createMockShipment, markOrderShipped, getTripProducts, getTripOrders, getTripBuyListItems, getProductVariant, getProduct } from '../../../services/mockDatabase';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../../theme';
 import { StatusBadge } from '../../../components/StatusBadge';
 
 type TabType = 'products' | 'orders' | 'buylist';
 
+function getTripStatusBadge(status: 'planning' | 'open' | 'completed') {
+  const badgeStatus = status === 'planning' ? 'pending' : status === 'open' ? 'in-stock' : 'delivered';
+  return <StatusBadge status={badgeStatus} label={status.charAt(0).toUpperCase() + status.slice(1)} />;
+}
+
+function formatDate(date: string) {
+  const parsed = new Date(date);
+  return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString();
+}
+
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
   const db = useMockDatabase();
   const [activeTab, setActiveTab] = useState<TabType>('products');
+  const [buyItemName, setBuyItemName] = useState('');
+  const [buyItemQuantity, setBuyItemQuantity] = useState('1');
+  const [editingBuyItem, setEditingBuyItem] = useState<string | null>(null);
   const trip = db.trips.find((entry: { id: string }) => entry.id === id);
   const tripProducts = useMemo(() => getTripProducts(trip?.id ?? '', db), [trip, db]);
   const tripOrders = useMemo(() => getTripOrders(trip?.id ?? '', db), [trip, db]);
@@ -42,8 +57,15 @@ export default function TripDetailScreen() {
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerLabel}>Trip detail</Text>
           <Text style={styles.headerTitle}>{trip.name}</Text>
+          <Text style={styles.headerMeta}>{trip.destination} · {formatDate(trip.tripDate)}</Text>
         </View>
-        <StatusBadge status="ready" label="Active" />
+        {getTripStatusBadge(trip.status)}
+      </View>
+
+      <View style={styles.summary}>
+        <SummaryItem label="Orders" value={tripOrders.length} />
+        <SummaryItem label="Products" value={tripProducts.length} />
+        <SummaryItem label="Buy List" value={buyListItems.length} />
       </View>
 
       <View style={styles.tabsContainer}>
@@ -64,13 +86,23 @@ export default function TripDetailScreen() {
         {activeTab === 'products' && (
           <View>
             {tripProducts.length === 0 ? (
-              <Text style={styles.emptyText}>No products added yet</Text>
+              <View>
+                <Text style={styles.emptyText}>No products added yet</Text>
+                <TouchableOpacity style={styles.uploadButton} onPress={() => router.push({ pathname: '/(tabs)/marketplace', params: { tripId: trip.id } })}>
+                  <Text style={styles.uploadButtonText}>+ Upload Product</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
-              tripProducts.map((product: { id: string; name: string; status: string; costPrice: number; sellingPrice: number }) => {
+              <View>
+                <TouchableOpacity style={styles.uploadButton} onPress={() => router.push({ pathname: '/(tabs)/marketplace', params: { tripId: trip.id } })}>
+                  <Text style={styles.uploadButtonText}>+ Upload Product</Text>
+                </TouchableOpacity>
+                {tripProducts.map((product: { id: string; name: string; image: string; status: string; costPrice: number; sellingPrice: number }) => {
                 const variants = db.productVariants.filter((variant: { productId: string }) => variant.productId === product.id);
                 const totalQuantity = variants.reduce((sum, variant) => sum + variant.stock, 0);
                 return (
                   <View key={product.id} style={styles.card}>
+                    <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="contain" />
                     <View style={styles.cardHeader}>
                       <View style={styles.cardTitleWrap}>
                         <Text style={styles.cardTitle}>{product.name}</Text>
@@ -106,7 +138,8 @@ export default function TripDetailScreen() {
                     </View>
                   </View>
                 );
-              })
+                })}
+              </View>
             )}
           </View>
         )}
@@ -150,6 +183,7 @@ export default function TripDetailScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
+                    <TouchableOpacity style={styles.smallAction} onPress={() => router.push(`/order/${order.id}`)}><Text style={styles.smallActionText}>View Order</Text></TouchableOpacity>
                   </View>
                 );
               })
@@ -159,35 +193,34 @@ export default function TripDetailScreen() {
 
         {activeTab === 'buylist' && (
           <View>
+            <Text style={styles.sectionLabel}>Buy List</Text>
+            <View style={styles.addBuyListRow}>
+                  <TextInput style={styles.buyInput} value={buyItemName} onChangeText={setBuyItemName} placeholder="Item name" placeholderTextColor={THEME.text.light} />
+                  <TextInput style={styles.quantityInput} value={buyItemQuantity} onChangeText={setBuyItemQuantity} keyboardType="numeric" placeholder="Qty" placeholderTextColor={THEME.text.light} />
+                  <TouchableOpacity style={styles.addBuyButton} onPress={() => { if (buyItemName.trim()) { createBuyListItem({ tripId: trip.id, itemName: buyItemName, quantity: Number(buyItemQuantity) || 1 }); setBuyItemName(''); setBuyItemQuantity('1'); } }}><Text style={styles.addBuyText}>+ Add Item</Text></TouchableOpacity>
+            </View>
             {buyListItems.length === 0 ? (
               <Text style={styles.emptyText}>Buy list is clear</Text>
             ) : (
               <View>
-                <Text style={styles.sectionLabel}>Auto-generated buy list</Text>
-                {buyListItems.map((item: { id: string; productVariantId: string; quantity: number }) => {
-                  const variant = getProductVariant(item.productVariantId, db);
+                {buyListItems.map((item) => {
+                  const variant = item.productVariantId ? getProductVariant(item.productVariantId, db) : undefined;
                   const product = variant ? getProduct(variant.productId, db) : undefined;
                   return (
                     <View key={item.id} style={styles.card}>
-                      <Text style={styles.cardTitle}>{product?.name ?? 'Product'}</Text>
+                      <Text style={styles.cardTitle}>{item.itemName ?? product?.name ?? 'Item'}</Text>
                       <View style={styles.buyListRow}>
                         <View>
-                          <Text style={styles.buyListLabel}>Size {variant?.size}</Text>
+                          <Text style={styles.buyListLabel}>{variant?.size ? `Size ${variant.size}` : item.purchased ? 'Bought' : 'To Buy'}</Text>
                           <Text style={styles.buyListDetail}>Needed: {item.quantity}</Text>
                         </View>
-                        <TouchableOpacity
-                          style={styles.markBoughtBtn}
-                          onPress={() => {
-                            const success = markBuyListItemBought(item.id);
-                            if (success) {
-                              Alert.alert('Success', 'Buy list item marked as bought and inventory updated.');
-                            }
-                          }}
-                        >
-                          <CheckCircle2 size={16} color={THEME.status.success} strokeWidth={2} />
-                          <Text style={styles.markBoughtText}>Mark Bought</Text>
-                        </TouchableOpacity>
+                        <View style={styles.buyActions}>
+                          {!item.purchased && <TouchableOpacity style={styles.markBoughtBtn} onPress={() => { const success = markBuyListItemBought(item.id); if (success) Alert.alert('Success', 'Buy list item marked as bought.'); }}><CheckCircle2 size={16} color={THEME.status.success} strokeWidth={2} /><Text style={styles.markBoughtText}>Mark Bought</Text></TouchableOpacity>}
+                          <TouchableOpacity onPress={() => { setEditingBuyItem(item.id); setBuyItemName(item.itemName ?? product?.name ?? ''); setBuyItemQuantity(String(item.quantity)); }}><Text style={styles.editBuyText}>Edit</Text></TouchableOpacity>
+                          <TouchableOpacity onPress={() => deleteBuyListItem(item.id)}><Text style={styles.deleteBuyText}>Delete</Text></TouchableOpacity>
+                        </View>
                       </View>
+                      {editingBuyItem === item.id && <View style={styles.editRow}><TextInput style={styles.buyInput} value={buyItemName} onChangeText={setBuyItemName} /><TextInput style={styles.quantityInput} value={buyItemQuantity} onChangeText={setBuyItemQuantity} keyboardType="numeric" /><TouchableOpacity style={styles.addBuyButton} onPress={() => { updateBuyListItem(item.id, { itemName: buyItemName, quantity: Number(buyItemQuantity) || 1 }); setEditingBuyItem(null); }}><Text style={styles.addBuyText}>Save</Text></TouchableOpacity></View>}
                     </View>
                   );
                 })}
@@ -197,6 +230,15 @@ export default function TripDetailScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.summaryItem}>
+      <Text style={styles.summaryValue}>{value}</Text>
+      <Text style={styles.summaryLabel}>{label}</Text>
+    </View>
   );
 }
 
@@ -237,6 +279,34 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.lg,
     fontWeight: '700',
     color: '#FFFFFF',
+    marginTop: SPACING.xs,
+  },
+  headerMeta: {
+    color: '#EDE9FE',
+    fontSize: FONT_SIZES.xs,
+    marginTop: SPACING.xs,
+  },
+  summary: {
+    flexDirection: 'row',
+    backgroundColor: THEME.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+    paddingVertical: SPACING.md,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: THEME.border,
+  },
+  summaryValue: {
+    color: THEME.primary,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '800',
+  },
+  summaryLabel: {
+    color: THEME.text.secondary,
+    fontSize: FONT_SIZES.xs,
     marginTop: SPACING.xs,
   },
   tabsContainer: {
@@ -400,6 +470,20 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     marginLeft: SPACING.xs,
   },
+  orderActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  smallAction: {
+    backgroundColor: '#F5F3FF',
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+  },
+  smallActionText: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700' },
+  dangerActionText: { color: THEME.status.error, fontSize: FONT_SIZES.xs, fontWeight: '700' },
   sectionLabel: {
     fontSize: FONT_SIZES.base,
     fontWeight: '700',
@@ -436,12 +520,31 @@ const styles = StyleSheet.create({
     color: THEME.status.success,
     marginLeft: SPACING.xs,
   },
+  addBuyListRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md, gap: SPACING.sm },
+  editRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md, gap: SPACING.sm },
+  buyInput: { flex: 1, borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, color: THEME.text.primary },
+  quantityInput: { width: 58, borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, color: THEME.text.primary },
+  addBuyButton: { backgroundColor: THEME.primary, borderRadius: BORDER_RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
+  addBuyText: { color: '#FFFFFF', fontWeight: '700', fontSize: FONT_SIZES.xs },
+  buyActions: { alignItems: 'flex-end', gap: SPACING.xs },
+  editBuyText: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700' },
+  deleteBuyText: { color: THEME.status.error, fontSize: FONT_SIZES.xs, fontWeight: '700' },
   emptyText: {
     fontSize: FONT_SIZES.base,
     color: THEME.text.secondary,
     textAlign: 'center',
     paddingVertical: SPACING['2xl'],
   },
+  uploadButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: THEME.primary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  uploadButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  productImage: { width: '100%', height: 180, borderRadius: BORDER_RADIUS.md, backgroundColor: '#F8FAFC', marginBottom: SPACING.md },
   notFound: {
     flex: 1,
     justifyContent: 'center',

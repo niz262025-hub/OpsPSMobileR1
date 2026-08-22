@@ -8,6 +8,7 @@ export default function TripLayout() {
       }}
     >
       <Stack.Screen name="[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="create" options={{ presentation: 'card' }} />
     </Stack>
   );
 }

@@ -1,0 +1,34 @@
+import React, { useState } from 'react';
+import { Alert } from 'react-native';
+import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { confirmPurchase, FinancePaymentMethod, getOrder, getProduct, getProductVariant, uploadPurchaseReceipt, useMockDatabase } from '../../../services/mockDatabase';
+import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../../theme';
+
+export default function PurchaseFormScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const db = useMockDatabase();
+  const order = id ? getOrder(id, db) : undefined;
+  const item = order ? db.orderItems.find((entry) => entry.orderId === order.id) : undefined;
+  const variant = item ? getProductVariant(item.productVariantId, db) : undefined;
+  const product = variant ? getProduct(variant.productId, db) : undefined;
+  const [productCost, setProductCost] = useState(product?.costPrice.toString() ?? '0');
+  const [transport, setTransport] = useState('0');
+  const [parking, setParking] = useState('0');
+  const [toll, setToll] = useState('0');
+  const [other, setOther] = useState('0');
+  const [receipt, setReceipt] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<FinancePaymentMethod>('cash');
+  if (!order || !product) return <SafeAreaView style={styles.safe}><Text style={styles.error}>Order not found.</Text></SafeAreaView>;
+  const total = [productCost, transport, parking, toll, other].reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const pickReceipt = async (camera: boolean) => {
+    const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = camera ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+    if (!result.canceled) { setReceipt(result.assets[0].uri); uploadPurchaseReceipt(order.id, result.assets[0].uri); }
+  };
+  const save = () => { if (!receipt) return; const saved = confirmPurchase(order.id, { productCost: Number(productCost) || 0, transport: Number(transport) || 0, parking: Number(parking) || 0, toll: Number(toll) || 0, other: Number(other) || 0, paymentMethod, receiptUri: receipt }); if (!saved) { Alert.alert('Payment Required', 'Verify customer payment before confirming this purchase.'); return; } router.replace(`/order/${order.id}`); };
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>Confirm Purchase</Text><Text style={styles.meta}>{product.name} · {db.trips.find((trip) => trip.id === order.tripId)?.name}</Text><View style={styles.card}>{[['Product Cost', productCost, setProductCost], ['Transport', transport, setTransport], ['Parking', parking, setParking], ['Toll', toll, setToll], ['Other Expenses', other, setOther]].map(([label, value, setter]) => <View key={label as string} style={styles.row}><Text style={styles.label}>{label as string}</Text><TextInput value={value as string} onChangeText={setter as (value: string) => void} keyboardType="decimal-pad" style={styles.input} /></View>)}<View style={styles.totalRow}><Text style={styles.totalLabel}>Total Purchase Cost</Text><Text style={styles.total}>RM{total.toFixed(2)}</Text></View><Text style={styles.label}>Paid From</Text><View style={styles.actions}>{(['cash', 'bank'] as FinancePaymentMethod[]).map((value) => <Pressable key={value} style={[styles.secondary, paymentMethod === value && styles.selected]} onPress={() => setPaymentMethod(value)}><Text style={styles.secondaryText}>{value === 'cash' ? 'Cash' : 'Bank'}</Text></Pressable>)}</View></View><View style={styles.card}><Text style={styles.section}>Purchase Receipt</Text>{receipt ? <View><Image source={{ uri: receipt }} style={styles.receipt} resizeMode="contain" /><View style={styles.actions}><Pressable onPress={() => pickReceipt(false)}><Text style={styles.link}>Replace</Text></Pressable><Pressable onPress={() => setReceipt('')}><Text style={styles.remove}>Remove</Text></Pressable></View></View> : <View style={styles.actions}><Pressable style={styles.secondary} onPress={() => pickReceipt(false)}><Text style={styles.secondaryText}>Upload Purchase Receipt</Text></Pressable><Pressable style={styles.secondary} onPress={() => pickReceipt(true)}><Text style={styles.secondaryText}>Camera</Text></Pressable></View>}<Pressable style={[styles.primary, !receipt && styles.disabled]} disabled={!receipt} onPress={save}><Text style={styles.primaryText}>Confirm Purchase</Text></Pressable></View></ScrollView></SafeAreaView>;
+}
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: THEME.background }, content: { width: '100%', maxWidth: 680, alignSelf: 'center', padding: SPACING['2xl'], paddingBottom: SPACING['3xl'] }, title: { color: THEME.text.primary, fontSize: FONT_SIZES['2xl'], fontWeight: '800' }, meta: { color: THEME.text.secondary, marginTop: SPACING.xs, marginBottom: SPACING.lg }, card: { backgroundColor: THEME.surface, borderRadius: BORDER_RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.md, borderWidth: 1, borderColor: THEME.border }, row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md }, label: { color: THEME.text.primary, fontWeight: '700' }, input: { width: 120, borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, textAlign: 'right', color: THEME.text.primary }, totalRow: { borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: SPACING.md, flexDirection: 'row', justifyContent: 'space-between' }, totalLabel: { color: THEME.text.primary, fontWeight: '800' }, total: { color: THEME.primary, fontWeight: '900', fontSize: FONT_SIZES.lg }, section: { color: THEME.text.primary, fontWeight: '800', fontSize: FONT_SIZES.lg }, receipt: { width: '100%', height: 220, marginVertical: SPACING.md, backgroundColor: '#F3F4F6' }, actions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: SPACING.sm }, secondary: { flex: 1, backgroundColor: '#F5F3FF', borderRadius: BORDER_RADIUS.md, padding: SPACING.md, alignItems: 'center' }, selected: { borderWidth: 2, borderColor: THEME.primary }, secondaryText: { color: THEME.primary, fontWeight: '800', fontSize: FONT_SIZES.xs }, link: { color: THEME.primary, fontWeight: '800' }, remove: { color: THEME.status.error, fontWeight: '800' }, primary: { backgroundColor: THEME.primary, borderRadius: BORDER_RADIUS.md, padding: SPACING.md, alignItems: 'center', marginTop: SPACING.lg }, disabled: { opacity: 0.45 }, primaryText: { color: '#FFFFFF', fontWeight: '800' }, error: { color: THEME.status.error, padding: SPACING['2xl'] } });

@@ -30,8 +30,8 @@ export default function ShippingGenerateScreen() {
       return;
     }
 
-    const trackingNum = `TRK${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const awbNum = `AWB${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const trackingNum = `MOCK-EP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const awbNum = `MOCK-AWB-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     setShippingLabel({
       trackingNumber: trackingNum,
@@ -95,7 +95,7 @@ export default function ShippingGenerateScreen() {
           <View>
             <View style={styles.successCard}>
               <StatusBadge status="shipped" label="Label generated" />
-              <Text style={styles.successText}>Shipping label successfully generated.</Text>
+              <Text style={styles.successText}>Development mock shipment created. No live courier booking was made.</Text>
             </View>
 
             <View style={styles.labelDetails}>
