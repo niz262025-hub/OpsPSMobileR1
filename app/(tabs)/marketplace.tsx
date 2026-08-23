@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
   SafeAreaView,
@@ -12,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Link, PackagePlus, Share2 } from 'lucide-react-native';
+import { Link, PackagePlus } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -49,6 +50,50 @@ const directPlatforms = [
   'Telegram',
 ];
 
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const value = typeof reader.result === 'string' ? reader.result : '';
+      if (value) {
+        resolve(value);
+        return;
+      }
+
+      reject(new Error('Failed to convert image to Data URL.'));
+    };
+    reader.onerror = () => reject(new Error('Failed to convert image to Data URL.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function normalizeProductImageUri(uri: string): Promise<string> {
+  if (!uri) {
+    return '';
+  }
+
+  if (uri.startsWith('data:')) {
+    return uri;
+  }
+
+  if (uri.startsWith('blob:') || uri.startsWith('file:') || uri.startsWith('content:')) {
+    try {
+      const response = await fetch(uri);
+      if (!response.ok) {
+        return uri;
+      }
+
+      const blob = await response.blob();
+      return await blobToDataUrl(blob);
+    } catch (error) {
+      console.warn('Unable to convert image URI to Data URL:', error);
+      return uri;
+    }
+  }
+
+  return uri;
+}
+
 export default function MarketplaceScreen() {
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
 
@@ -78,9 +123,8 @@ export default function MarketplaceScreen() {
 
   const [selected, setSelected] = useState<string[]>([]);
 
-  const [buyerName, setBuyerName] = useState('');
-
   const [copied, setCopied] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const sizeOptions =
     category === 'Other'
@@ -112,39 +156,54 @@ export default function MarketplaceScreen() {
    *
    * /product/product-1755841234567
    */
-  const saveProduct = () => {
-    console.log('GENERATE LINK PRESSED');
-
+  const saveProduct = async () => {
     if (!name.trim()) {
-      Alert.alert(
-        'Product Name Required',
-        'Please enter a product name.'
-      );
+      setFormError('Please enter a product name.');
       return;
     }
 
     if (!image.trim()) {
-      Alert.alert(
-        'Product Image Required',
-        'Please upload a product image.'
-      );
+      setFormError('Please upload a product image.');
+      return;
+    }
+
+    if (!category || (category !== 'Other' && !size.trim())) {
+      setFormError('Please select a category and size.');
+      return;
+    }
+
+    const stockNumber = Number(stock);
+    const costNumber = Number(cost);
+    const priceNumber = Number(price);
+    if (!Number.isFinite(stockNumber) || stockNumber < 0) {
+      setFormError('Stock must be a valid number of 0 or more.');
+      return;
+    }
+    if (!Number.isFinite(costNumber) || costNumber < 0) {
+      setFormError('Cost must be a valid amount of 0 or more.');
+      return;
+    }
+    if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
+      setFormError('Price must be a valid amount greater than 0.');
       return;
     }
 
     try {
+      const durableImage = await normalizeProductImageUri(image);
       const product = createProduct({
         name,
-        image,
+        image: durableImage,
         description,
         category,
         tripId,
         size: size || undefined,
-        stock: Number(stock) || 0,
-        costPrice: Number(cost) || 0,
-        sellingPrice: Number(price) || 0,
+        stock: stockNumber,
+        costPrice: costNumber,
+        sellingPrice: priceNumber,
       });
 
       if (!product) {
+        setFormError('Product creation failed. Please try again.');
         Alert.alert(
           'Product Creation Failed',
           'Product was not created.'
@@ -153,6 +212,7 @@ export default function MarketplaceScreen() {
       }
 
       if (!product.id) {
+        setFormError('Product creation failed because no Product ID was returned.');
         Alert.alert(
           'Product Creation Failed',
           'Product was not created because no Product ID was returned.'
@@ -160,10 +220,19 @@ export default function MarketplaceScreen() {
         return;
       }
 
-      const productLink = `/product/${product.id}`;
+      const productPath = `/product/${product.id}`;
+      const appOrigin =
+        typeof window !== 'undefined' && window.location?.origin
+          ? window.location.origin
+          : '';
+
+      const productLink = appOrigin
+        ? `${appOrigin}${productPath}`
+        : productPath;
 
       setGeneratedLink(productLink);
       setGeneratedImage(product.image);
+      setFormError('');
 
       setCopied(false);
 
@@ -183,6 +252,8 @@ export default function MarketplaceScreen() {
         error instanceof Error
           ? error.message
           : 'Unable to create the product.';
+
+      setFormError(message);
 
       Alert.alert(
         'Product Creation Failed',
@@ -218,7 +289,9 @@ export default function MarketplaceScreen() {
         });
 
     if (!result.canceled && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
+      const selectedUri = result.assets[0].uri;
+      const durableImage = await normalizeProductImageUri(selectedUri);
+      setImage(durableImage);
     }
   };
 
@@ -252,28 +325,69 @@ export default function MarketplaceScreen() {
       return;
     }
 
-    router.push(generatedLink as any);
+    const productPath = generatedLink.replace(
+      /^https?:\/\/[^/]+/i,
+      ''
+    );
+
+    if (productPath.startsWith('/')) {
+      router.push(productPath as any);
+      return;
+    }
+
+    router.push('/' as any);
   };
 
-  const shareProduct = (platform: string) => {
+  const shareProduct = async (platform: string) => {
     if (!generatedLink) {
+      return;
+    }
+
+    const message = `Check out this product:\n${generatedLink}`;
+
+    if (platform === 'WhatsApp') {
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+      try {
+        const supported = await Linking.canOpenURL(whatsappUrl);
+        if (supported) {
+          await Linking.openURL(whatsappUrl);
+          return;
+        }
+      } catch (error) {
+        console.warn('Unable to open WhatsApp share URL', error);
+      }
+
+      Alert.alert(
+        'WhatsApp Unavailable',
+        'WhatsApp could not be opened from this device.'
+      );
+      return;
+    }
+
+    if (platform === 'Telegram') {
+      const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(generatedLink)}&text=${encodeURIComponent('Check out this product')}`;
+
+      try {
+        const supported = await Linking.canOpenURL(telegramUrl);
+        if (supported) {
+          await Linking.openURL(telegramUrl);
+          return;
+        }
+      } catch (error) {
+        console.warn('Unable to open Telegram share URL', error);
+      }
+
+      Alert.alert(
+        'Telegram Unavailable',
+        'Telegram could not be opened from this device.'
+      );
       return;
     }
 
     Alert.alert(
       `Share to ${platform}`,
-      `Product link ready:\n\n${generatedLink}`
-    );
-  };
-
-  const shareBulk = () => {
-    if (selected.length === 0) {
-      return;
-    }
-
-    Alert.alert(
-      'MarketHub',
-      `${selected.length} products selected for bulk sharing.`
+      `Use your preferred ${platform} channel to share this product:\n\n${generatedLink}`
     );
   };
 
@@ -313,15 +427,8 @@ export default function MarketplaceScreen() {
             Upload Product
           </Text>
 
-          <Field
-            label="Product Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Premium Cotton Tee"
-          />
-
           <Text style={styles.label}>
-            Product Image
+            Product Photo
           </Text>
 
           {image ? (
@@ -351,26 +458,22 @@ export default function MarketplaceScreen() {
               </View>
             </View>
           ) : (
-            <View style={styles.imagePickerRow}>
-              <Pressable
-                style={styles.imagePickerButton}
-                onPress={() => chooseImage(false)}
-              >
-                <Text style={styles.imagePickerText}>
-                  + Photo Library
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.imagePickerButton}
-                onPress={() => chooseImage(true)}
-              >
-                <Text style={styles.imagePickerText}>
-                  + Camera
-                </Text>
-              </Pressable>
-            </View>
+            <Pressable
+              style={styles.imagePickerButton}
+              onPress={() => chooseImage(false)}
+            >
+              <Text style={styles.imagePickerText}>
+                Upload Photo
+              </Text>
+            </Pressable>
           )}
+
+          <Field
+            label="Product Name"
+            value={name}
+            onChangeText={setName}
+            placeholder="e.g. Premium Cotton Tee"
+          />
 
           <Field
             label="Description"
@@ -403,26 +506,26 @@ export default function MarketplaceScreen() {
 
           <View style={styles.fieldRow}>
             <Field
-              label="Stock"
-              value={stock}
-              onChangeText={setStock}
-              placeholder="0"
-              numeric
-            />
-
-            <Field
               label="Price (RM)"
               value={price}
               onChangeText={setPrice}
               placeholder="0"
               numeric
             />
+
+            <Field
+              label="Cost (RM)"
+              value={cost}
+              onChangeText={setCost}
+              placeholder="0"
+              numeric
+            />
           </View>
 
           <Field
-            label="Cost (RM)"
-            value={cost}
-            onChangeText={setCost}
+            label="Stock"
+            value={stock}
+            onChangeText={setStock}
             placeholder="0"
             numeric
           />
@@ -430,12 +533,14 @@ export default function MarketplaceScreen() {
           <Pressable
             style={styles.primaryButton}
             onPress={saveProduct}
-            disabled={!name.trim() || !image.trim()}
           >
             <Text style={styles.primaryButtonText}>
               Generate Product Link
             </Text>
           </Pressable>
+          {!!formError && (
+            <Text style={styles.formError}>{formError}</Text>
+          )}
         </View>
 
         {/* GENERATED PRODUCT */}
@@ -489,7 +594,7 @@ export default function MarketplaceScreen() {
                 onPress={openGeneratedProduct}
               >
                 <Text style={styles.secondaryButtonText}>
-                  Open Product
+                  Open Customer Page
                 </Text>
               </Pressable>
             </View>
@@ -524,7 +629,7 @@ export default function MarketplaceScreen() {
                       togglePlatform(
                         platform
                       );
-                      shareProduct(
+                      void shareProduct(
                         platform
                       );
                     }}
@@ -552,7 +657,7 @@ export default function MarketplaceScreen() {
                       togglePlatform(
                         platform
                       );
-                      shareProduct(
+                      void shareProduct(
                         platform
                       );
                     }}
@@ -563,152 +668,6 @@ export default function MarketplaceScreen() {
           </View>
         )}
 
-        {/* MARKET HUB */}
-
-        <View style={styles.shareCard}>
-          <View style={styles.shareHeader}>
-            <Text style={styles.sectionTitle}>
-              MarketHub
-            </Text>
-
-            <Share2
-              size={18}
-              color={THEME.primary}
-            />
-          </View>
-
-          <Text style={styles.subtitle}>
-            Select multiple products for bulk sharing.
-          </Text>
-
-          <TextInput
-            value={buyerName}
-            onChangeText={setBuyerName}
-            placeholder="Buyer name for I Want This"
-            placeholderTextColor={
-              THEME.text.light
-            }
-            style={styles.input}
-          />
-
-          {products.length === 0 ? (
-            <Text style={styles.emptyText}>
-              Your uploaded products will appear here.
-            </Text>
-          ) : (
-            products.map((product) => (
-              <View
-                key={product.id}
-                style={styles.productRow}
-              >
-                <Pressable
-                  style={styles.productSelect}
-                  onPress={() =>
-                    togglePlatform(
-                      product.id
-                    )
-                  }
-                >
-                  <Image
-                    source={{
-                      uri: product.image,
-                    }}
-                    style={styles.marketImage}
-                    resizeMode="contain"
-                  />
-
-                  <View
-                    style={
-                      styles.productDetails
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.productName
-                      }
-                    >
-                      {product.name}
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.emptyText
-                      }
-                    >
-                      {product.tripId
-                        ? `Trip: ${
-                            db.trips.find(
-                              (trip) =>
-                                trip.id ===
-                                product.tripId
-                            )?.name ??
-                            product.tripId
-                          }`
-                        : 'Marketplace product'}
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.emptyText
-                      }
-                    >
-                      RM
-                      {product.sellingPrice.toFixed(
-                        2
-                      )}{' '}
-                      · {product.category}
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={styles.selectText}
-                  >
-                    {selected.includes(
-                      product.id
-                    )
-                      ? 'Selected'
-                      : 'Select'}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  style={styles.wantButton}
-                  onPress={() =>
-                    router.push({
-                      pathname:
-                        '/order/create',
-                      params: {
-                        productId:
-                          product.id,
-                      },
-                    })
-                  }
-                >
-                  <Text
-                    style={styles.wantText}
-                  >
-                    I Want This
-                  </Text>
-                </Pressable>
-              </View>
-            ))
-          )}
-
-          {selected.length > 1 && (
-            <Pressable
-              style={styles.primaryButton}
-              onPress={shareBulk}
-            >
-              <Text
-                style={
-                  styles.primaryButtonText
-                }
-              >
-                Share Bulk to Platform
-              </Text>
-            </Pressable>
-          )}
-        </View>
       </ScrollView>
 
       {/* CATEGORY / SIZE MODAL */}
@@ -1048,6 +1007,12 @@ const styles = StyleSheet.create({
     fontSize:
       FONT_SIZES.base,
     fontWeight: '800',
+  },
+
+  formError: {
+    color: THEME.status.error,
+    fontSize: FONT_SIZES.sm,
+    marginTop: SPACING.sm,
   },
 
   linkText: {

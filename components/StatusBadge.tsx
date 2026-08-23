@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../theme';
 
-type StatusType = 'pending' | 'packing' | 'ready' | 'shipped' | 'delivered' | 'cancelled' | 'in-stock' | 'low-stock' | 'out-of-stock';
+type StatusType = 'pending' | 'payment_received' | 'packing' | 'ready' | 'shipped' | 'delivered' | 'cancelled' | 'in-stock' | 'low-stock' | 'out-of-stock';
 
 interface StatusBadgeProps {
   status: StatusType;
@@ -11,6 +11,7 @@ interface StatusBadgeProps {
 
 const STATUS_CONFIG: Record<StatusType, { bg: string; text: string; label: string }> = {
   pending: { bg: '#FEF3C7', text: '#92400E', label: 'Pending Purchase' },
+  payment_received: { bg: '#DCFCE7', text: '#166534', label: 'Payment Received' },
   packing: { bg: '#E0E7FF', text: '#3730A3', label: 'Packing' },
   ready: { bg: '#D1FAE5', text: '#065F46', label: 'Ready to Ship' },
   shipped: { bg: '#DBEAFE', text: '#0C2340', label: 'Shipped' },

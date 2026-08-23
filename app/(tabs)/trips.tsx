@@ -7,11 +7,12 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { useMockDatabase, getTripOrders, getTripProducts } from '../../services/mockDatabase';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
-type TripStatus = 'planning' | 'open' | 'completed';
+type TripStatus = 'planning' | 'open' | 'closed';
 
 function statusBadge(status: TripStatus) {
-  const badgeStatus = status === 'planning' ? 'pending' : status === 'open' ? 'in-stock' : 'delivered';
-  return <StatusBadge status={badgeStatus} label={status.charAt(0).toUpperCase() + status.slice(1)} />;
+  const normalized = status === 'planning' ? 'pending' : status === 'open' ? 'in-stock' : 'cancelled';
+  const label = status === 'planning' ? 'Planning' : status === 'open' ? 'Open' : 'Closed';
+  return <StatusBadge status={normalized} label={label} />;
 }
 
 function formatDate(date: string) {

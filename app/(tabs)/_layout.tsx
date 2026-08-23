@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable } from 'react-native';
-import { Tabs, router } from 'expo-router';
+import { Redirect, Tabs, router } from 'expo-router';
 import {
   Home,
   Truck,
@@ -11,6 +11,7 @@ import {
   Store,
   ClipboardList,
 } from 'lucide-react-native';
+import { useAuth } from '../../context/AuthContext';
 
 const iconProps = {
   size: 24,
@@ -18,9 +19,19 @@ const iconProps = {
 };
 
 export default function TabsLayout() {
+  const { currentUser, ready } = useAuth();
   const TAB_ICON_SIZE = 24;
   const THEME_PRIMARY = '#7C3AED';
   const THEME_INACTIVE = '#9CA3AF';
+
+  useEffect(() => {
+    if (ready && (!currentUser || currentUser.role !== 'founder')) {
+      router.replace('/login');
+    }
+  }, [currentUser, ready]);
+
+  if (!ready) return null;
+  if (!currentUser || currentUser.role !== 'founder') return <Redirect href="/login" />;
 
   return (
     <Tabs

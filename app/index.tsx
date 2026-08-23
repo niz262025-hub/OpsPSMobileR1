@@ -31,9 +31,6 @@ const content = {
     heroTitle2: 'Dalam Satu Aplikasi',
     heroDescription:
       'Semua yang anda perlukan untuk mengurus produk, order, trip, pembelian, inventory, kewangan dan keuntungan personal shopper dalam satu sistem.',
-    free: 'Mula Percuma',
-    freeSub: 'Percubaan percuma • 2 Trips',
-    noCard: 'Tiada kad kredit diperlukan',
 
     needsTitle:
       'Semua Keperluan Personal Shopper, Dalam Satu Sistem',
@@ -90,9 +87,6 @@ const content = {
     heroTitle2: 'In One Application',
     heroDescription:
       'Everything you need to manage products, orders, trips, purchases, inventory, finance and profit in one complete system.',
-    free: 'Start Free',
-    freeSub: 'Free trial • 2 Trips',
-    noCard: 'No credit card required',
 
     needsTitle:
       'Everything a Personal Shopper Needs, In One System',
@@ -149,9 +143,6 @@ const content = {
     heroTitle2: 'एक ही ऐप में मैनेज करें',
     heroDescription:
       'Products, orders, trips, purchases, inventory, finance और profit को एक ही complete system में आसानी से manage करें।',
-    free: 'मुफ्त शुरू करें',
-    freeSub: 'मुफ्त ट्रायल • 2 Trips',
-    noCard: 'क्रेडिट कार्ड की जरूरत नहीं',
 
     needsTitle:
       'Personal Shopper की सभी जरूरतें, एक ही सिस्टम में',
@@ -208,9 +199,6 @@ const content = {
     heroTitle2: '一个应用即可完成',
     heroDescription:
       '一个完整系统，帮助您管理产品、订单、Trips、采购、库存、财务和利润。',
-    free: '免费开始',
-    freeSub: '免费试用 • 2 Trips',
-    noCard: '无需信用卡',
 
     needsTitle:
       'Personal Shopper 所需的一切，一个系统完成',
@@ -263,6 +251,10 @@ const content = {
 
 function goLogin() {
   router.push('/login');
+}
+
+function goFounderRegistration() {
+  router.push('/register/founder');
 }
 
 export default function LandingPage() {
@@ -406,17 +398,14 @@ export default function LandingPage() {
             {/* ONLY ONE CTA */}
 
             <Pressable
-              onPress={goLogin}
+              onPress={goFounderRegistration}
               style={styles.freeButton}
             >
               <View>
                 <Text style={styles.freeButtonTitle}>
-                  {t.free}
+                  Founder
                 </Text>
 
-                <Text style={styles.freeButtonSub}>
-                  {t.freeSub}
-                </Text>
               </View>
 
               <ArrowRight
@@ -426,9 +415,6 @@ export default function LandingPage() {
               />
             </Pressable>
 
-            <Text style={styles.noCard}>
-              ✓ {t.noCard}
-            </Text>
 
           </View>
         </View>
@@ -579,7 +565,7 @@ export default function LandingPage() {
               </View>
 
               <Pressable
-                onPress={goLogin}
+                onPress={goFounderRegistration}
                 style={styles.founderButton}
               >
                 <Text style={styles.founderButtonText}>
@@ -886,6 +872,20 @@ const styles = StyleSheet.create({
 
   loginText: {
     color: '#5B2BD9',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  register: {
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#5B2BD9',
+    justifyContent: 'center',
+  },
+
+  registerText: {
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },

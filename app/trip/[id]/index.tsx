@@ -9,23 +9,46 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  Platform,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, CheckCircle2, Package, ShoppingBag } from 'lucide-react-native';
-import { useMockDatabase, markBuyListItemBought, createBuyListItem, updateBuyListItem, deleteBuyListItem, confirmOrderAvailability, setOrderPaymentMode, recordPayment, verifyPayment, confirmPurchase, markOrderPacked, createMockShipment, markOrderShipped, getTripProducts, getTripOrders, getTripBuyListItems, getProductVariant, getProduct } from '../../../services/mockDatabase';
+import { useMockDatabase, markBuyListItemBought, createBuyListItem, updateBuyListItem, deleteBuyListItem, getTripProducts, getTripOrders, getTripBuyListItems, getProductVariant, getProduct, closeTrip, addTripExpense, getTripExpenses, addTripCostOfGoods, getTripCostOfGoods, getTripProfit, type TripExpenseType } from '../../../services/mockDatabase';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../../theme';
 import { StatusBadge } from '../../../components/StatusBadge';
 
-type TabType = 'products' | 'orders' | 'buylist';
+type TabType = 'products' | 'orders' | 'buylist' | 'expenses';
 
-function getTripStatusBadge(status: 'planning' | 'open' | 'completed') {
-  const badgeStatus = status === 'planning' ? 'pending' : status === 'open' ? 'in-stock' : 'delivered';
-  return <StatusBadge status={badgeStatus} label={status.charAt(0).toUpperCase() + status.slice(1)} />;
+function getTripStatusBadge(status: 'planning' | 'open' | 'closed') {
+  const label = status === 'planning' ? 'Planning' : status === 'open' ? 'Open' : 'Closed';
+  const badgeStatus = status === 'planning' ? 'pending' : status === 'open' ? 'in-stock' : 'cancelled';
+  return <StatusBadge status={badgeStatus} label={label} />;
 }
 
 function formatDate(date: string) {
   const parsed = new Date(date);
   return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString();
+}
+
+type TripExpenseDraft = {
+  id: string;
+  amount: string;
+  type: TripExpenseType;
+  description: string;
+  date: string;
+  receipt: string;
+};
+
+function createTripExpenseDraft(): TripExpenseDraft {
+  return {
+    id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    amount: '0',
+    type: 'Transport',
+    description: '',
+    date: new Date().toISOString().slice(0, 10),
+    receipt: '',
+  };
 }
 
 export default function TripDetailScreen() {
@@ -35,10 +58,171 @@ export default function TripDetailScreen() {
   const [buyItemName, setBuyItemName] = useState('');
   const [buyItemQuantity, setBuyItemQuantity] = useState('1');
   const [editingBuyItem, setEditingBuyItem] = useState<string | null>(null);
+  const [expenseAmount, setExpenseAmount] = useState('0');
+  const [expenseType, setExpenseType] = useState<TripExpenseType>('Transport');
+  const [expenseDescription, setExpenseDescription] = useState('');
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseReceipt, setExpenseReceipt] = useState('');
+  const [expenseError, setExpenseError] = useState('');
+  const [showCloseFlow, setShowCloseFlow] = useState(false);
+  const [closeFlowDrafts, setCloseFlowDrafts] = useState<TripExpenseDraft[]>([createTripExpenseDraft()]);
+  const [closeFlowError, setCloseFlowError] = useState('');
+  const [cogsDrafts, setCogsDrafts] = useState<Array<{ id: string; productName: string; quantity: string; unitCost: string; notes: string }>>([
+    { id: `cogs-${Date.now()}`, productName: '', quantity: '1', unitCost: '0', notes: '' },
+  ]);
+
   const trip = db.trips.find((entry: { id: string }) => entry.id === id);
   const tripProducts = useMemo(() => getTripProducts(trip?.id ?? '', db), [trip, db]);
   const tripOrders = useMemo(() => getTripOrders(trip?.id ?? '', db), [trip, db]);
   const buyListItems = useMemo(() => getTripBuyListItems(trip?.id ?? '', db), [trip, db]);
+  const tripExpenses = useMemo(() => getTripExpenses(trip?.id ?? '', db), [trip, db]);
+  const tripCostOfGoods = useMemo(() => getTripCostOfGoods(trip?.id ?? '', db), [trip, db]);
+  const tripProfit = useMemo(() => (trip ? getTripProfit(trip.id, db) : { salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 }), [trip, db]);
+
+  const handleCloseTrip = () => {
+    if (!trip) return;
+    setShowCloseFlow(true);
+    setCloseFlowError('');
+    setCloseFlowDrafts([createTripExpenseDraft()]);
+  };
+
+  const updateCloseDraft = (id: string, updates: Partial<TripExpenseDraft>) => {
+    setCloseFlowDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...updates } : draft));
+  };
+
+  const addCloseDraft = () => {
+    setCloseFlowDrafts((current) => [...current, createTripExpenseDraft()]);
+  };
+
+  const updateCogsDraft = (id: string, updates: Partial<{ id: string; productName: string; quantity: string; unitCost: string; notes: string }>) => {
+    setCogsDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...updates } : draft));
+  };
+
+  const addCogsDraft = () => {
+    setCogsDrafts((current) => [...current, { id: `cogs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, productName: '', quantity: '1', unitCost: '0', notes: '' }]);
+  };
+
+  const saveCloseTrip = () => {
+    if (!trip) return;
+
+    const validExpenseDrafts = closeFlowDrafts.filter((draft) => Number(draft.amount) > 0);
+    const validCogsDrafts = cogsDrafts.filter((draft) => draft.productName.trim() && Number(draft.quantity) > 0 && Number(draft.unitCost) > 0);
+
+    if (validExpenseDrafts.length === 0 && validCogsDrafts.length === 0) {
+      setCloseFlowError('Please add at least one expense or cost-of-goods entry before closing the trip.');
+      return;
+    }
+
+    let failed = false;
+
+    validExpenseDrafts.forEach((draft) => {
+      const saved = addTripExpense({
+        tripId: trip.id,
+        amount: Number(draft.amount),
+        paymentType: draft.type,
+        description: draft.description.trim() || draft.type,
+        date: draft.date,
+        receiptUri: draft.receipt || undefined,
+      });
+
+      if (!saved) {
+        failed = true;
+      }
+    });
+
+    validCogsDrafts.forEach((draft) => {
+      const saved = addTripCostOfGoods({
+        tripId: trip.id,
+        productName: draft.productName,
+        quantity: Number(draft.quantity),
+        unitCost: Number(draft.unitCost),
+        notes: draft.notes,
+      });
+
+      if (!saved) {
+        failed = true;
+      }
+    });
+
+    if (failed) {
+      setCloseFlowError('One or more final items could not be saved.');
+      return;
+    }
+
+    closeTrip(trip.id);
+    setShowCloseFlow(false);
+    setCloseFlowError('');
+    setCloseFlowDrafts([createTripExpenseDraft()]);
+    setCogsDrafts([{ id: `cogs-${Date.now()}`, productName: '', quantity: '1', unitCost: '0', notes: '' }]);
+  };
+
+  const handleReceiptPick = async () => {
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => setExpenseReceipt(String(reader.result));
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Photo library permission is required to upload a receipt.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.9,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      setExpenseReceipt(result.assets[0].uri);
+    }
+  };
+
+  const saveExpense = () => {
+    if (!trip) return;
+
+    const parsedAmount = Number(expenseAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setExpenseError('Please enter a valid expense amount.');
+      return;
+    }
+
+    if (!expenseDescription.trim()) {
+      setExpenseError('Please add a brief expense description.');
+      return;
+    }
+
+    const saved = addTripExpense({
+      tripId: trip.id,
+      amount: parsedAmount,
+      paymentType: expenseType,
+      description: expenseDescription,
+      date: expenseDate,
+      receiptUri: expenseReceipt || undefined,
+    });
+
+    if (!saved) {
+      setExpenseError('Unable to save this trip expense.');
+      return;
+    }
+
+    setExpenseAmount('0');
+    setExpenseType('Transport');
+    setExpenseDescription('');
+    setExpenseDate(new Date().toISOString().slice(0, 10));
+    setExpenseReceipt('');
+    setExpenseError('');
+  };
 
   if (!trip) {
     return (
@@ -68,21 +252,190 @@ export default function TripDetailScreen() {
         <SummaryItem label="Buy List" value={buyListItems.length} />
       </View>
 
+      {trip.status === 'closed' && (
+        <View style={styles.summaryCard}>
+          <Text style={styles.sectionLabel}>Trip Summary</Text>
+          <View style={styles.summaryRows}>
+            <SummaryMetric label="Sales" value={`RM${tripProfit.salesRevenue.toFixed(2)}`} accent="primary" />
+            <SummaryMetric label="COGS" value={`-RM${tripProfit.costOfGoods.toFixed(2)}`} accent="warning" />
+            <SummaryMetric label="Expenses" value={`-RM${tripProfit.moneyOut.toFixed(2)}`} accent="danger" />
+            <SummaryMetric label="Gross Profit" value={`RM${tripProfit.grossProfit.toFixed(2)}`} accent="success" />
+            <SummaryMetric label="Net Profit" value={`RM${tripProfit.netProfit.toFixed(2)}`} accent="success" />
+          </View>
+        </View>
+      )}
+
+      <View style={styles.actionsRow}>
+        <TouchableOpacity style={styles.actionButtonPrimary} onPress={handleCloseTrip}>
+          <Text style={styles.actionButtonPrimaryText}>Close Trip</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.tabsContainer}>
-        {(['products', 'orders', 'buylist'] as TabType[]).map((tab) => (
+        {(['products', 'orders', 'buylist', 'expenses'] as TabType[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.activeTab]}
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabLabel, activeTab === tab && styles.activeTabLabel]}>
-              {tab === 'buylist' ? 'Buy List' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'buylist' ? 'Buy List' : tab === 'expenses' ? 'Expenses' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+        {showCloseFlow && (
+          <View style={styles.closeFlowCard}>
+            <Text style={styles.sectionLabel}>Close Trip</Text>
+            <Text style={styles.closeFlowHint}>Before closing, enter final trip expenses and any direct cost-of-goods for this trip.</Text>
+
+            <Text style={styles.sectionSubLabel}>Cost of Goods</Text>
+            {cogsDrafts.map((draft, draftIndex) => (
+              <View key={draft.id} style={styles.closeFlowItem}>
+                <Text style={styles.label}>COGS Item {draftIndex + 1}</Text>
+                <TextInput
+                  value={draft.productName}
+                  onChangeText={(value) => updateCogsDraft(draft.id, { productName: value })}
+                  style={styles.input}
+                  placeholder="Product name"
+                  placeholderTextColor={THEME.text.light}
+                />
+
+                <View style={styles.cogsRow}>
+                  <View style={styles.cogsField}>
+                    <Text style={styles.label}>Qty</Text>
+                    <TextInput
+                      value={draft.quantity}
+                      onChangeText={(value) => updateCogsDraft(draft.id, { quantity: value })}
+                      keyboardType="numeric"
+                      style={styles.input}
+                      placeholder="1"
+                      placeholderTextColor={THEME.text.light}
+                    />
+                  </View>
+                  <View style={styles.cogsField}>
+                    <Text style={styles.label}>Unit Cost</Text>
+                    <TextInput
+                      value={draft.unitCost}
+                      onChangeText={(value) => updateCogsDraft(draft.id, { unitCost: value })}
+                      keyboardType="numeric"
+                      style={styles.input}
+                      placeholder="0.00"
+                      placeholderTextColor={THEME.text.light}
+                    />
+                  </View>
+                </View>
+
+                <Text style={styles.label}>Notes</Text>
+                <TextInput
+                  value={draft.notes}
+                  onChangeText={(value) => updateCogsDraft(draft.id, { notes: value })}
+                  style={styles.input}
+                  placeholder="Supplier, batch, restock, etc."
+                  placeholderTextColor={THEME.text.light}
+                />
+
+                <Text style={styles.helperText}>Total: RM{((Number(draft.quantity) || 0) * (Number(draft.unitCost) || 0)).toFixed(2)}</Text>
+              </View>
+            ))}
+
+            <View style={styles.closeFlowActions}>
+              <TouchableOpacity style={styles.secondaryAction} onPress={addCogsDraft}>
+                <Text style={styles.secondaryActionText}>Add COGS</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sectionSubLabel}>Trip Expenses</Text>
+            {closeFlowDrafts.map((draft, draftIndex) => (
+              <View key={draft.id} style={styles.closeFlowItem}>
+                <Text style={styles.label}>Expense {draftIndex + 1}</Text>
+                <TextInput
+                  value={draft.amount}
+                  onChangeText={(value) => updateCloseDraft(draft.id, { amount: value })}
+                  keyboardType="numeric"
+                  style={styles.input}
+                  placeholder="Amount"
+                  placeholderTextColor={THEME.text.light}
+                />
+
+                <Text style={styles.label}>Type</Text>
+                <View style={styles.typeRow}>
+                  {(['Transport', 'Hotel', 'Parking', 'Toll', 'Other'] as TripExpenseType[]).map((type) => (
+                    <TouchableOpacity
+                      key={`${draft.id}-${type}`}
+                      style={[styles.typeButton, draft.type === type && styles.typeButtonSelected]}
+                      onPress={() => updateCloseDraft(draft.id, { type })}
+                    >
+                      <Text style={[styles.typeButtonText, draft.type === type && styles.typeButtonTextSelected]}>{type}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Description</Text>
+                <TextInput
+                  value={draft.description}
+                  onChangeText={(value) => updateCloseDraft(draft.id, { description: value })}
+                  style={styles.input}
+                  placeholder="Fuel, hotel, purchase, etc."
+                  placeholderTextColor={THEME.text.light}
+                />
+
+                <Text style={styles.label}>Receipt</Text>
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={async () => {
+                    if (Platform.OS === 'web') {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (event) => {
+                        const file = (event.target as HTMLInputElement).files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => updateCloseDraft(draft.id, { receipt: String(reader.result) });
+                        reader.readAsDataURL(file);
+                      };
+                      input.click();
+                      return;
+                    }
+
+                    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (!permission.granted) {
+                      Alert.alert('Permission Required', 'Photo library permission is required to upload a receipt.');
+                      return;
+                    }
+
+                    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+                    if (!result.canceled && result.assets.length > 0) {
+                      updateCloseDraft(draft.id, { receipt: result.assets[0].uri });
+                    }
+                  }}
+                >
+                  <Text style={styles.uploadButtonText}>{draft.receipt ? 'Replace Receipt' : 'Upload Receipt'}</Text>
+                </TouchableOpacity>
+
+                {!!draft.receipt && <Image source={{ uri: draft.receipt }} style={styles.receiptImage} resizeMode="cover" />}
+              </View>
+            ))}
+
+            <View style={styles.closeFlowActions}>
+              <TouchableOpacity style={styles.secondaryAction} onPress={addCloseDraft}>
+                <Text style={styles.secondaryActionText}>Add Expense</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.primaryAction} onPress={saveCloseTrip}>
+                <Text style={styles.primaryActionText}>Save Expenses & Close Trip</Text>
+              </TouchableOpacity>
+            </View>
+
+            {closeFlowError ? <Text style={styles.errorText}>{closeFlowError}</Text> : null}
+            <TouchableOpacity style={styles.cancelCloseButton} onPress={() => setShowCloseFlow(false)}>
+              <Text style={styles.cancelCloseText}>Back to Trip</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {activeTab === 'products' && (
           <View>
             {tripProducts.length === 0 ? (
@@ -228,6 +581,98 @@ export default function TripDetailScreen() {
             )}
           </View>
         )}
+
+        {activeTab === 'expenses' && (
+          <View>
+            <Text style={styles.sectionLabel}>Trip Expenses</Text>
+
+            <View style={styles.expenseCard}>
+              <Text style={styles.label}>Amount</Text>
+              <TextInput
+                value={expenseAmount}
+                onChangeText={setExpenseAmount}
+                keyboardType="numeric"
+                style={styles.input}
+                placeholder="0.00"
+                placeholderTextColor={THEME.text.light}
+              />
+
+              <Text style={styles.label}>Payment Type</Text>
+              <View style={styles.typeRow}>
+                {(['Transport', 'Hotel', 'Parking', 'Toll', 'Other'] as TripExpenseType[]).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.typeButton, expenseType === type && styles.typeButtonSelected]}
+                    onPress={() => setExpenseType(type)}
+                  >
+                    <Text style={[styles.typeButtonText, expenseType === type && styles.typeButtonTextSelected]}>{type}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.label}>Date</Text>
+              <TextInput
+                value={expenseDate}
+                onChangeText={setExpenseDate}
+                style={styles.input}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={THEME.text.light}
+              />
+
+              <Text style={styles.label}>Description</Text>
+              <TextInput
+                value={expenseDescription}
+                onChangeText={setExpenseDescription}
+                style={[styles.input, styles.textArea]}
+                placeholder="Hotel, transport, toll, etc."
+                placeholderTextColor={THEME.text.light}
+                multiline
+              />
+
+              <Text style={styles.label}>Receipt</Text>
+              <TouchableOpacity style={styles.uploadButton} onPress={handleReceiptPick}>
+                <Text style={styles.uploadButtonText}>{expenseReceipt ? 'Replace Receipt' : 'Capture / Upload Receipt'}</Text>
+              </TouchableOpacity>
+
+              {expenseReceipt ? (
+                <Image source={{ uri: expenseReceipt }} style={styles.receiptImage} resizeMode="cover" />
+              ) : null}
+
+              {!!expenseError && <Text style={styles.errorText}>{expenseError}</Text>}
+
+              <TouchableOpacity style={styles.primaryAction} onPress={saveExpense}>
+                <Text style={styles.primaryActionText}>Save Expense</Text>
+              </TouchableOpacity>
+            </View>
+
+            {tripExpenses.length === 0 ? (
+              <Text style={styles.emptyText}>No trip expenses recorded yet</Text>
+            ) : (
+              tripExpenses.map((expense) => (
+                <View key={expense.id} style={styles.card}>
+                  <View style={styles.expenseRow}>
+                    <View style={styles.expenseInfo}>
+                      <Text style={styles.cardTitle}>{expense.paymentType}</Text>
+                      <Text style={styles.itemDetail}>{expense.description || 'Trip expense'}</Text>
+                    </View>
+                    <Text style={styles.amountText}>RM{expense.amount.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.metaGrid}>
+                    <Text style={styles.metaLabel}>Date</Text>
+                    <Text style={styles.metaValue}>{formatDate(expense.date)}</Text>
+                  </View>
+                  <View style={styles.metaGrid}>
+                    <Text style={styles.metaLabel}>Receipt</Text>
+                    <Text style={styles.metaValue}>{expense.receiptUri ? 'Attached' : 'None'}</Text>
+                  </View>
+                  {!!expense.receiptUri && (
+                    <Image source={{ uri: expense.receiptUri }} style={styles.receiptPreview} resizeMode="cover" />
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -238,6 +683,17 @@ function SummaryItem({ label, value }: { label: string; value: number }) {
     <View style={styles.summaryItem}>
       <Text style={styles.summaryValue}>{value}</Text>
       <Text style={styles.summaryLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function SummaryMetric({ label, value, accent }: { label: string; value: string; accent: 'primary' | 'danger' | 'success' | 'warning' }) {
+  const color = accent === 'primary' ? THEME.primary : accent === 'danger' ? THEME.status.error : accent === 'warning' ? THEME.status.warning : THEME.status.success;
+
+  return (
+    <View style={styles.summaryMetricRow}>
+      <Text style={styles.summaryMetricLabel}>{label}</Text>
+      <Text style={[styles.summaryMetricValue, { color }]}>{value}</Text>
     </View>
   );
 }
@@ -308,6 +764,67 @@ const styles = StyleSheet.create({
     color: THEME.text.secondary,
     fontSize: FONT_SIZES.xs,
     marginTop: SPACING.xs,
+  },
+  summaryCard: {
+    backgroundColor: THEME.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+    paddingHorizontal: SPACING['2xl'],
+    paddingVertical: SPACING.md,
+  },
+  summaryRows: {
+    gap: SPACING.sm,
+  },
+  summaryMetricRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  summaryMetricLabel: {
+    color: THEME.text.primary,
+    fontWeight: '700',
+  },
+  summaryMetricValue: {
+    fontSize: FONT_SIZES.base,
+    fontWeight: '800',
+  },
+  sectionSubLabel: {
+    color: THEME.text.primary,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '800',
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  cogsRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  cogsField: {
+    flex: 1,
+  },
+  helperText: {
+    color: THEME.text.secondary,
+    fontSize: FONT_SIZES.xs,
+    marginTop: SPACING.xs,
+  },
+  actionsRow: {
+    backgroundColor: THEME.surface,
+    paddingHorizontal: SPACING['2xl'],
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+  },
+  actionButtonPrimary: {
+    backgroundColor: THEME.primary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+  },
+  actionButtonPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -419,141 +936,330 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.lg,
     fontWeight: '700',
     color: THEME.text.primary,
-    marginTop: SPACING.xs,
   },
-  orderCustomer: {
-    fontSize: FONT_SIZES.sm,
-    color: THEME.text.secondary,
-  },
-  orderItems: {
-    borderTopWidth: 1,
-    borderTopColor: THEME.border,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
-    paddingVertical: SPACING.md,
+  productImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#F3F4F6',
+    borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.md,
   },
-  orderItem: {
+  uploadButton: {
+    backgroundColor: '#F5F3FF',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  uploadButtonText: {
+    color: THEME.primary,
+    fontWeight: '700',
+  },
+  emptyText: {
+    color: THEME.text.secondary,
+    fontSize: FONT_SIZES.sm,
+    marginBottom: SPACING.md,
+  },
+  sectionLabel: {
+    color: THEME.text.primary,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    marginBottom: SPACING.md,
+  },
+  label: {
+    color: THEME.text.primary,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
     marginBottom: SPACING.sm,
   },
-  itemName: {
+  input: {
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: '#FCFCFD',
+    color: THEME.text.primary,
+    marginBottom: SPACING.md,
+  },
+  textArea: {
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+  expenseCard: {
+    backgroundColor: THEME.surface,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: THEME.border,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  typeButton: {
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  typeButtonSelected: {
+    backgroundColor: THEME.primary,
+    borderColor: THEME.primary,
+  },
+  typeButtonText: {
+    color: THEME.text.primary,
+    fontWeight: '600',
+  },
+  typeButtonTextSelected: {
+    color: '#FFFFFF',
+  },
+  closeFlowCard: {
+    backgroundColor: THEME.surface,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: THEME.border,
+  },
+  closeFlowHint: {
+    color: THEME.text.secondary,
+    fontSize: FONT_SIZES.sm,
+    marginBottom: SPACING.md,
+  },
+  closeFlowItem: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  closeFlowActions: {
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  secondaryAction: {
+    backgroundColor: '#F5F3FF',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+  },
+  secondaryActionText: {
+    color: THEME.primary,
+    fontWeight: '800',
+  },
+  primaryAction: {
+    backgroundColor: THEME.primary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+  },
+  primaryActionText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  cancelCloseButton: {
+    marginTop: SPACING.md,
+    alignItems: 'center',
+  },
+  cancelCloseText: {
+    color: THEME.primary,
+    fontWeight: '700',
+  },
+  errorText: {
+    color: THEME.status.error,
+    marginBottom: SPACING.md,
+    fontSize: FONT_SIZES.sm,
+  },
+  receiptImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F3F4F6',
+    marginBottom: SPACING.md,
+  },
+  receiptPreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F3F4F6',
+    marginTop: SPACING.md,
+  },
+  expenseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  expenseInfo: {
+    flex: 1,
+    paddingRight: SPACING.md,
+  },
+  amountText: {
+    color: THEME.primary,
+    fontSize: FONT_SIZES.base,
+    fontWeight: '800',
+  },
+  metaGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+  },
+  metaLabel: {
+    color: THEME.text.secondary,
+    fontSize: FONT_SIZES.sm,
+  },
+  metaValue: {
+    color: THEME.text.primary,
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
+  },
+  notFound: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.background,
+  },
+  notFoundText: {
     color: THEME.text.primary,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+  },
+  orderCustomer: {
+    color: THEME.text.secondary,
+    fontSize: FONT_SIZES.sm,
+  },
+  orderItems: {
+    gap: SPACING.sm,
+  },
+  orderItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+    paddingBottom: SPACING.sm,
+  },
+  itemName: {
+    color: THEME.text.primary,
+    fontWeight: '600',
   },
   itemDetail: {
-    fontSize: FONT_SIZES.xs,
     color: THEME.text.secondary,
-    marginTop: SPACING.xs,
+    fontSize: FONT_SIZES.sm,
   },
   orderFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: SPACING.md,
   },
   orderTotal: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: '700',
-    color: THEME.primary,
+    color: THEME.text.primary,
+    fontWeight: '800',
   },
   shippingBtn: {
-    flexDirection: 'row',
     backgroundColor: THEME.primary,
+    borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING.xs,
   },
   shippingBtnText: {
     color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: FONT_SIZES.sm,
-    marginLeft: SPACING.xs,
-  },
-  orderActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-    marginTop: SPACING.md,
+    fontWeight: '700',
   },
   smallAction: {
-    backgroundColor: '#F5F3FF',
+    marginTop: SPACING.md,
+  },
+  smallActionText: {
+    color: THEME.primary,
+    fontWeight: '700',
+  },
+  addBuyListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  buyInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: THEME.border,
     borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: '#FCFCFD',
+    color: THEME.text.primary,
+  },
+  quantityInput: {
+    width: 80,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: '#FCFCFD',
+    color: THEME.text.primary,
+  },
+  addBuyButton: {
+    backgroundColor: THEME.primary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
   },
-  smallActionText: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700' },
-  dangerActionText: { color: THEME.status.error, fontSize: FONT_SIZES.xs, fontWeight: '700' },
-  sectionLabel: {
-    fontSize: FONT_SIZES.base,
+  addBuyText: {
+    color: '#FFFFFF',
     fontWeight: '700',
-    color: THEME.text.primary,
-    marginBottom: SPACING.md,
   },
   buyListRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: SPACING.sm,
   },
   buyListLabel: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
     color: THEME.text.primary,
+    fontWeight: '700',
   },
   buyListDetail: {
-    fontSize: FONT_SIZES.xs,
     color: THEME.text.secondary,
+    fontSize: FONT_SIZES.sm,
     marginTop: SPACING.xs,
+  },
+  buyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flexWrap: 'wrap',
   },
   markBoughtBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: '#D1FAE5',
-    borderRadius: BORDER_RADIUS.md,
+    gap: SPACING.xs,
   },
   markBoughtText: {
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '600',
     color: THEME.status.success,
-    marginLeft: SPACING.xs,
+    fontWeight: '700',
   },
-  addBuyListRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md, gap: SPACING.sm },
-  editRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md, gap: SPACING.sm },
-  buyInput: { flex: 1, borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, color: THEME.text.primary },
-  quantityInput: { width: 58, borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, color: THEME.text.primary },
-  addBuyButton: { backgroundColor: THEME.primary, borderRadius: BORDER_RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
-  addBuyText: { color: '#FFFFFF', fontWeight: '700', fontSize: FONT_SIZES.xs },
-  buyActions: { alignItems: 'flex-end', gap: SPACING.xs },
-  editBuyText: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700' },
-  deleteBuyText: { color: THEME.status.error, fontSize: FONT_SIZES.xs, fontWeight: '700' },
-  emptyText: {
-    fontSize: FONT_SIZES.base,
-    color: THEME.text.secondary,
-    textAlign: 'center',
-    paddingVertical: SPACING['2xl'],
+  editBuyText: {
+    color: THEME.primary,
+    fontWeight: '700',
   },
-  uploadButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: THEME.primary,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.md,
+  deleteBuyText: {
+    color: THEME.status.error,
+    fontWeight: '700',
   },
-  uploadButtonText: { color: '#FFFFFF', fontWeight: '700' },
-  productImage: { width: '100%', height: 180, borderRadius: BORDER_RADIUS.md, backgroundColor: '#F8FAFC', marginBottom: SPACING.md },
-  notFound: {
-    flex: 1,
-    justifyContent: 'center',
+  editRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.background,
-  },
-  notFoundText: {
-    fontSize: FONT_SIZES.lg,
-    color: THEME.text.secondary,
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
   },
 });
 

@@ -1,4 +1,4 @@
-# BizPS Mobile v1
+# OpsPS Mobile v1
 
 OpsPS is now scoped as a mobile-only React Native + Expo application for Android phones. The focus is on stable Expo Go launches, native phone UX, and later APK delivery.
 

@@ -1,18 +1,33 @@
 import React, { useState } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ArrowRight, LockKeyhole, Mail } from 'lucide-react-native';
 
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth, UserRole } from '../../context/AuthContext';
 
 export default function LoginScreen() {
 	const { t } = useLanguage();
-	const [registering, setRegistering] = useState(false);
+	const { role = 'founder' } = useLocalSearchParams<{ role?: UserRole }>();
+	const { login, ready } = useAuth();
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [error, setError] = useState('');
 
-	const submit = () => {
-		router.replace('/(tabs)/dashboard');
+	const submit = async () => {
+		if (!ready) return;
+		if (!email.trim() || !password.trim()) {
+			setError('Please enter your email and password.');
+			return;
+		}
+
+		const success = await login(email, password, role);
+		if (success) {
+			router.replace(role === 'founder' ? '/(tabs)/dashboard' : '/customer');
+			return;
+		}
+
+		setError('Invalid email or password.');
 	};
 
 	return (
@@ -29,7 +44,7 @@ export default function LoginScreen() {
 
 				<View style={styles.form}>
 					<Text style={styles.welcome}>{t.auth.welcome}</Text>
-					<Text style={styles.title}>{registering ? t.auth.registerTitle : t.auth.loginTitle}</Text>
+					<Text style={styles.title}>{t.auth.loginTitle}</Text>
 
 					<View style={styles.inputWrap}>
 						<Mail size={18} color="#8A83A4" />
@@ -41,13 +56,12 @@ export default function LoginScreen() {
 					</View>
 
 					<Pressable onPress={submit} style={styles.submitButton}>
-						<Text style={styles.submitText}>{registering ? t.auth.registerButton : t.auth.loginButton}</Text>
+						<Text style={styles.submitText}>{t.auth.loginButton}</Text>
 						<ArrowRight size={18} color="#FFFFFF" />
 					</Pressable>
-					{!registering && <Pressable style={styles.forgotButton}><Text style={styles.forgotText}>{t.auth.forgotPassword}</Text></Pressable>}
-					<Pressable onPress={() => setRegistering((value) => !value)} style={styles.switchButton}>
-						<Text style={styles.switchText}>{registering ? t.auth.haveAccount : t.auth.noAccount}</Text>
-						<Text style={styles.switchAction}>{registering ? t.auth.loginButton : t.auth.createAccount}</Text>
+					{!!error && <Text style={styles.error}>{error}</Text>}
+					<Pressable style={styles.forgotButton} onPress={() => router.push('/forgot-password')}>
+						<Text style={styles.forgotText}>{t.auth.forgotPassword}</Text>
 					</Pressable>
 				</View>
 			</View>
@@ -74,7 +88,5 @@ const styles = StyleSheet.create({
 	submitText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
 	forgotButton: { alignSelf: 'center', padding: 12 },
 	forgotText: { color: '#5B2BD9', fontSize: 13, fontWeight: '700' },
-	switchButton: { alignItems: 'center', marginTop: 12 },
-	switchText: { color: '#77738D', fontSize: 13 },
-	switchAction: { color: '#EC4C99', fontSize: 14, fontWeight: '800', marginTop: 4 },
+	error: { color: '#B42318', fontSize: 13, marginTop: 10 },
 });

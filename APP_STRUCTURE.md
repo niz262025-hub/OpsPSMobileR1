@@ -1,4 +1,4 @@
-# BizPS Mobile v1 - Application Structure
+# OpsPS Mobile v1 - Application Structure
 
 ## Mobile-Only Scope
 
