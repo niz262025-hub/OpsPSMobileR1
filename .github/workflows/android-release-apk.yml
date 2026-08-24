@@ -63,12 +63,6 @@ jobs:
             "cmake;3.22.1" \
             "ndk;27.1.12297006"
 
-      - name: Write local Gradle SDK path
-        shell: bash
-        run: |
-          set -euxo pipefail
-          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > android/local.properties
-
       - name: Install dependencies
         shell: bash
         run: |
@@ -82,6 +76,13 @@ jobs:
           if [ ! -f android/settings.gradle ] || [ ! -f android/gradlew ]; then
             npx expo prebuild --platform android --clean
           fi
+
+      - name: Write local Gradle SDK path
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p android
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > android/local.properties
 
       - name: Build release APK for arm64-v8a only
         shell: bash
