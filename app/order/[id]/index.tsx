@@ -13,6 +13,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ShoppingBag } from 'lucide-react-native';
 import {
+  clearActiveBusinessScope,
   completeCustomerPayment,
   confirmOrderAvailability,
   confirmPayLater,
@@ -28,6 +29,7 @@ import {
   startPacking,
   offerCustomerPaymentOption,
   rejectPayment,
+  setActiveBusinessScope,
   setOrderPaymentMode,
   submitEasyParcelShipment,
   syncShipmentStatus,
@@ -39,11 +41,38 @@ import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../../theme';
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
+
+  React.useEffect(() => {
+    try {
+      const activeBusinessIdFromStorage =
+        typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+          ? window.localStorage.getItem('@opsps_active_business_id') ||
+            (() => {
+              const rawSession = window.localStorage.getItem('@opsps_session');
+              if (!rawSession) {
+                return null;
+              }
+              const session = JSON.parse(rawSession) as { businessId?: string } | null;
+              return session?.businessId?.trim() || null;
+            })()
+          : null;
+
+      if (activeBusinessIdFromStorage) {
+        setActiveBusinessScope(activeBusinessIdFromStorage);
+        return;
+      }
+    } catch {
+      // Ignore storage access errors; the page will still render the default business scope.
+    }
+
+    clearActiveBusinessScope();
+  }, []);
+
   const db = useMockDatabase();
   const order = id ? getOrder(id, db) : undefined;
   const item = order ? db.orderItems.find((entry) => entry.orderId === order.id) : undefined;
-  const variant = item ? getProductVariant(item.productVariantId, db) : undefined;
-  const product = order?.productId ? getProduct(order.productId, db) : undefined;
+  const variant = item ? getProductVariant(item.productVariantId, db, order?.businessId ?? null) : undefined;
+  const product = order?.productId ? getProduct(order.productId, db, order.businessId ?? null) : undefined;
   const resolvedProduct = product ?? (variant ? getProduct(variant.productId, db) : undefined);
   const paymentMethods = getConfiguredPaymentMethods(db.paymentSettings);
   const [shipmentFormVisible, setShipmentFormVisible] = React.useState(false);
@@ -156,7 +185,13 @@ export default function OrderDetailScreen() {
   const awaitingAvailability = !order.availabilityStatus || order.availabilityStatus === 'pending';
   const paymentRequired = order.availabilityStatus === 'confirmed' && !order.paymentMode;
   const canShowPaymentRequest = order.availabilityStatus === 'confirmed' && !!order.paymentMode && order.paymentStatus !== 'success' && order.paymentStatus !== 'paid';
-  const customerPaymentOffer = order.availabilityStatus === 'confirmed' && (order.requestStatus === 'AVAILABLE' || order.requestStatus === 'PENDING_PAYMENT' || order.requestStatus === 'PAYMENT_REQUESTED' || order.requestStatus === 'PAY_LATER_OFFERED');
+  const customerPaymentOffer = order.availabilityStatus === 'confirmed' && (
+    order.requestStatus === 'AVAILABLE' ||
+    order.requestStatus === 'PENDING_PAYMENT' ||
+    order.requestStatus === 'PAYMENT_REQUESTED' ||
+    order.requestStatus === 'PAYMENT_REQUIRED' ||
+    order.requestStatus === 'PAY_LATER_OFFERED'
+  );
   const orderStatusLabel = (() => {
     const canonical = order.requestStatus ?? order.status ?? 'PENDING_AVAILABILITY';
     const map: Record<string, string> = {
@@ -307,7 +342,7 @@ export default function OrderDetailScreen() {
             <Text style={styles.meta}>Quantity: {item?.quantity ?? 0}</Text>
             <Text style={styles.total}>Total: RM{order.total.toFixed(2)}</Text>
 
-            {order.requestStatus !== 'PENDING_PAYMENT' && order.requestStatus !== 'PAYMENT_REQUESTED' && order.requestStatus !== 'PAY_LATER_OFFERED' && (
+            {order.requestStatus !== 'PENDING_PAYMENT' && order.requestStatus !== 'PAYMENT_REQUESTED' && order.requestStatus !== 'PAYMENT_REQUIRED' && order.requestStatus !== 'PAY_LATER_OFFERED' && (
               <>
                 <Text style={styles.section}>Choose Customer Payment Option:</Text>
                 <View style={styles.actions}>
@@ -321,7 +356,7 @@ export default function OrderDetailScreen() {
               </>
             )}
 
-            {(order.requestStatus === 'PENDING_PAYMENT' || order.requestStatus === 'PAYMENT_REQUESTED') && (
+            {(order.requestStatus === 'PENDING_PAYMENT' || order.requestStatus === 'PAYMENT_REQUESTED' || order.requestStatus === 'PAYMENT_REQUIRED') && (
               <Text style={styles.meta}>Payment Option: Pay Now</Text>
             )}
 

@@ -26,6 +26,13 @@
       },
       "predictiveBackGestureEnabled": true,
       "package": "com.anonymous.bizpsmobile"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "44526312-3d44-4fd3-ac22-c1fdf9a0d196"
+      }
+    },
+    "owner": "syaifulnizam83"
   }
 }

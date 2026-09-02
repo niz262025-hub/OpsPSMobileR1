@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -96,12 +98,17 @@ async function normalizeProductImageUri(uri: string): Promise<string> {
 
 export default function MarketplaceScreen() {
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
+  const routeTripId = Array.isArray(tripId) ? tripId[0] : tripId;
+  const fallbackTripId =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('tripId') ?? undefined
+      : undefined;
+  const resolvedTripId = routeTripId ?? fallbackTripId;
 
   const db = useMockDatabase();
 
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
-  const [description, setDescription] = useState('');
 
   const [category, setCategory] =
     useState<ProductCategory>('Clothing');
@@ -132,6 +139,10 @@ export default function MarketplaceScreen() {
       : PRODUCT_SIZE_OPTIONS[category];
 
   const products = db.products;
+  const tripLabel =
+    typeof resolvedTripId === 'string' && resolvedTripId.trim()
+      ? db.trips.find((trip) => trip.id === resolvedTripId)?.name ?? resolvedTripId
+      : 'No trip selected';
 
   const selectCategory = (next: ProductCategory) => {
     setCategory(next);
@@ -157,13 +168,13 @@ export default function MarketplaceScreen() {
    * /product/product-1755841234567
    */
   const saveProduct = async () => {
-    if (!name.trim()) {
-      setFormError('Please enter a product name.');
+    if (!resolvedTripId) {
+      setFormError('Please open this product from a real trip.');
       return;
     }
 
-    if (!image.trim()) {
-      setFormError('Please upload a product image.');
+    if (!name.trim()) {
+      setFormError('Please enter a product name.');
       return;
     }
 
@@ -180,7 +191,7 @@ export default function MarketplaceScreen() {
       return;
     }
     if (!Number.isFinite(costNumber) || costNumber < 0) {
-      setFormError('Cost must be a valid amount of 0 or more.');
+      setFormError('COGS must be a valid amount of 0 or more.');
       return;
     }
     if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
@@ -189,13 +200,26 @@ export default function MarketplaceScreen() {
     }
 
     try {
-      const durableImage = await normalizeProductImageUri(image);
+      const durableImage = image.trim()
+        ? await normalizeProductImageUri(image)
+        : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+            <defs>
+              <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stop-color="#5B2BD9" />
+                <stop offset="100%" stop-color="#EC4C99" />
+              </linearGradient>
+            </defs>
+            <rect width="1200" height="900" fill="#F5F3FF"/>
+            <rect x="120" y="130" width="960" height="640" rx="32" fill="url(#g)" opacity="0.9"/>
+            <text x="600" y="470" text-anchor="middle" font-size="72" font-family="Arial, sans-serif" fill="white" font-weight="700">${name.trim() || 'OpsPS Product'}</text>
+          </svg>
+        `)}`;
       const product = createProduct({
         name,
         image: durableImage,
-        description,
         category,
-        tripId,
+        tripId: resolvedTripId,
         size: size || undefined,
         stock: stockNumber,
         costPrice: costNumber,
@@ -220,7 +244,7 @@ export default function MarketplaceScreen() {
         return;
       }
 
-      const productPath = `/product/${product.id}`;
+      const productPath = `/product/${product.id}?businessId=${encodeURIComponent(product.businessId || 'business-default')}`;
       const appOrigin =
         typeof window !== 'undefined' && window.location?.origin
           ? window.location.origin
@@ -238,7 +262,6 @@ export default function MarketplaceScreen() {
 
       setName('');
       setImage('');
-      setDescription('');
       setStock('0');
       setCost('0');
       setPrice('0');
@@ -263,6 +286,50 @@ export default function MarketplaceScreen() {
   };
 
   const chooseImage = async (camera: boolean) => {
+    const isWebRuntime = Platform.OS === 'web' || typeof document !== 'undefined';
+
+    if (isWebRuntime) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.position = 'fixed';
+      input.style.left = '-9999px';
+      input.style.top = '-9999px';
+      input.style.opacity = '0';
+      input.style.pointerEvents = 'none';
+
+      const cleanup = () => {
+        if (input.parentNode) {
+          input.parentNode.removeChild(input);
+        }
+      };
+
+      input.onchange = (event: Event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        cleanup();
+
+        if (!file) {
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const nextValue = typeof reader.result === 'string' ? reader.result : '';
+          if (nextValue) {
+            setImage(nextValue);
+          }
+        };
+        reader.readAsDataURL(file);
+      };
+
+      input.oncancel = cleanup;
+      document.body.appendChild(input);
+      setTimeout(() => {
+        input.click();
+      }, 0);
+      return;
+    }
+
     const permission = camera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -393,336 +460,214 @@ export default function MarketplaceScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardFlex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'android' ? 32 : 0}
       >
-        {/* HEADER */}
-
-        <View style={styles.headingRow}>
-          <View>
-            <Text style={styles.eyebrow}>
-              Product operations
-            </Text>
-
-            <Text style={styles.title}>
-              Marketplace
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Upload, price and share products from one place.
-            </Text>
-          </View>
-
-          <PackagePlus
-            size={28}
-            color={THEME.primary}
-          />
-        </View>
-
-        {/* UPLOAD PRODUCT */}
-
-        <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>
-            Upload Product
-          </Text>
-
-          <Text style={styles.label}>
-            Product Photo
-          </Text>
-
-          {image ? (
-            <View style={styles.imagePreviewWrap}>
-              <Image
-                source={{ uri: image }}
-                style={styles.imagePreview}
-                resizeMode="contain"
-              />
-
-              <View style={styles.imageActions}>
-                <Pressable
-                  onPress={() => chooseImage(false)}
-                >
-                  <Text style={styles.linkButtonText}>
-                    Replace
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => setImage('')}
-                >
-                  <Text style={styles.deleteText}>
-                    Remove
-                  </Text>
-                </Pressable>
-              </View>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          alwaysBounceVertical={false}
+          bounces={false}
+        >
+          <View style={styles.headingRow}>
+            <View>
+              <Text style={styles.eyebrow}>Product operations</Text>
+              <Text style={styles.title}>Marketplace Catalog</Text>
+              <Text style={styles.subtitle}>
+                Upload, price and share products from one place.
+              </Text>
             </View>
-          ) : (
-            <Pressable
-              style={styles.imagePickerButton}
-              onPress={() => chooseImage(false)}
-            >
-              <Text style={styles.imagePickerText}>
-                Upload Photo
-              </Text>
-            </Pressable>
-          )}
-
-          <Field
-            label="Product Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Premium Cotton Tee"
-          />
-
-          <Field
-            label="Description"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Product details"
-          />
-
-          <Text style={styles.label}>
-            Category
-          </Text>
-
-          <PickerButton
-            value={category}
-            onPress={() => setPicker('category')}
-          />
-
-          {category !== 'Other' && (
-            <>
-              <Text style={styles.label}>
-                Size
-              </Text>
-
-              <PickerButton
-                value={size}
-                onPress={() => setPicker('size')}
-              />
-            </>
-          )}
-
-          <View style={styles.fieldRow}>
-            <Field
-              label="Price (RM)"
-              value={price}
-              onChangeText={setPrice}
-              placeholder="0"
-              numeric
-            />
-
-            <Field
-              label="Cost (RM)"
-              value={cost}
-              onChangeText={setCost}
-              placeholder="0"
-              numeric
-            />
+            <PackagePlus size={28} color={THEME.primary} />
           </View>
 
-          <Field
-            label="Stock"
-            value={stock}
-            onChangeText={setStock}
-            placeholder="0"
-            numeric
-          />
+          <View style={styles.formCard}>
+            <Text style={styles.sectionTitle}>Upload Product</Text>
 
-          <Pressable
-            style={styles.primaryButton}
-            onPress={saveProduct}
-          >
-            <Text style={styles.primaryButtonText}>
-              Generate Product Link
-            </Text>
-          </Pressable>
-          {!!formError && (
-            <Text style={styles.formError}>{formError}</Text>
-          )}
-        </View>
+            <Text style={styles.label}>Product Photo</Text>
 
-        {/* GENERATED PRODUCT */}
+            {image ? (
+              <View style={styles.imagePreviewWrap}>
+                <Image
+                  source={{ uri: image }}
+                  style={styles.imagePreview}
+                  resizeMode="contain"
+                />
 
-        {generatedLink && (
-          <View style={styles.shareCard}>
-            <Text style={styles.sectionTitle}>
-              Share / Post Product
-            </Text>
-
-            {!!generatedImage && (
-              <Image
-                source={{ uri: generatedImage }}
-                style={styles.productImage}
-                resizeMode="cover"
-              />
+                <View style={styles.imageActions}>
+                  <Pressable onPress={() => chooseImage(false)}>
+                    <Text style={styles.linkButtonText}>Replace</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setImage('')}>
+                    <Text style={styles.deleteText}>Remove</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.imagePickerButton}
+                onPress={() => chooseImage(false)}
+              >
+                <Text style={styles.imagePickerText}>Upload Photo</Text>
+              </Pressable>
             )}
 
-            <Text style={styles.groupLabel}>
-              Product Link
-            </Text>
+            <Field
+              label="Product Name"
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Premium Cotton Tee"
+            />
 
-            <View style={styles.linkBox}>
-              <Link
-                size={17}
-                color={THEME.primary}
+            <Text style={styles.label}>Category</Text>
+            <PickerButton value={category} onPress={() => setPicker('category')} />
+
+            {category !== 'Other' && (
+              <>
+                <Text style={styles.label}>Size</Text>
+                <PickerButton value={size} onPress={() => setPicker('size')} />
+              </>
+            )}
+
+            <View style={styles.fieldRow}>
+              <Field
+                label="Price (RM)"
+                value={price}
+                onChangeText={setPrice}
+                placeholder="0"
+                numeric
               />
-
-              <Text
-                style={styles.linkText}
-                selectable
-              >
-                {generatedLink}
-              </Text>
-            </View>
-
-            <View style={styles.actionRow}>
-              <Pressable
-                style={styles.secondaryButton}
-                onPress={copyGeneratedLink}
-              >
-                <Text style={styles.secondaryButtonText}>
-                  {copied
-                    ? 'Copied'
-                    : 'Copy Link'}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.secondaryButton}
-                onPress={openGeneratedProduct}
-              >
-                <Text style={styles.secondaryButtonText}>
-                  Open Customer Page
-                </Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.linkButton}>
-              <Link
-                size={17}
-                color={THEME.primary}
+              <Field
+                label="COGS (RM)"
+                value={cost}
+                onChangeText={setCost}
+                placeholder="0"
+                numeric
               />
-
-              <Text style={styles.linkButtonText}>
-                Product link generated
-              </Text>
             </View>
 
-            {/* MARKETING */}
-
-            <Text style={styles.groupLabel}>
-              Marketing
-            </Text>
-
-            <View style={styles.chipRow}>
-              {marketingPlatforms.map(
-                (platform) => (
-                  <PlatformChip
-                    key={platform}
-                    label={platform}
-                    selected={selected.includes(
-                      platform
-                    )}
-                    onPress={() => {
-                      togglePlatform(
-                        platform
-                      );
-                      void shareProduct(
-                        platform
-                      );
-                    }}
-                  />
-                )
-              )}
+            <Text style={styles.label}>Trip</Text>
+            <View style={styles.tripBox}>
+              <Text style={styles.tripText}>{tripLabel}</Text>
             </View>
 
-            {/* DIRECT */}
+            <Field
+              label="Quantity"
+              value={stock}
+              onChangeText={setStock}
+              placeholder="0"
+              numeric
+            />
 
-            <Text style={styles.groupLabel}>
-              Direct Link
-            </Text>
+            <Pressable style={styles.primaryButton} onPress={saveProduct}>
+              <Text style={styles.primaryButtonText}>Generate Product Link</Text>
+            </Pressable>
 
-            <View style={styles.chipRow}>
-              {directPlatforms.map(
-                (platform) => (
-                  <PlatformChip
-                    key={platform}
-                    label={platform}
-                    selected={selected.includes(
-                      platform
-                    )}
-                    onPress={() => {
-                      togglePlatform(
-                        platform
-                      );
-                      void shareProduct(
-                        platform
-                      );
-                    }}
-                  />
-                )
-              )}
-            </View>
+            {!!formError && <Text style={styles.formError}>{formError}</Text>}
           </View>
-        )}
 
-      </ScrollView>
+          {generatedLink && (
+            <View style={styles.shareCard}>
+              <Text style={styles.sectionTitle}>Share / Post Product</Text>
 
-      {/* CATEGORY / SIZE MODAL */}
+              {!!generatedImage && (
+                <Image
+                  source={{ uri: generatedImage }}
+                  style={styles.productImage}
+                  resizeMode="cover"
+                />
+              )}
+
+              <Text style={styles.groupLabel}>Product Link</Text>
+
+              <View style={styles.linkBox}>
+                <Link size={17} color={THEME.primary} />
+                <Text style={styles.linkText} selectable>
+                  {generatedLink}
+                </Text>
+              </View>
+
+              <View style={styles.actionRow}>
+                <Pressable style={styles.secondaryButton} onPress={copyGeneratedLink}>
+                  <Text style={styles.secondaryButtonText}>
+                    {copied ? 'Copied' : 'Copy Link'}
+                  </Text>
+                </Pressable>
+
+                <Pressable style={styles.secondaryButton} onPress={openGeneratedProduct}>
+                  <Text style={styles.secondaryButtonText}>Open Customer Page</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.linkButton}>
+                <Link size={17} color={THEME.primary} />
+                <Text style={styles.linkButtonText}>Product link generated</Text>
+              </View>
+
+              <Text style={styles.groupLabel}>Marketing</Text>
+
+              <View style={styles.chipRow}>
+                {marketingPlatforms.map((platform) => (
+                  <PlatformChip
+                    key={platform}
+                    label={platform}
+                    selected={selected.includes(platform)}
+                    onPress={() => {
+                      togglePlatform(platform);
+                      void shareProduct(platform);
+                    }}
+                  />
+                ))}
+              </View>
+
+              <Text style={styles.groupLabel}>Direct Link</Text>
+
+              <View style={styles.chipRow}>
+                {directPlatforms.map((platform) => (
+                  <PlatformChip
+                    key={platform}
+                    label={platform}
+                    selected={selected.includes(platform)}
+                    onPress={() => {
+                      togglePlatform(platform);
+                      void shareProduct(platform);
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={picker !== null}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setPicker(null)
-        }
+        onRequestClose={() => setPicker(null)}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setPicker(null)}
-        >
-          <View
-            style={styles.modalSheet}
-          >
-            <Text
-              style={styles.sectionTitle}
-            >
-              {picker === 'category'
-                ? 'Choose Category'
-                : 'Choose Size'}
+        <Pressable style={styles.modalBackdrop} onPress={() => setPicker(null)}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.sectionTitle}>
+              {picker === 'category' ? 'Choose Category' : 'Choose Size'}
             </Text>
 
-            {(picker === 'category'
-              ? categories
-              : sizeOptions
-            ).map((option) => (
+            {(picker === 'category' ? categories : sizeOptions).map((option) => (
               <Pressable
                 key={option}
                 style={styles.option}
                 onPress={() => {
-                  if (
-                    picker ===
-                    'category'
-                  ) {
-                    selectCategory(
-                      option as ProductCategory
-                    );
+                  if (picker === 'category') {
+                    selectCategory(option as ProductCategory);
                   } else {
                     setSize(option);
                     setPicker(null);
                   }
                 }}
               >
-                <Text
-                  style={
-                    styles.optionText
-                  }
-                >
-                  {option}
-                </Text>
+                <Text style={styles.optionText}>{option}</Text>
               </Pressable>
             ))}
           </View>
@@ -741,30 +686,20 @@ function Field({
 }: {
   label: string;
   value: string;
-  onChangeText: (
-    value: string
-  ) => void;
+  onChangeText: (value: string) => void;
   placeholder: string;
   numeric?: boolean;
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>
-        {label}
-      </Text>
+      <Text style={styles.label}>{label}</Text>
 
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={
-          THEME.text.light
-        }
-        keyboardType={
-          numeric
-            ? 'numeric'
-            : 'default'
-        }
+        placeholderTextColor={THEME.text.light}
+        keyboardType={numeric ? 'numeric' : 'default'}
         style={styles.input}
       />
     </View>
@@ -787,9 +722,7 @@ function PickerButton({
         {value || 'Select'}
       </Text>
 
-      <Text style={styles.chevron}>
-        ▾
-      </Text>
+      <Text style={styles.chevron}>{'▾'}</Text>
     </Pressable>
   );
 }
@@ -807,16 +740,14 @@ function PlatformChip({
     <Pressable
       style={[
         styles.chip,
-        selected &&
-          styles.chipSelected,
+        selected && styles.chipSelected,
       ]}
       onPress={onPress}
     >
       <Text
         style={[
           styles.chipText,
-          selected &&
-            styles.chipTextSelected,
+          selected && styles.chipTextSelected,
         ]}
       >
         {label}
@@ -830,6 +761,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor:
       THEME.background,
+  },
+
+  keyboardFlex: {
+    flex: 1,
   },
 
   content: {
@@ -937,6 +872,21 @@ const styles = StyleSheet.create({
   fieldRow: {
     flexDirection: 'row',
     gap: SPACING.md,
+  },
+
+  tripBox: {
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    backgroundColor: '#FCFCFD',
+    marginBottom: SPACING.lg,
+  },
+
+  tripText: {
+    color: THEME.text.primary,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
   },
 
   input: {

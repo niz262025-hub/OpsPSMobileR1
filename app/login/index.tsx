@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
 	brand: { color: '#252039', fontSize: 34, fontWeight: '900', textAlign: 'center', marginTop: 12 },
 	brandAccent: { color: '#EC4C99' },
 	subtitle: { color: '#77738D', textAlign: 'center', marginTop: 4 },
-	form: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 24, marginTop: 34, borderWidth: 1, borderColor: '#E8E3F1', shadowColor: '#35245E', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+	form: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 24, marginTop: 34, borderWidth: 1, borderColor: '#E8E3F1', boxShadow: '0px 8px 18px rgba(53, 36, 94, 0.08)', elevation: 3 },
 	welcome: { color: '#EC4C99', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
 	title: { color: '#252039', fontSize: 28, fontWeight: '900', marginTop: 7, marginBottom: 22 },
 	inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E3DEEC', borderRadius: 11, paddingHorizontal: 14, marginBottom: 12, backgroundColor: '#FCFBFE' },

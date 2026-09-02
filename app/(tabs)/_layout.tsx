@@ -21,11 +21,12 @@ const iconProps = {
 export default function TabsLayout() {
   const { currentUser, ready } = useAuth();
   const TAB_ICON_SIZE = 24;
-  const THEME_PRIMARY = '#7C3AED';
-  const THEME_INACTIVE = '#9CA3AF';
+  const THEME_PRIMARY = '#5B2BD9';
+  const THEME_INACTIVE = '#8E899B';
 
   useEffect(() => {
-    if (ready && (!currentUser || currentUser.role !== 'founder')) {
+    if (!ready) return;
+    if (!currentUser || currentUser.role !== 'founder') {
       router.replace('/login');
     }
   }, [currentUser, ready]);
@@ -93,7 +94,7 @@ export default function TabsLayout() {
         options={{
           title: 'Marketplace',
           tabBarLabel: 'Market',
-          headerTitle: 'Marketplace',
+          headerTitle: 'Marketplace Hub',
           tabBarIcon: ({ color }) => (
             <Store {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),

@@ -60,8 +60,8 @@ export const translations = {
       title2: 'Dalam Satu Aplikasi',
       description:
         'Urus produk, order, trip, pembelian, inventory, kewangan dan keuntungan personal shopper dengan lebih pantas dan mudah.',
-      startFree: 'Mula Percuma',
-      freeTrial: 'Percubaan Percuma • 2 Trips',
+      startFree: 'Pilih Plan',
+      freeTrial: 'Tiada percubaan percuma',
       noCreditCard: 'Tiada kad kredit diperlukan',
       operationsTitle:
         'Semua yang Personal Shopper perlukan',
@@ -81,21 +81,21 @@ export const translations = {
         'Sales, cost dan keuntungan',
       pricingTitle: 'Pelan OpsPS',
       pricingSubtitle:
-        'Cuba percuma dengan 2 Trips atau jadi antara 100 Founder pertama.',
-      founder: 'FOUNDER 100',
-      founderUsers: '100 pengguna pertama',
-      founderPrice: 'RM39',
+        'Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.',
+      founder: 'FOUNDER',
+      founderUsers: 'RM29/bulan',
+      founderPrice: 'RM29',
       founderPriceText:
-        'Harga Founder RM39/bulan',
+        'Founder RM29/bulan',
       founderPriceDescription:
-        'untuk 100 pengguna pertama.',
+        'untuk 100 perniagaan pertama.',
       becomeFounder: 'Jadi Founder',
-      standard: 'STANDARD',
+      standard: 'PRO',
       standardPrice: 'RM49',
       standardPriceText:
-        'Harga standard RM49/bulan',
+        'Pro RM49/bulan',
       standardPriceDescription:
-        'selepas 100 slot Founder habis.',
+        'untuk operasi yang berkembang.',
     },
 
     auth: {
@@ -244,8 +244,8 @@ export const translations = {
       title2: 'In One Application',
       description:
         'Manage products, orders, trips, purchases, inventory, finance and profit faster and easier.',
-      startFree: 'Start Free',
-      freeTrial: 'Free Trial • 2 Trips',
+      startFree: 'Choose Plan',
+      freeTrial: 'No free trial',
       noCreditCard: 'No credit card required',
       operationsTitle:
         'Everything a Personal Shopper needs',
@@ -265,21 +265,21 @@ export const translations = {
         'Sales, costs and profit',
       pricingTitle: 'OpsPS Plans',
       pricingSubtitle:
-        'Try free with 2 Trips or become one of the first 100 Founders.',
-      founder: 'FOUNDER 100',
-      founderUsers: 'First 100 users',
-      founderPrice: 'RM39',
+        'Free RM0 • Founder RM29/month • Pro RM49/month • Team +RM10/user/month.',
+      founder: 'FOUNDER',
+      founderUsers: 'RM29/month',
+      founderPrice: 'RM29',
       founderPriceText:
-        'Founder price RM39/month',
+        'Founder RM29/month',
       founderPriceDescription:
-        'for the first 100 users.',
+        'for the first 100 businesses.',
       becomeFounder: 'Become a Founder',
-      standard: 'STANDARD',
+      standard: 'PRO',
       standardPrice: 'RM49',
       standardPriceText:
-        'Standard price RM49/month',
+        'Pro RM49/month',
       standardPriceDescription:
-        'after all Founder slots are taken.',
+        'for growing operations.',
     },
 
     auth: {
@@ -428,8 +428,8 @@ export const translations = {
       title2: 'एक ही एप्लिकेशन में',
       description:
         'प्रोडक्ट, ऑर्डर, ट्रिप, खरीदारी, इन्वेंटरी, वित्त और मुनाफे को तेज़ और आसान तरीके से मैनेज करें।',
-      startFree: 'मुफ़्त शुरू करें',
-      freeTrial: 'मुफ़्त ट्रायल • 2 Trips',
+      startFree: 'प्लान चुनें',
+      freeTrial: 'कोई free trial नहीं',
       noCreditCard: 'क्रेडिट कार्ड की आवश्यकता नहीं',
       operationsTitle:
         'पर्सनल शॉपर के लिए सब कुछ',
@@ -449,21 +449,21 @@ export const translations = {
         'बिक्री, लागत और मुनाफा',
       pricingTitle: 'OpsPS प्लान',
       pricingSubtitle:
-        '2 Trips के साथ मुफ़्त आज़माएं या पहले 100 Founder में शामिल हों।',
-      founder: 'FOUNDER 100',
-      founderUsers: 'पहले 100 उपयोगकर्ता',
-      founderPrice: 'RM39',
+        'Free RM0 • Founder RM29/माह • Pro RM49/माह • Team +RM10/यूज़र/माह.',
+      founder: 'FOUNDER',
+      founderUsers: 'RM29/माह',
+      founderPrice: 'RM29',
       founderPriceText:
-        'Founder कीमत RM39/माह',
+        'Founder RM29/माह',
       founderPriceDescription:
-        'पहले 100 उपयोगकर्ताओं के लिए।',
+        'पहले 100 businesses के लिए.',
       becomeFounder: 'Founder बनें',
-      standard: 'STANDARD',
+      standard: 'PRO',
       standardPrice: 'RM49',
       standardPriceText:
-        'Standard कीमत RM49/माह',
+        'Pro RM49/माह',
       standardPriceDescription:
-        '100 Founder स्लॉट पूरे होने के बाद।',
+        'बढ़ते ops के लिए.',
     },
 
     auth: {
@@ -612,8 +612,8 @@ export const translations = {
       title2: '一个应用即可完成',
       description:
         '轻松管理产品、订单、Trip、采购、库存、财务和利润。',
-      startFree: '免费开始',
-      freeTrial: '免费试用 • 2 Trips',
+      startFree: '选择方案',
+      freeTrial: '无免费试用',
       noCreditCard: '无需信用卡',
       operationsTitle:
         'Personal Shopper 所需的一切',
@@ -633,21 +633,21 @@ export const translations = {
         '销售、成本和利润',
       pricingTitle: 'OpsPS 方案',
       pricingSubtitle:
-        '免费体验 2 Trips，或成为前 100 位 Founder。',
-      founder: 'FOUNDER 100',
-      founderUsers: '前100位用户',
-      founderPrice: 'RM39',
+        'Free RM0 • Founder RM29/月 • Pro RM49/月 • Team +RM10/用户/月.',
+      founder: 'FOUNDER',
+      founderUsers: 'RM29/月',
+      founderPrice: 'RM29',
       founderPriceText:
-        'Founder 价格 RM39/月',
+        'Founder RM29/月',
       founderPriceDescription:
-        '前100位用户享有。',
+        '适用于前 100 家业务。',
       becomeFounder: '成为 Founder',
-      standard: 'STANDARD',
+      standard: 'PRO',
       standardPrice: 'RM49',
       standardPriceText:
-        '标准价格 RM49/月',
+        'Pro RM49/月',
       standardPriceDescription:
-        '100 个 Founder 名额用完后。',
+        '适合增长中的业务。',
     },
 
     auth: {

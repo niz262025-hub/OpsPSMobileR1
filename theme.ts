@@ -1,23 +1,31 @@
 // Theme constants
 export const THEME = {
-  primary: '#7C3AED',
-  background: '#F4F4F5',
+  primary: '#5B2BD9',
+  accent: '#EC4C99',
+  accentAlt: '#F97316',
+  background: '#F6F4FB',
   surface: '#FFFFFF',
   text: {
-    primary: '#1F2937',
-    secondary: '#6B7280',
-    light: '#9CA3AF',
+    primary: '#181145',
+    secondary: '#6B6B8A',
+    light: '#8E899B',
   },
   status: {
-    success: '#10B981',
+    success: '#16A34A',
     warning: '#F59E0B',
     error: '#EF4444',
     info: '#3B82F6',
   },
-  border: '#E5E7EB',
+  border: '#ECE8F5',
   shadow: {
-    small: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-    medium: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
+    small: {
+      boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.08)',
+      elevation: 2,
+    },
+    medium: {
+      boxShadow: '0px 4px 12px rgba(91, 43, 217, 0.12)',
+      elevation: 4,
+    },
   },
 };
 

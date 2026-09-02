@@ -11,6 +11,11 @@ function AuthRouteGuard() {
   useEffect(() => {
     if (!ready) return;
 
+    const publicRoutes = ['/login', '/register', '/forgot-password', '/', '/legal', '/product'];
+    if (publicRoutes.includes(pathname) || publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
+      return;
+    }
+
     const protectedFounderRoutes = [
       '/(tabs)',
       '/settings',
@@ -53,7 +58,7 @@ export default function RootLayout() {
           <Stack.Screen name="forgot-password" />
           <Stack.Screen name="order" />
           <Stack.Screen name="settings" />
-          <Stack.Screen name="register" />
+          <Stack.Screen name="legal" />
         </Stack>
       </AuthProvider>
     </LanguageProvider>

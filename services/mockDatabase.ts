@@ -4,15 +4,58 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export type ProductStatus = 'ready' | 'preorder';
 export type ProductCategory = 'Clothing' | 'Shoes' | 'Other';
 export type ProductSize = string;
-export type RequestStatus = 'PENDING_AVAILABILITY' | 'AVAILABLE' | 'PENDING_PAYMENT' | 'PAYMENT_REQUESTED' | 'PAY_LATER_OFFERED' | 'OUT_OF_STOCK' | 'PAYMENT_REQUIRED' | 'PAYMENT_RECEIVED' | 'PACKING' | 'SHIPPED' | 'DELIVERED' | 'PAID' | 'RECEIPT_GENERATED' | 'ORDER_CONFIRMED' | 'CANCELLED';
-export type OrderStatus = 'pending' | 'payment_received' | 'packing' | 'ready' | 'shipped' | 'delivered' | 'cancelled';
+
+export type RequestStatus =
+  | 'PENDING_AVAILABILITY'
+  | 'AVAILABLE'
+  | 'PENDING_PAYMENT'
+  | 'PAYMENT_REQUESTED'
+  | 'PAY_LATER_OFFERED'
+  | 'OUT_OF_STOCK'
+  | 'PAYMENT_REQUIRED'
+  | 'PAYMENT_RECEIVED'
+  | 'PACKING'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'PAID'
+  | 'RECEIPT_GENERATED'
+  | 'ORDER_CONFIRMED'
+  | 'CANCELLED';
+
+export type OrderStatus =
+  | 'pending'
+  | 'payment_received'
+  | 'packing'
+  | 'ready'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled';
+
 export type PaymentMethod = 'cash' | 'bank' | 'qr' | string;
-export type PaymentStatus = 'pending' | 'pending_verification' | 'success' | 'paid' | 'partial' | 'pay_later';
-export type PaymentMode = 'customer_pays_first' | 'ps_buy_first_pay_later' | string;
+export type PaymentStatus =
+  | 'pending'
+  | 'pending_verification'
+  | 'success'
+  | 'paid'
+  | 'partial'
+  | 'pay_later';
+
+export type PaymentMode =
+  | 'customer_pays_first'
+  | 'ps_buy_first_pay_later'
+  | string;
+
 export type FinanceTransactionType = 'income' | 'expense';
 export type FinancePaymentMethod = 'bank' | 'cash';
 export type PurchaseClassification = 'customer_order' | 'extra_stock';
-export type CourierStatus = 'created' | 'shipped' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'failed';
+
+export type CourierStatus =
+  | 'created'
+  | 'shipped'
+  | 'in_transit'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'failed';
 
 export interface Receipt {
   id: string;
@@ -48,6 +91,7 @@ export interface OrderShipment {
 
 export interface Product {
   id: string;
+  businessId?: string;
   tripId: string;
   name: string;
   image: string;
@@ -58,10 +102,22 @@ export interface Product {
   description?: string;
   size?: string;
   stock?: number;
+  initialStock?: number;
+}
+
+export interface CustomerProfile {
+  id: string;
+  businessId: string;
+  fullName: string;
+  phoneNumber: string;
+  deliveryAddress: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProductVariant {
   id: string;
+  businessId?: string;
   productId: string;
   size: ProductSize;
   stock: number;
@@ -69,6 +125,7 @@ export interface ProductVariant {
 
 export interface Order {
   id: string;
+  businessId?: string;
   tripId: string;
   productId?: string;
   customerName: string;
@@ -89,8 +146,22 @@ export interface Order {
   paymentCode?: string;
   paymentVerifiedAt?: string;
   availabilityStatus?: 'pending' | 'confirmed' | 'not_available';
-  paymentReceipt?: { amount: number; date: string; receiptUri?: string; verified: boolean };
-  purchase?: { productCost: number; transport: number; parking: number; toll: number; other: number; paymentMethod?: FinancePaymentMethod; receiptUri?: string; confirmedAt?: string };
+  paymentReceipt?: {
+    amount: number;
+    date: string;
+    receiptUri?: string;
+    verified: boolean;
+  };
+  purchase?: {
+    productCost: number;
+    transport: number;
+    parking: number;
+    toll: number;
+    other: number;
+    paymentMethod?: FinancePaymentMethod;
+    receiptUri?: string;
+    confirmedAt?: string;
+  };
   purchaseId?: string;
   packedAt?: string;
   shippedAt?: string;
@@ -155,32 +226,13 @@ export interface BuyListItem {
 
 export interface TripRecord {
   id: string;
+  businessId?: string;
   name: string;
   destination: string;
   tripDate: string;
   notes: string;
   status: 'planning' | 'open' | 'closed';
   createdAt: string;
-}
-
-export interface MockDatabaseSnapshot {
-  trips: TripRecord[];
-  products: Product[];
-  productVariants: ProductVariant[];
-  orders: Order[];
-  orderItems: OrderItem[];
-  buyListItems: BuyListItem[];
-  tripExpenses: TripExpense[];
-  tripCostOfGoods: TripCostOfGoods[];
-  financeTransactions: FinanceTransaction[];
-  paymentSettings: PaymentSettings;
-  extraStockPurchases: ExtraStockPurchase[];
-  businessSettings: BusinessSettings;
-  marketplaceSettings: MarketplaceSettings;
-  tripSettings: TripSettings;
-  shippingSettings: ShippingSettings;
-  notificationSettings: NotificationSettings;
-  userSettings: UserSettings;
 }
 
 export interface BusinessSettings {
@@ -250,64 +302,222 @@ export interface FinanceTransaction {
   isMonthlyExpense?: boolean;
 }
 
+export interface MockDatabaseSnapshot {
+  trips: TripRecord[];
+  products: Product[];
+  productVariants: ProductVariant[];
+  orders: Order[];
+  orderItems: OrderItem[];
+  buyListItems: BuyListItem[];
+  tripExpenses: TripExpense[];
+  tripCostOfGoods: TripCostOfGoods[];
+  financeTransactions: FinanceTransaction[];
+  paymentSettings: PaymentSettings;
+  extraStockPurchases: ExtraStockPurchase[];
+  customers: CustomerProfile[];
+  businessSettings: BusinessSettings;
+  marketplaceSettings: MarketplaceSettings;
+  tripSettings: TripSettings;
+  shippingSettings: ShippingSettings;
+  notificationSettings: NotificationSettings;
+  userSettings: UserSettings;
+}
+
 const LOW_STOCK_THRESHOLD = 5;
+const BUSINESS_DB_PREFIX = '@opsps_business_data_';
+const ACTIVE_BUSINESS_KEY = '@opsps_active_business_id';
+const DEMO_BUSINESS_ID = '__opsps_demo_seed__';
+const DB_CHANGE_EVENT = 'opsps-db-change';
+const SHARED_STORE_URL = 'http://localhost:3001';
+
 let idSequence = 0;
+let activeBusinessId: string | null = null;
+let loadedBusinessId: string | null = null;
+const businessSnapshots = new Map<string, MockDatabaseSnapshot>();
+const businessMutationVersions = new Map<string, number>();
 
-function createId(prefix: string) {
-  return `${prefix}-${Date.now()}-${idSequence++}`;
+function bumpBusinessVersion(businessId: string | null) {
+  if (!businessId) {
+    return;
+  }
+
+  const current = businessMutationVersions.get(businessId) ?? 0;
+  businessMutationVersions.set(businessId, current + 1);
 }
 
-export function getRequestStatus(order?: Partial<Order>): Order['requestStatus'] {
-  if (!order) return 'PENDING_AVAILABILITY';
-
-  if (order.requestStatus) {
-    return order.requestStatus;
+function markBusinessMutation(businessId?: string | null) {
+  const normalizedBusinessId = (businessId ?? activeBusinessId ?? '').trim();
+  if (!normalizedBusinessId) {
+    return;
   }
 
-  if (order.availabilityStatus === 'not_available') {
-    return 'OUT_OF_STOCK';
+  if (activeBusinessId !== normalizedBusinessId) {
+    activeBusinessId = normalizedBusinessId;
   }
 
-  if (order.status === 'delivered') {
-    return 'DELIVERED';
-  }
-
-  if (order.status === 'shipped') {
-    return 'SHIPPED';
-  }
-
-  if (order.status === 'packing' || order.status === 'ready') {
-    return 'PACKING';
-  }
-
-  if (order.status === 'payment_received') {
-    return 'PAYMENT_RECEIVED';
-  }
-
-  if (order.paymentStatus === 'pay_later') {
-    return 'PAY_LATER_OFFERED';
-  }
-
-  if (order.availabilityStatus === 'confirmed') {
-    if (order.paymentStatus === 'success' || order.paymentStatus === 'paid' || Boolean(order.receipt)) {
-      return 'PAYMENT_RECEIVED';
-    }
-    if (order.paymentMode === 'ps_buy_first_pay_later') {
-      return 'PAY_LATER_OFFERED';
-    }
-    return 'PENDING_PAYMENT';
-  }
-
-  if (order.paymentStatus === 'success' || order.paymentStatus === 'paid' || Boolean(order.receipt)) {
-    return 'PAYMENT_RECEIVED';
-  }
-
-  return 'PENDING_AVAILABILITY';
+  bumpBusinessVersion(normalizedBusinessId);
+  businessSnapshots.set(normalizedBusinessId, clone(state));
 }
 
-export const PRODUCT_SIZE_OPTIONS: Record<Exclude<ProductCategory, 'Other'>, string[]> = {
-  Clothing: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '2Y', '3Y', '4Y', '5Y', '6Y', '7Y', '8Y', '9Y', '10Y', '11Y', '12Y', '13Y', '14Y'],
-  Shoes: ['22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
+function readSessionBusinessId(): string | null {
+  try {
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+      const activeBusinessIdRaw = window.localStorage.getItem(ACTIVE_BUSINESS_KEY);
+      if (activeBusinessIdRaw && activeBusinessIdRaw.trim()) {
+        return activeBusinessIdRaw.trim();
+      }
+
+      const raw = window.localStorage.getItem('@opsps_session');
+      if (!raw) {
+        return null;
+      }
+      const session = JSON.parse(raw) as { businessId?: string } | null;
+      return session?.businessId?.trim() || null;
+    }
+  } catch {
+    // ignore localStorage access failures in restricted runtime contexts
+  }
+
+  return null;
+}
+
+function resolveCurrentBusinessId(): string | null {
+  if (activeBusinessId && activeBusinessId.trim()) {
+    return activeBusinessId;
+  }
+
+  const sessionBusinessId = readSessionBusinessId();
+  if (sessionBusinessId && sessionBusinessId !== activeBusinessId) {
+    setActiveBusinessScope(sessionBusinessId);
+  }
+  return activeBusinessId;
+}
+
+function resolveOrderBusinessId(orderId: string, fallbackBusinessId?: string | null): string | null {
+  const directOrder = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
+
+  if (directOrder?.businessId) {
+    return directOrder.businessId.trim() || null;
+  }
+
+  const candidate = (fallbackBusinessId ?? resolveCurrentBusinessId() ?? '').trim();
+  return candidate || null;
+}
+
+function ensureOrderBusinessScope(orderId: string, fallbackBusinessId?: string | null) {
+  const targetBusinessId = resolveOrderBusinessId(orderId, fallbackBusinessId);
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+    return targetBusinessId;
+  }
+  return null;
+}
+
+function ensureBusinessScopeForMutation(businessId?: string | null) {
+  const targetBusinessId = (businessId ?? resolveCurrentBusinessId() ?? '').trim();
+  if (!targetBusinessId) {
+    return;
+  }
+
+  if (activeBusinessId !== targetBusinessId) {
+    activeBusinessId = targetBusinessId;
+    loadedBusinessId = null;
+  }
+
+  const cachedSnapshot = businessSnapshots.get(targetBusinessId);
+  if (cachedSnapshot) {
+    state = clone(cachedSnapshot);
+    return;
+  }
+
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(getBusinessStorageKey(targetBusinessId));
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<MockDatabaseSnapshot>;
+        const normalized = normalizeSnapshot(parsed);
+        businessSnapshots.set(targetBusinessId, clone(normalized));
+        state = clone(normalized);
+        return;
+      }
+    } catch {
+      // Fall back to the empty/default snapshot below.
+    }
+  }
+
+  const scopedStateMatchesBusiness = state.orders.some((entry) => entry.businessId === targetBusinessId)
+    || state.products.some((entry) => entry.businessId === targetBusinessId)
+    || state.trips.some((entry) => entry.businessId === targetBusinessId)
+    || state.customers.some((entry) => entry.businessId === targetBusinessId);
+
+  if (scopedStateMatchesBusiness) {
+    const normalized = normalizeSnapshot(state);
+    businessSnapshots.set(targetBusinessId, clone(normalized));
+    state = clone(normalized);
+    return;
+  }
+
+  const emptyState = createEmptyUATSnapshot();
+  businessSnapshots.set(targetBusinessId, clone(emptyState));
+  state = clone(emptyState);
+}
+
+export const PRODUCT_SIZE_OPTIONS: Record<
+  Exclude<ProductCategory, 'Other'>,
+  string[]
+> = {
+  Clothing: [
+    'XS',
+    'S',
+    'M',
+    'L',
+    'XL',
+    '2XL',
+    '3XL',
+    '4XL',
+    '5XL',
+    '2Y',
+    '3Y',
+    '4Y',
+    '5Y',
+    '6Y',
+    '7Y',
+    '8Y',
+    '9Y',
+    '10Y',
+    '11Y',
+    '12Y',
+    '13Y',
+    '14Y',
+  ],
+  Shoes: [
+    '22',
+    '23',
+    '24',
+    '25',
+    '26',
+    '27',
+    '28',
+    '29',
+    '30',
+    '31',
+    '32',
+    '33',
+    '34',
+    '35',
+    '36',
+    '37',
+    '38',
+    '39',
+    '40',
+    '41',
+    '42',
+    '43',
+    '44',
+    '45',
+    '46',
+  ],
 };
 
 const initialTrips: TripRecord[] = [
@@ -441,7 +651,87 @@ const initialBuyList: BuyListItem[] = [
   { id: 'buy-list-1', tripId: 'trip-1', productVariantId: 'variant-2', quantity: 3, purchased: false },
 ];
 
-function createDefaultSettings(): Pick<MockDatabaseSnapshot, 'paymentSettings' | 'businessSettings' | 'marketplaceSettings' | 'tripSettings' | 'shippingSettings' | 'notificationSettings' | 'userSettings'> {
+function createId(prefix: string) {
+  return `${prefix}-${Date.now()}-${idSequence++}`;
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+const listeners = new Set<() => void>();
+
+function getBusinessStorageKey(businessId: string) {
+  return `${BUSINESS_DB_PREFIX}${businessId}`;
+}
+
+function writeBrowserBusinessSnapshot(businessId: string, snapshot: MockDatabaseSnapshot) {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(getBusinessStorageKey(businessId), JSON.stringify(snapshot));
+  } catch {
+    // Ignore browser storage write failures in restricted contexts.
+  }
+}
+
+async function writeSharedBusinessSnapshot(businessId: string, snapshot: MockDatabaseSnapshot): Promise<void> {
+  if (!businessId || typeof fetch === 'undefined') {
+    return;
+  }
+
+  try {
+    await fetch(`${SHARED_STORE_URL}/api/mock-db/${encodeURIComponent(businessId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    });
+  } catch {
+    // Ignore shared-store write failures in dev environments without the mock server running.
+  }
+}
+
+async function readSharedBusinessSnapshot(businessId: string): Promise<string | null> {
+  if (!businessId || typeof fetch === 'undefined') {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${SHARED_STORE_URL}/api/mock-db/${encodeURIComponent(businessId)}`);
+    if (!response.ok) {
+      return null;
+    }
+    const snapshot = await response.json();
+    return snapshot ? JSON.stringify(snapshot) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readBrowserBusinessSnapshot(businessId: string): string | null {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(getBusinessStorageKey(businessId));
+  } catch {
+    return null;
+  }
+}
+
+function createDefaultSettings(): Pick<
+  MockDatabaseSnapshot,
+  | 'paymentSettings'
+  | 'businessSettings'
+  | 'marketplaceSettings'
+  | 'tripSettings'
+  | 'shippingSettings'
+  | 'notificationSettings'
+  | 'userSettings'
+> {
   return {
     paymentSettings: {
       bankName: '',
@@ -449,12 +739,23 @@ function createDefaultSettings(): Pick<MockDatabaseSnapshot, 'paymentSettings' |
       accountNumber: '',
       paymentReference: 'Order ID',
       enabledPaymentMethods: ['Bank Transfer', 'QR Payment'],
-      bnplEnabled: false,
+      bnplEnabled: true,
     },
     businessSettings: { businessName: '', phone: '', email: '', address: '' },
     marketplaceSettings: { currency: 'RM', defaultProductStatus: 'ready', defaultMarkup: 0 },
-    tripSettings: { defaultTripDate: new Date().toISOString().slice(0, 10), destinationType: 'Shopping Mall', clothingSizes: [...PRODUCT_SIZE_OPTIONS.Clothing], shoeSizes: [...PRODUCT_SIZE_OPTIONS.Shoes] },
-    shippingSettings: { defaultCourier: 'J&T', senderName: '', senderPhone: '', senderAddress: '', integrationStatus: 'Mock / Not Connected' },
+    tripSettings: {
+      defaultTripDate: new Date().toISOString().slice(0, 10),
+      destinationType: 'Shopping Mall',
+      clothingSizes: [...PRODUCT_SIZE_OPTIONS.Clothing],
+      shoeSizes: [...PRODUCT_SIZE_OPTIONS.Shoes],
+    },
+    shippingSettings: {
+      defaultCourier: 'J&T',
+      senderName: '',
+      senderPhone: '',
+      senderAddress: '',
+      integrationStatus: 'Mock / Not Connected',
+    },
     notificationSettings: { paymentConfirmation: true, orderAvailability: true, shipping: true },
     userSettings: { name: '', email: '' },
   };
@@ -472,6 +773,7 @@ function createSeededSnapshot(): MockDatabaseSnapshot {
     tripCostOfGoods: [],
     financeTransactions: [],
     extraStockPurchases: [],
+    customers: [],
     ...createDefaultSettings(),
   };
 }
@@ -488,23 +790,28 @@ function createEmptyUATSnapshot(): MockDatabaseSnapshot {
     tripCostOfGoods: [],
     financeTransactions: [],
     extraStockPurchases: [],
+    customers: [],
     ...createDefaultSettings(),
   };
 }
 
-const DATABASE_KEY = '@opsps_mock_database_v1';
+function getDemoSeededSnapshot(): MockDatabaseSnapshot {
+  const seeded = createSeededSnapshot();
+  businessSnapshots.set(DEMO_BUSINESS_ID, clone(seeded));
+  return clone(seeded);
+}
 
 let state: MockDatabaseSnapshot = createEmptyUATSnapshot();
 
-const listeners = new Set<() => void>();
+function syncCurrentBusinessState(snapshot: MockDatabaseSnapshot): MockDatabaseSnapshot {
+  const snapshotCopy = clone(snapshot);
 
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
-}
+  if (activeBusinessId) {
+    businessSnapshots.set(activeBusinessId, snapshotCopy);
+  }
 
-function emit() {
-  listeners.forEach((listener) => listener());
-  AsyncStorage.setItem(DATABASE_KEY, JSON.stringify(state)).catch(() => undefined);
+  state = snapshotCopy;
+  return state;
 }
 
 function normalizeTripStatus(status: unknown): TripRecord['status'] {
@@ -524,6 +831,7 @@ function normalizeSnapshot(raw: Partial<MockDatabaseSnapshot> | null | undefined
   return {
     trips: Array.isArray(snapshot.trips) ? snapshot.trips.map((trip) => ({
       id: String(trip?.id ?? createId('trip')),
+      businessId: String(trip?.businessId ?? activeBusinessId ?? 'business-default'),
       name: String(trip?.name ?? 'Trip'),
       destination: String(trip?.destination ?? ''),
       tripDate: String(trip?.tripDate ?? new Date().toISOString().slice(0, 10)),
@@ -531,8 +839,18 @@ function normalizeSnapshot(raw: Partial<MockDatabaseSnapshot> | null | undefined
       status: normalizeTripStatus(trip?.status),
       createdAt: String(trip?.createdAt ?? new Date().toISOString()),
     })) : [],
-    products: Array.isArray(snapshot.products) ? snapshot.products : [],
-    productVariants: Array.isArray(snapshot.productVariants) ? snapshot.productVariants : [],
+    products: Array.isArray(snapshot.products)
+      ? snapshot.products.map((product) => ({
+          ...product,
+          businessId: String(product?.businessId ?? activeBusinessId ?? 'business-default'),
+        }))
+      : [],
+    productVariants: Array.isArray(snapshot.productVariants)
+      ? snapshot.productVariants.map((variant) => ({
+          ...variant,
+          businessId: String(variant?.businessId ?? activeBusinessId ?? 'business-default'),
+        }))
+      : [],
     orders: Array.isArray(snapshot.orders) ? snapshot.orders : [],
     orderItems: Array.isArray(snapshot.orderItems) ? snapshot.orderItems : [],
     buyListItems: Array.isArray(snapshot.buyListItems) ? snapshot.buyListItems : [],
@@ -540,7 +858,7 @@ function normalizeSnapshot(raw: Partial<MockDatabaseSnapshot> | null | undefined
     tripCostOfGoods: Array.isArray(snapshot.tripCostOfGoods) ? snapshot.tripCostOfGoods : [],
     financeTransactions: Array.isArray(snapshot.financeTransactions) ? snapshot.financeTransactions : [],
     paymentSettings: {
-      ...(defaultSettings.paymentSettings),
+      ...defaultSettings.paymentSettings,
       ...(snapshot.paymentSettings ?? {}),
       enabledPaymentMethods: Array.isArray(snapshot.paymentSettings?.enabledPaymentMethods)
         ? snapshot.paymentSettings.enabledPaymentMethods.map(String).filter(Boolean)
@@ -548,6 +866,15 @@ function normalizeSnapshot(raw: Partial<MockDatabaseSnapshot> | null | undefined
       bnplEnabled: Boolean(snapshot.paymentSettings?.bnplEnabled ?? defaultSettings.paymentSettings.bnplEnabled),
     },
     extraStockPurchases: Array.isArray(snapshot.extraStockPurchases) ? snapshot.extraStockPurchases : [],
+    customers: Array.isArray(snapshot.customers) ? snapshot.customers.map((customer) => ({
+      id: String(customer?.id ?? createId('customer')),
+      businessId: String(customer?.businessId ?? activeBusinessId ?? 'business-default'),
+      fullName: String(customer?.fullName ?? ''),
+      phoneNumber: String(customer?.phoneNumber ?? ''),
+      deliveryAddress: String(customer?.deliveryAddress ?? ''),
+      createdAt: String(customer?.createdAt ?? new Date().toISOString()),
+      updatedAt: String(customer?.updatedAt ?? new Date().toISOString()),
+    })) : [],
     businessSettings: snapshot.businessSettings ?? defaultSettings.businessSettings,
     marketplaceSettings: snapshot.marketplaceSettings ?? defaultSettings.marketplaceSettings,
     tripSettings: snapshot.tripSettings ?? defaultSettings.tripSettings,
@@ -557,16 +884,172 @@ function normalizeSnapshot(raw: Partial<MockDatabaseSnapshot> | null | undefined
   };
 }
 
-async function loadPersistedState() {
-  try {
-    const raw = await AsyncStorage.getItem(DATABASE_KEY);
-    if (!raw) {
-      state = createSeededSnapshot();
+function emit(businessIdOverride?: string | null) {
+  const activeScope = (businessIdOverride ?? activeBusinessId ?? '').trim();
+  const targetBusinessId = activeScope || activeBusinessId || null;
+
+  if (targetBusinessId) {
+    activeBusinessId = targetBusinessId;
+  }
+
+  listeners.forEach((listener) => listener());
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent(DB_CHANGE_EVENT, {
+      detail: { businessId: targetBusinessId ?? DEMO_BUSINESS_ID },
+    }));
+  }
+
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    try {
+      window.localStorage.setItem(DB_CHANGE_EVENT, JSON.stringify({
+        businessId: targetBusinessId ?? DEMO_BUSINESS_ID,
+        timestamp: Date.now(),
+      }));
+    } catch {
+      // Ignore localStorage write failures in non-browser or restricted contexts.
+    }
+  }
+
+  if (targetBusinessId) {
+    const persistedState = clone(state);
+    bumpBusinessVersion(targetBusinessId);
+    businessSnapshots.set(targetBusinessId, persistedState);
+    writeBrowserBusinessSnapshot(targetBusinessId, persistedState);
+    void writeSharedBusinessSnapshot(targetBusinessId, persistedState);
+    AsyncStorage.setItem(getBusinessStorageKey(targetBusinessId), JSON.stringify(persistedState)).catch(() => undefined);
+  }
+}
+
+export function setActiveBusinessScope(businessId: string | null) {
+  const normalizedBusinessId = businessId?.trim() || null;
+  activeBusinessId = normalizedBusinessId;
+
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    try {
+      if (normalizedBusinessId) {
+        window.localStorage.setItem(ACTIVE_BUSINESS_KEY, normalizedBusinessId);
+      } else {
+        window.localStorage.removeItem(ACTIVE_BUSINESS_KEY);
+      }
+    } catch {
+      // Ignore browser storage write failures in restricted contexts.
+    }
+  }
+
+  if (!normalizedBusinessId) {
+    const demoState = getDemoSeededSnapshot();
+    loadedBusinessId = DEMO_BUSINESS_ID;
+    state = clone(demoState);
+    emit();
+    return;
+  }
+
+  const cachedSnapshot = businessSnapshots.get(normalizedBusinessId);
+  if (cachedSnapshot) {
+    state = clone(cachedSnapshot);
+    loadedBusinessId = normalizedBusinessId;
+    emit();
+    return;
+  }
+
+  const currentVersion = businessMutationVersions.get(normalizedBusinessId) ?? 0;
+  state = createEmptyUATSnapshot();
+  loadedBusinessId = null;
+
+  void loadPersistedState(normalizedBusinessId).then((snapshot) => {
+    if (activeBusinessId !== normalizedBusinessId) {
       return;
+    }
+
+    if ((businessMutationVersions.get(normalizedBusinessId) ?? 0) > currentVersion) {
+      return;
+    }
+
+    state = clone(snapshot);
+    businessSnapshots.set(normalizedBusinessId, clone(snapshot));
+    emit();
+  });
+}
+
+export function clearActiveBusinessScope() {
+  activeBusinessId = null;
+  loadedBusinessId = DEMO_BUSINESS_ID;
+
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    try {
+      window.localStorage.removeItem(ACTIVE_BUSINESS_KEY);
+    } catch {
+      // Ignore browser storage write failures in restricted contexts.
+    }
+  }
+
+  const demoState = getDemoSeededSnapshot();
+  state = clone(demoState);
+  emit();
+}
+
+export async function loadPersistedState(businessId: string | null = activeBusinessId): Promise<MockDatabaseSnapshot> {
+  const resolvedBusinessId = businessId ?? resolveCurrentBusinessId();
+
+  if (!resolvedBusinessId) {
+    const demoState = getDemoSeededSnapshot();
+    state = clone(demoState);
+    loadedBusinessId = DEMO_BUSINESS_ID;
+    return clone(state);
+  }
+
+  if (activeBusinessId !== resolvedBusinessId) {
+    activeBusinessId = resolvedBusinessId;
+  }
+
+  const startVersion = businessMutationVersions.get(resolvedBusinessId) ?? 0;
+
+  if (
+    resolvedBusinessId === loadedBusinessId &&
+    resolvedBusinessId === activeBusinessId &&
+    businessSnapshots.has(resolvedBusinessId)
+  ) {
+    const activeSnapshot = businessSnapshots.get(resolvedBusinessId) ?? state;
+    state = clone(activeSnapshot);
+    return clone(state);
+  }
+
+  if (resolvedBusinessId === DEMO_BUSINESS_ID) {
+    const demoState = getDemoSeededSnapshot();
+    state = clone(demoState);
+    businessSnapshots.set(resolvedBusinessId, clone(demoState));
+    loadedBusinessId = resolvedBusinessId;
+    emit();
+    return clone(state);
+  }
+
+  try {
+    const key = getBusinessStorageKey(resolvedBusinessId);
+    const browserRaw = readBrowserBusinessSnapshot(resolvedBusinessId);
+    const sharedRaw = await readSharedBusinessSnapshot(resolvedBusinessId);
+    const raw = sharedRaw ?? browserRaw ?? (await AsyncStorage.getItem(key));
+
+    if ((businessMutationVersions.get(resolvedBusinessId) ?? 0) > startVersion) {
+      return clone(state);
+    }
+
+    if (!raw) {
+      const emptyState = createEmptyUATSnapshot();
+      businessSnapshots.set(resolvedBusinessId, clone(emptyState));
+      if (resolvedBusinessId === activeBusinessId) {
+        state = clone(emptyState);
+      }
+      loadedBusinessId = resolvedBusinessId;
+      return clone(emptyState);
     }
 
     const parsed = JSON.parse(raw) as Partial<MockDatabaseSnapshot>;
     const normalized = normalizeSnapshot(parsed);
+
+    if ((businessMutationVersions.get(resolvedBusinessId) ?? 0) > startVersion) {
+      return clone(state);
+    }
 
     if (
       normalized.trips.length === 0 &&
@@ -574,17 +1057,43 @@ async function loadPersistedState() {
       normalized.orders.length === 0 &&
       normalized.orderItems.length === 0
     ) {
-      state = createSeededSnapshot();
-      return;
+      const emptyState = createEmptyUATSnapshot();
+      businessSnapshots.set(resolvedBusinessId, clone(emptyState));
+      if (resolvedBusinessId === activeBusinessId) {
+        state = clone(emptyState);
+      }
+      loadedBusinessId = resolvedBusinessId;
+      return clone(emptyState);
     }
 
-    state = normalized;
+    businessSnapshots.set(resolvedBusinessId, clone(normalized));
+    if (resolvedBusinessId === activeBusinessId) {
+      state = clone(normalized);
+    }
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+      try {
+        window.localStorage.setItem(getBusinessStorageKey(resolvedBusinessId), JSON.stringify(normalized));
+      } catch {
+        // Ignore local storage write failures in restricted environments.
+      }
+    }
+    loadedBusinessId = resolvedBusinessId;
+    return clone(normalized);
   } catch {
-    state = createSeededSnapshot();
+    const fallback = createEmptyUATSnapshot();
+    businessSnapshots.set(resolvedBusinessId, clone(fallback));
+    if (resolvedBusinessId === activeBusinessId && (businessMutationVersions.get(resolvedBusinessId) ?? 0) <= startVersion) {
+      state = clone(fallback);
+    }
+    loadedBusinessId = resolvedBusinessId;
+    return clone(fallback);
   }
 }
 
-void loadPersistedState();
+export async function hydrateMockDatabase() {
+  await loadPersistedState(activeBusinessId);
+  return getMockDatabaseSnapshot();
+}
 
 export function getMockDatabaseSnapshot(): MockDatabaseSnapshot {
   return clone(state);
@@ -592,23 +1101,202 @@ export function getMockDatabaseSnapshot(): MockDatabaseSnapshot {
 
 export function resetMockDatabaseForUAT() {
   state = createEmptyUATSnapshot();
-  emit();
+  if (activeBusinessId) {
+    AsyncStorage.setItem(getBusinessStorageKey(activeBusinessId), JSON.stringify(state)).catch(() => undefined);
+  }
   return getMockDatabaseSnapshot();
 }
 
 export function subscribeMockDatabase(listener: () => void) {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    return () => listeners.delete(listener);
+  }
+
+  const handleCustomEvent = () => {
+    void loadPersistedState(activeBusinessId).then(() => listener());
+  };
+
+  const handleStorageEvent = (event: StorageEvent) => {
+    const changedKey = event.key ?? '';
+    const seenChange = !changedKey || changedKey.startsWith(BUSINESS_DB_PREFIX) || changedKey === DEMO_BUSINESS_ID || changedKey === DB_CHANGE_EVENT;
+    if (!seenChange) {
+      return;
+    }
+
+    void loadPersistedState(activeBusinessId).then(() => listener());
+  };
+
+  window.addEventListener(DB_CHANGE_EVENT, handleCustomEvent);
+  window.addEventListener('storage', handleStorageEvent);
+
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener(DB_CHANGE_EVENT, handleCustomEvent);
+    window.removeEventListener('storage', handleStorageEvent);
+  };
 }
 
-export function createTrip(input: {
-  name: string;
-  destination: string;
-  tripDate: string;
-  notes?: string;
-}) {
+export function getRequestStatus(order?: Partial<Order>): Order['requestStatus'] {
+  if (!order) return 'PENDING_AVAILABILITY';
+
+  if (order.requestStatus) {
+    return order.requestStatus;
+  }
+
+  if (order.availabilityStatus === 'not_available') {
+    return 'OUT_OF_STOCK';
+  }
+
+  if (order.status === 'delivered') {
+    return 'DELIVERED';
+  }
+
+  if (order.status === 'shipped') {
+    return 'SHIPPED';
+  }
+
+  if (order.status === 'packing' || order.status === 'ready') {
+    return 'PACKING';
+  }
+
+  if (order.status === 'payment_received') {
+    return 'PAYMENT_RECEIVED';
+  }
+
+  if (order.paymentStatus === 'pay_later') {
+    return 'PAY_LATER_OFFERED';
+  }
+
+  if (order.availabilityStatus === 'confirmed') {
+    if (order.paymentStatus === 'success' || order.paymentStatus === 'paid' || Boolean(order.receipt)) {
+      return 'PAYMENT_RECEIVED';
+    }
+    if (order.paymentMode === 'ps_buy_first_pay_later') {
+      return 'PAY_LATER_OFFERED';
+    }
+    if (order.paymentMode === 'customer_pays_first') {
+      return 'PAYMENT_REQUIRED';
+    }
+    return 'AVAILABLE';
+  }
+
+  if (order.paymentStatus === 'success' || order.paymentStatus === 'paid' || Boolean(order.receipt)) {
+    return 'PAYMENT_RECEIVED';
+  }
+
+  return 'PENDING_AVAILABILITY';
+}
+
+export function useMockDatabase() {
+  const [snapshot, setSnapshot] = useState<MockDatabaseSnapshot>(getMockDatabaseSnapshot);
+
+  useEffect(() => {
+    let active = true;
+
+    const hydrate = async () => {
+      await loadPersistedState(activeBusinessId);
+      if (active) {
+        setSnapshot(getMockDatabaseSnapshot());
+      }
+    };
+
+    void hydrate();
+
+    const unsubscribe = subscribeMockDatabase(() => {
+      setSnapshot(getMockDatabaseSnapshot());
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  return snapshot;
+}
+
+export function normalizeCustomerPhone(value: string) {
+  return String(value ?? '').replace(/\D/g, '');
+}
+
+export function getCustomerProfileByPhone(phone: string, businessId: string | null = activeBusinessId, snapshot = state) {
+  const normalized = normalizeCustomerPhone(phone);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const scope = (businessId ?? activeBusinessId ?? 'business-default').trim() || 'business-default';
+  const localMatch = snapshot.customers.find((customer) => customer.businessId === scope && normalizeCustomerPhone(customer.phoneNumber) === normalized);
+  if (localMatch) {
+    return localMatch;
+  }
+
+  return [...businessSnapshots.values()].flatMap((entry) => entry.customers).find(
+    (customer) => customer.businessId === scope && normalizeCustomerPhone(customer.phoneNumber) === normalized,
+  );
+}
+
+export function upsertCustomerProfile(input: { businessId?: string; fullName: string; phoneNumber: string; deliveryAddress: string }) {
+  const businessId = (input.businessId ?? activeBusinessId ?? 'business-default').trim() || 'business-default';
+  const phoneNumber = String(input.phoneNumber ?? '').trim();
+  const fullName = String(input.fullName ?? '').trim();
+  const deliveryAddress = String(input.deliveryAddress ?? '').trim();
+  const normalizedPhone = normalizeCustomerPhone(phoneNumber);
+
+  if (!normalizedPhone) {
+    return null;
+  }
+
+  const existing = state.customers.find((customer) => customer.businessId === businessId && normalizeCustomerPhone(customer.phoneNumber) === normalizedPhone);
+  const now = new Date().toISOString();
+
+  if (existing) {
+    const updated = {
+      ...existing,
+      fullName: fullName || existing.fullName,
+      phoneNumber: phoneNumber || existing.phoneNumber,
+      deliveryAddress: deliveryAddress || existing.deliveryAddress,
+      updatedAt: now,
+    };
+
+    state.customers = state.customers.map((customer) => customer.id === existing.id ? updated : customer);
+    markBusinessMutation(businessId);
+    emit();
+    return updated;
+  }
+
+  const profile: CustomerProfile = {
+    id: createId('customer-profile'),
+    businessId,
+    fullName,
+    phoneNumber,
+    deliveryAddress,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  state.customers = [...state.customers, profile];
+  markBusinessMutation(businessId);
+  emit();
+  return profile;
+}
+
+export function createTrip(input: { name: string; destination: string; tripDate: string; notes?: string; businessId?: string; }) {
+  const activeFounderBusinessId = resolveCurrentBusinessId();
+  const founderBusinessId = (activeFounderBusinessId ?? input.businessId ?? '').trim();
+
+  if (!founderBusinessId || founderBusinessId === 'business-default' || founderBusinessId === DEMO_BUSINESS_ID) {
+    throw new Error('Founder business scope is required before creating a trip.');
+  }
+
+  ensureBusinessScopeForMutation(founderBusinessId);
+  loadedBusinessId = founderBusinessId;
+
   const trip: TripRecord = {
     id: createId('trip'),
+    businessId: founderBusinessId,
     name: input.name.trim(),
     destination: input.destination.trim(),
     tripDate: input.tripDate.trim(),
@@ -618,6 +1306,10 @@ export function createTrip(input: {
   };
 
   state.trips = [...state.trips, trip];
+  businessSnapshots.set(founderBusinessId, clone(state));
+  businessMutationVersions.set(founderBusinessId, (businessMutationVersions.get(founderBusinessId) ?? 0) + 1);
+  writeBrowserBusinessSnapshot(founderBusinessId, clone(state));
+  AsyncStorage.setItem(getBusinessStorageKey(founderBusinessId), JSON.stringify(state)).catch(() => undefined);
   emit();
   return trip;
 }
@@ -727,13 +1419,17 @@ export function createProduct(input: {
   sellingPrice: number;
   size?: string;
   stock?: number;
+  businessId?: string;
 }) {
   const productId = createId('product');
   const resolvedTripId = input.tripId && input.tripId.trim() ? input.tripId : 'trip-1';
+  const businessId = (input.businessId ?? resolveCurrentBusinessId() ?? activeBusinessId ?? 'business-default').trim() || 'business-default';
+  ensureBusinessScopeForMutation(businessId);
   const sizeValue = input.size?.trim() || 'Standard';
   const stockValue = Number(input.stock ?? 0);
   const product: Product = {
     id: productId,
+    businessId,
     tripId: resolvedTripId,
     name: input.name.trim(),
     image: input.image.trim(),
@@ -744,17 +1440,20 @@ export function createProduct(input: {
     description: input.description?.trim(),
     size: sizeValue,
     stock: Number.isFinite(stockValue) ? Math.max(0, stockValue) : 0,
+    initialStock: Number.isFinite(stockValue) ? Math.max(0, stockValue) : 0,
   };
   state.products = [...state.products, product];
   state.productVariants = [
     ...state.productVariants,
     {
       id: createId('variant'),
+      businessId,
       productId,
       size: input.size ?? 'Standard',
       stock: input.stock ?? 0,
     },
   ];
+  markBusinessMutation(businessId);
   emit();
   return product;
 }
@@ -773,7 +1472,9 @@ export function createBuyListItem(input: { tripId: string; itemName: string; qua
 }
 
 export function updateBuyListItem(itemId: string, input: { itemName: string; quantity: number }) {
-  state.buyListItems = state.buyListItems.map((item) => item.id === itemId ? { ...item, itemName: input.itemName.trim(), quantity: Math.max(1, input.quantity) } : item);
+  state.buyListItems = state.buyListItems.map((item) =>
+    item.id === itemId ? { ...item, itemName: input.itemName.trim(), quantity: Math.max(1, input.quantity) } : item,
+  );
   emit();
   return true;
 }
@@ -792,7 +1493,14 @@ export function addFinanceTransaction(input: Omit<FinanceTransaction, 'id' | 'da
 }
 
 export function addMonthlyExpense(input: { description: string; amount: number; category: string; paymentMethod: FinancePaymentMethod; notes?: string }) {
-  return addFinanceTransaction({ description: input.notes ? `${input.description} - ${input.notes}` : input.description, amount: Math.abs(input.amount), type: 'expense', paymentMethod: input.paymentMethod, category: input.category, isMonthlyExpense: true });
+  return addFinanceTransaction({
+    description: input.notes ? `${input.description} - ${input.notes}` : input.description,
+    amount: Math.abs(input.amount),
+    type: 'expense',
+    paymentMethod: input.paymentMethod,
+    category: input.category,
+    isMonthlyExpense: true,
+  });
 }
 
 export function updatePaymentSettings(settings: PaymentSettings) {
@@ -839,44 +1547,10 @@ export function updateTripStatus(tripId: string, status: TripRecord['status']) {
   if (!trip) return null;
 
   state.trips = state.trips.map((entry) =>
-    entry.id === tripId ? { ...entry, status } : entry
+    entry.id === tripId ? { ...entry, status } : entry,
   );
   emit();
   return true;
-}
-
-export async function hydrateMockDatabase() {
-  await loadPersistedState();
-  emit();
-  return getMockDatabaseSnapshot();
-}
-
-export function useMockDatabase() {
-  const [snapshot, setSnapshot] = useState<MockDatabaseSnapshot>(getMockDatabaseSnapshot);
-
-  useEffect(() => {
-    let active = true;
-
-    const hydrate = async () => {
-      await loadPersistedState();
-      if (active) {
-        setSnapshot(getMockDatabaseSnapshot());
-      }
-    };
-
-    hydrate();
-
-    const unsubscribe = subscribeMockDatabase(() => {
-      setSnapshot(getMockDatabaseSnapshot());
-    });
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, []);
-
-  return snapshot;
 }
 
 export function getTripProducts(tripId: string, snapshot = state) {
@@ -961,6 +1635,12 @@ export function getTripBuyListItems(tripId: string, snapshot = state) {
 }
 
 export function confirmOrderAvailability(orderId: string, available: boolean) {
+  const order = state.orders.find((entry) => entry.id === orderId) ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
+  const targetBusinessId = (order?.businessId ?? resolveCurrentBusinessId() ?? activeBusinessId ?? '').trim();
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
   if (!available) {
     state.orders = state.orders.map((order) => order.id === orderId ? {
       ...order,
@@ -975,44 +1655,70 @@ export function confirmOrderAvailability(orderId: string, available: boolean) {
       status: 'cancelled',
     } : order);
   } else {
-    const order = state.orders.find((entry) => entry.id === orderId);
+    const currentOrder = state.orders.find((entry) => entry.id === orderId);
     state.orders = state.orders.map((entry) => entry.id === orderId ? {
       ...entry,
       availabilityStatus: 'confirmed',
-      requestStatus: 'PENDING_PAYMENT',
-      paymentOption: 'PAY_NOW',
-      paymentMode: entry.paymentMode ?? 'customer_pays_first',
+      requestStatus: 'AVAILABLE',
+      paymentOption: undefined,
+      paymentMode: undefined,
       paymentStatus: 'pending',
-      paymentRequestedAt: new Date().toISOString(),
-      paymentCode: entry.paymentCode ?? `OPSPS-${String(state.orders.indexOf(order ?? entry) + 1).padStart(6, '0')}`,
-      status: 'pending',
+      paymentRequestedAt: undefined,
+      paymentCode: undefined,
+      status: entry.status === 'cancelled' ? 'pending' : entry.status,
     } : entry);
+    if (!currentOrder && targetBusinessId) {
+      const scopedOrders = businessSnapshots.get(targetBusinessId)?.orders ?? [];
+      const scopedOrder = scopedOrders.find((entry) => entry.id === orderId);
+      if (scopedOrder) {
+        state.orders = state.orders.map((entry) => entry.id === orderId ? { ...entry, ...scopedOrder, availabilityStatus: 'confirmed', requestStatus: 'AVAILABLE', paymentStatus: 'pending', paymentOption: undefined, paymentMode: undefined, paymentRequestedAt: undefined, paymentCode: undefined, status: scopedOrder.status === 'cancelled' ? 'pending' : scopedOrder.status } : entry);
+      }
+    }
   }
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId);
   return available;
 }
 
 export function setOrderPaymentMode(orderId: string, paymentMode: PaymentMode, payLaterCustomerId?: string) {
+  const targetBusinessId = ensureOrderBusinessScope(orderId, activeBusinessId);
+  const normalizedMode = paymentMode === 'Buy Now Pay Later'
+    ? 'ps_buy_first_pay_later'
+    : paymentMode === 'Pay Now'
+      ? 'customer_pays_first'
+      : paymentMode;
+
   state.orders = state.orders.map((order) => order.id === orderId ? {
     ...order,
-    paymentMode,
-    paymentOption: paymentMode === 'ps_buy_first_pay_later' ? 'PAY_LATER' : 'PAY_NOW',
-    requestStatus: paymentMode === 'ps_buy_first_pay_later' ? 'PAY_LATER_OFFERED' : 'PENDING_PAYMENT',
-    payLaterCustomerId: paymentMode === 'ps_buy_first_pay_later' ? (payLaterCustomerId ?? order.payLaterCustomerId ?? order.customerName) : undefined,
-    paymentStatus: paymentMode === 'ps_buy_first_pay_later' ? 'pay_later' : 'pending',
-    paymentRequestedAt: paymentMode === 'customer_pays_first' ? new Date().toISOString() : undefined,
+    paymentMode: normalizedMode,
+    paymentOption: normalizedMode === 'ps_buy_first_pay_later' ? 'PAY_LATER' : 'PAY_NOW',
+    requestStatus: normalizedMode === 'ps_buy_first_pay_later' ? 'PAY_LATER_OFFERED' : 'PAYMENT_REQUIRED',
+    payLaterCustomerId: normalizedMode === 'ps_buy_first_pay_later' ? (payLaterCustomerId ?? order.payLaterCustomerId ?? order.customerName) : undefined,
+    paymentStatus: normalizedMode === 'ps_buy_first_pay_later' ? 'pay_later' : 'pending',
+    paymentRequestedAt: normalizedMode === 'customer_pays_first' ? new Date().toISOString() : undefined,
     paymentCode: order.paymentCode ?? `OPSPS-${String(state.orders.indexOf(order) + 1).padStart(6, '0')}`,
     availabilityStatus: 'confirmed',
     status: order.status === 'cancelled' ? 'pending' : order.status,
   } : order);
-  emit();
+
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId);
   return true;
 }
 
 export function offerCustomerPaymentOption(orderId: string, option: 'pay_now' | 'pay_later') {
-  const order = state.orders.find((entry) => entry.id === orderId);
+  const order = state.orders.find((entry) => entry.id === orderId) ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
   if (!order) {
     return null;
+  }
+
+  const targetBusinessId = (order.businessId ?? resolveCurrentBusinessId() ?? activeBusinessId ?? '').trim();
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
   }
 
   const paymentMode = option === 'pay_now' ? 'customer_pays_first' : 'ps_buy_first_pay_later';
@@ -1020,7 +1726,7 @@ export function offerCustomerPaymentOption(orderId: string, option: 'pay_now' | 
   state.orders = state.orders.map((entry) => entry.id === orderId ? {
     ...entry,
     availabilityStatus: 'confirmed',
-    requestStatus: option === 'pay_now' ? 'PENDING_PAYMENT' : 'PAY_LATER_OFFERED',
+    requestStatus: option === 'pay_now' ? 'PAYMENT_REQUIRED' : 'PAY_LATER_OFFERED',
     paymentOption: option === 'pay_now' ? 'PAY_NOW' : 'PAY_LATER',
     paymentMode,
     paymentStatus: option === 'pay_now' ? 'pending' : 'pay_later',
@@ -1029,11 +1735,19 @@ export function offerCustomerPaymentOption(orderId: string, option: 'pay_now' | 
     status: entry.status === 'cancelled' ? 'pending' : entry.status,
   } : entry);
 
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId);
   return state.orders.find((entry) => entry.id === orderId) ?? null;
 }
 
 export function recordPayment(orderId: string, amount: number, receiptUri?: string) {
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
   state.orders = state.orders.map((order) => order.id === orderId ? {
     ...order,
     paymentStatus: 'success',
@@ -1041,11 +1755,19 @@ export function recordPayment(orderId: string, amount: number, receiptUri?: stri
     status: 'payment_received',
     paymentReceipt: { amount, date: new Date().toISOString(), receiptUri, verified: false },
   } : order);
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return true;
 }
 
 export function verifyPayment(orderId: string) {
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
   const existingOrder = state.orders.find((order) => order.id === orderId);
   if (!existingOrder?.paymentReceipt || existingOrder.paymentReceipt.verified) return false;
   state.orders = state.orders.map((order) => order.id === orderId ? { ...order, paymentStatus: 'success', paymentVerifiedAt: new Date().toISOString(), paymentReceipt: { ...order.paymentReceipt!, verified: true }, requestStatus: 'PAYMENT_RECEIVED', status: 'payment_received' } : order);
@@ -1056,11 +1778,19 @@ export function verifyPayment(orderId: string) {
   if (order && !order.receipt) {
     generateOrderReceipt(order.id, order.customerName, order.total, order.paymentMethod.toString());
   }
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return true;
 }
 
 export function generateOrderReceipt(orderId: string, customerName: string, amount: number, paymentMethod: string) {
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order) return null;
 
@@ -1087,13 +1817,52 @@ export function generateOrderReceipt(orderId: string, customerName: string, amou
     status: 'payment_received',
     paymentVerifiedAt: entry.paymentVerifiedAt ?? new Date().toISOString(),
   } : entry);
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return receipt;
 }
 
 export function completeCustomerPayment(orderId: string, paymentMethod: string) {
-  const order = state.orders.find((entry) => entry.id === orderId);
+  const targetBusinessId = ensureOrderBusinessScope(orderId, activeBusinessId);
+  const order = state.orders.find((entry) => entry.id === orderId) ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
   if (!order) return null;
+
+  const orderItem = state.orderItems.find((entry) => entry.orderId === orderId) ?? [...businessSnapshots.values()].flatMap((entry) => entry.orderItems).find((entry) => entry.orderId === orderId);
+  const quantityRequested = Math.max(1, Number(orderItem?.quantity ?? 1));
+  const variantCandidate = orderItem
+    ? getProductVariant(orderItem.productVariantId, state, targetBusinessId)
+      ?? (order.productId ? getProductVariantByProduct(order.productId, state, targetBusinessId)[0] : undefined)
+    : (order.productId ? getProductVariantByProduct(order.productId, state, targetBusinessId)[0] : undefined);
+
+  if (order.paymentStatus === 'success' || order.requestStatus === 'PAYMENT_RECEIVED' || order.receipt) {
+    const existingReceipt = order.receipt ?? generateOrderReceipt(orderId, order.customerName, order.total, paymentMethod || String(order.paymentMethod || 'Bank Transfer'));
+    if (!existingReceipt) {
+      return null;
+    }
+    if (!state.financeTransactions.some((transaction) => transaction.referenceId === orderId && transaction.category === 'Customer Payment')) {
+      addFinanceTransaction({
+        description: 'Customer Payment',
+        amount: order.total,
+        type: 'income',
+        paymentMethod: String(paymentMethod).toLowerCase().includes('qr') ? 'bank' : 'cash',
+        category: 'Customer Payment',
+        referenceId: orderId,
+        tripId: order.tripId,
+        orderId: order.id,
+      });
+    }
+    return existingReceipt;
+  }
+
+  if (variantCandidate && variantCandidate.stock < quantityRequested) {
+    return null;
+  }
+
+  if (variantCandidate) {
+    reduceStock(variantCandidate.id, quantityRequested);
+  }
 
   const receipt = generateOrderReceipt(orderId, order.customerName, order.total, paymentMethod || String(order.paymentMethod || 'Bank Transfer'));
   if (!receipt) return null;
@@ -1104,6 +1873,12 @@ export function completeCustomerPayment(orderId: string, paymentMethod: string) 
     paymentStatus: 'success',
     status: 'payment_received',
   } : entry);
+
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+
+  emit(targetBusinessId);
 
   if (!state.financeTransactions.some((transaction) => transaction.referenceId === orderId && transaction.category === 'Customer Payment')) {
     addFinanceTransaction({
@@ -1122,14 +1897,27 @@ export function completeCustomerPayment(orderId: string, paymentMethod: string) 
 }
 
 export function rejectPayment(orderId: string) {
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
   state.orders = state.orders.map((order) => order.id === orderId ? { ...order, paymentStatus: 'pending', paymentReceipt: undefined } : order);
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return true;
 }
 
 export function confirmPayLater(orderId: string) {
-  const order = state.orders.find((entry) => entry.id === orderId);
+  const order = state.orders.find((entry) => entry.id === orderId) ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
   if (!order) return null;
+
+  const targetBusinessId = (order.businessId ?? resolveCurrentBusinessId() ?? activeBusinessId ?? '').trim();
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
 
   state.orders = state.orders.map((entry) => entry.id === orderId ? {
     ...entry,
@@ -1141,7 +1929,10 @@ export function confirmPayLater(orderId: string) {
     status: 'pending',
   } : entry);
 
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId);
   return state.orders.find((entry) => entry.id === orderId) ?? null;
 }
 
@@ -1367,16 +2158,91 @@ export function markOrderDeliveredFromCourier(orderId: string) {
   return true;
 }
 
-export function getProductVariant(productVariantId: string, snapshot = state) {
-  return snapshot.productVariants.find((variant) => variant.id === productVariantId);
+export function getProductVariant(productVariantId: string, snapshot = state, businessId: string | null = activeBusinessId) {
+  const scope = (businessId ?? activeBusinessId ?? '').trim();
+
+  const productMatch = scope
+    ? snapshot.products.find((product) => product.id === productVariantId && product.businessId === scope)
+    : snapshot.products.find((product) => product.id === productVariantId);
+
+  if (productMatch) {
+    const variants = scope
+      ? snapshot.productVariants.filter((variant) => variant.productId === productMatch.id && variant.businessId === scope)
+      : snapshot.productVariants.filter((variant) => variant.productId === productMatch.id);
+    if (variants.length > 0) {
+      return variants[0];
+    }
+  }
+
+  const scopedMatch = scope
+    ? snapshot.productVariants.find((variant) => variant.id === productVariantId && variant.businessId === scope)
+    : snapshot.productVariants.find((variant) => variant.id === productVariantId);
+
+  if (scopedMatch) {
+    return scopedMatch;
+  }
+
+  const knownMatches = [...businessSnapshots.values()].filter((entry) => !scope || entry.products.some((product) => product.businessId === scope) || entry.productVariants.some((variant) => variant.businessId === scope));
+  const scopedBusinessSnapshot = scope ? knownMatches.find((entry) => entry.productVariants.some((variant) => variant.id === productVariantId && variant.businessId === scope)) : undefined;
+  if (scopedBusinessSnapshot) {
+    return scopedBusinessSnapshot.productVariants.find((variant) => variant.id === productVariantId && variant.businessId === scope);
+  }
+
+  const productFromSnapshots = scope
+    ? [...businessSnapshots.values()].find((entry) => entry.products.some((product) => product.id === productVariantId && product.businessId === scope))?.products.find((product) => product.id === productVariantId && product.businessId === scope)
+    : [...businessSnapshots.values()].find((entry) => entry.products.some((product) => product.id === productVariantId))?.products.find((product) => product.id === productVariantId);
+
+  if (productFromSnapshots) {
+    const variantMatches = scope
+      ? [...businessSnapshots.values()].flatMap((entry) => entry.productVariants.filter((variant) => variant.productId === productFromSnapshots.id && variant.businessId === scope))
+      : [...businessSnapshots.values()].flatMap((entry) => entry.productVariants.filter((variant) => variant.productId === productFromSnapshots.id));
+    if (variantMatches.length > 0) {
+      return variantMatches[0];
+    }
+  }
+
+  return snapshot.productVariants.find((variant) => variant.id === productVariantId)
+    ?? [...businessSnapshots.values()].find((entry) => entry.productVariants.some((variant) => variant.id === productVariantId))?.productVariants.find((variant) => variant.id === productVariantId);
 }
 
-export function getProduct(productId: string, snapshot = state) {
-  return snapshot.products.find((product) => product.id === productId);
+export function getProduct(productId: string, snapshot = state, businessId: string | null = activeBusinessId) {
+  const scope = (businessId ?? activeBusinessId ?? '').trim();
+  const scopedMatch = scope
+    ? snapshot.products.find((product) => product.id === productId && product.businessId === scope)
+    : snapshot.products.find((product) => product.id === productId);
+
+  if (scopedMatch) {
+    return scopedMatch;
+  }
+
+  const scopedBusinessSnapshot = scope
+    ? [...businessSnapshots.values()].find((entry) => entry.products.some((product) => product.id === productId && product.businessId === scope))
+    : undefined;
+  if (scopedBusinessSnapshot) {
+    return scopedBusinessSnapshot.products.find((product) => product.id === productId && product.businessId === scope);
+  }
+
+  return snapshot.products.find((product) => product.id === productId)
+    ?? [...businessSnapshots.values()].find((entry) => entry.products.some((product) => product.id === productId))?.products.find((product) => product.id === productId);
 }
 
-export function getProductVariantByProduct(productId: string, snapshot = state) {
-  return snapshot.productVariants.filter((variant) => variant.productId === productId);
+export function getProductVariantByProduct(productId: string, snapshot = state, businessId: string | null = activeBusinessId) {
+  const scope = (businessId ?? activeBusinessId ?? '').trim();
+  const direct = scope
+    ? snapshot.productVariants.filter((variant) => variant.productId === productId && variant.businessId === scope)
+    : snapshot.productVariants.filter((variant) => variant.productId === productId);
+  if (direct.length > 0) {
+    return direct;
+  }
+
+  const scopedMatches = scope
+    ? [...businessSnapshots.values()].flatMap((entry) => entry.productVariants.filter((variant) => variant.productId === productId && variant.businessId === scope))
+    : [...businessSnapshots.values()].flatMap((entry) => entry.productVariants.filter((variant) => variant.productId === productId));
+  if (scopedMatches.length > 0) {
+    return scopedMatches;
+  }
+
+  return [...businessSnapshots.values()].flatMap((entry) => entry.productVariants.filter((variant) => variant.productId === productId));
 }
 
 export function getConfiguredPaymentMethods(settings: PaymentSettings = state.paymentSettings) {
@@ -1419,7 +2285,7 @@ export function createOrder(input: {
   state.productVariants = state.productVariants.map((variant) =>
     variant.id === productVariant.id
       ? { ...variant, stock: nextStock }
-      : variant
+      : variant,
   );
 
   const orderId = createId('order');
@@ -1455,14 +2321,14 @@ export function createOrder(input: {
 
   if (shortage > 0) {
     const existingItem = state.buyListItems.find(
-      (item) => item.tripId === input.tripId && item.productVariantId === input.productVariantId && !item.purchased
+      (item) => item.tripId === input.tripId && item.productVariantId === input.productVariantId && !item.purchased,
     );
 
     if (existingItem) {
       state.buyListItems = state.buyListItems.map((item) =>
         item.id === existingItem.id
           ? { ...item, quantity: item.quantity + shortage }
-          : item
+          : item,
       );
     } else {
       state.buyListItems = [
@@ -1515,55 +2381,54 @@ export function getCustomerRequestForProduct(productId: string, customerIdentifi
   }
 
   const candidate = (customerIdentifier ?? '').trim();
+  const normalizedCandidate = candidate ? normalizeCustomerPhone(candidate) : '';
 
-  return snapshot.orders.find((order) => {
-    if (order.productId !== productId) {
-      return false;
-    }
+  const matchingOrders = snapshot.orders.filter((order) => order.productId === productId);
 
-    if (!candidate) {
-      return true;
-    }
+  if (!candidate) {
+    return matchingOrders.at(-1);
+  }
 
+  return [...matchingOrders].reverse().find((order) => {
+    const orderPhone = normalizeCustomerPhone(order.customerPhone ?? '');
+    const orderCustomerId = (order.customerId ?? '').trim();
     return (
-      order.customerId === candidate ||
-      order.customerPhone === candidate ||
+      orderCustomerId === candidate ||
+      orderPhone === normalizedCandidate ||
       order.customerName.toLowerCase() === candidate.toLowerCase()
     );
   });
 }
 
-export function submitCustomerOrder(input: { productId: string; productVariantId: string; quantity: number; customerName: string; customerPhone?: string; deliveryAddress?: string; customerId?: string }) {
-  const product = getProduct(input.productId, state);
-  if (!product) return null;
+export function submitCustomerOrder(input: { productId: string; productVariantId: string; quantity: number; customerName: string; customerPhone?: string; deliveryAddress?: string; customerId?: string; businessId?: string }) {
+  const productLookup = getProduct(input.productId, undefined, input.businessId ?? activeBusinessId ?? null) ?? getProduct(input.productId, state, null) ?? getProduct(input.productId, undefined, null);
+  if (!productLookup) {
+    return null;
+  }
+
+  const businessId = (productLookup.businessId ?? input.businessId ?? activeBusinessId ?? resolveCurrentBusinessId() ?? 'business-default').trim() || 'business-default';
+  ensureBusinessScopeForMutation(businessId);
+
+  const product = getProduct(input.productId, state, businessId);
+  if (!product) {
+    return null;
+  }
 
   const quantity = Math.max(1, input.quantity);
   const customerName = input.customerName.trim() || 'Customer';
   const customerPhone = input.customerPhone?.trim() || 'Not provided';
   const deliveryAddress = input.deliveryAddress?.trim() || 'To be confirmed';
-  const customerKey = input.customerId?.trim() || customerPhone || customerName;
-
-  const existing = state.orders.find((order) => {
-    if (order.productId !== input.productId) {
-      return false;
-    }
-
-    if (order.customerId && input.customerId && order.customerId === input.customerId) {
-      return true;
-    }
-
-    return (
-      order.customerPhone === customerPhone ||
-      (order.customerName === customerName && order.deliveryAddress === deliveryAddress)
-    );
+  const customerProfile = upsertCustomerProfile({
+    businessId,
+    fullName: customerName,
+    phoneNumber: customerPhone,
+    deliveryAddress,
   });
-
-  if (existing) {
-    return existing;
-  }
+  const customerKey = input.customerId?.trim() || customerProfile?.id || customerPhone || customerName;
 
   const order: Order = {
     id: createId('order'),
+    businessId,
     tripId: product.tripId,
     productId: input.productId,
     customerName,
@@ -1582,12 +2447,68 @@ export function submitCustomerOrder(input: { productId: string; productVariantId
 
   state.orders = [...state.orders, order];
   state.orderItems = [...state.orderItems, { id: createId('order-item'), orderId: order.id, productVariantId: input.productVariantId, quantity }];
-
-  emit();
+  markBusinessMutation(businessId);
+  emit(businessId);
   return order;
 }
 
-export function getOrder(orderId: string, snapshot = state) { return snapshot.orders.find((order) => order.id === orderId); }
+export function getOrder(orderId: string, snapshot = state, businessId: string | null = activeBusinessId) {
+  const explicitScope = (businessId ?? activeBusinessId ?? '').trim();
+  const actualScope = resolveOrderBusinessId(orderId, explicitScope) ?? explicitScope;
+  const resolvedScope = actualScope || '';
+
+  if (resolvedScope) {
+    const scopedSnapshot = businessSnapshots.get(resolvedScope) ?? snapshot;
+    const scopedMatch = scopedSnapshot.orders.find((order) => order.id === orderId && order.businessId === resolvedScope);
+    if (scopedMatch) {
+      return scopedMatch;
+    }
+
+    const snapshotMatch = snapshot.orders.find((order) => order.id === orderId && order.businessId === resolvedScope);
+    if (snapshotMatch) {
+      return snapshotMatch;
+    }
+  }
+
+  const globalMatch = snapshot.orders.find((order) => order.id === orderId)
+    ?? [...businessSnapshots.values()].find((entry) => entry.orders.some((order) => order.id === orderId))?.orders.find((order) => order.id === orderId);
+
+  if (!globalMatch) {
+    return undefined;
+  }
+
+  const ownerBusinessId = (globalMatch.businessId ?? resolvedScope ?? '').trim();
+  if (!ownerBusinessId) {
+    return globalMatch;
+  }
+
+  const ownerSnapshot = businessSnapshots.get(ownerBusinessId) ?? snapshot;
+  return ownerSnapshot.orders.find((order) => order.id === orderId && order.businessId === ownerBusinessId) ?? globalMatch;
+}
+
+export function isMarketplaceProductVisible(product: Partial<Product> | undefined, snapshot = state) {
+  if (!product) {
+    return false;
+  }
+
+  const trip = snapshot.trips.find((entry) => entry.id === product.tripId);
+  if (trip?.status === 'closed') {
+    return false;
+  }
+
+  const stock = Number(product.stock ?? 0);
+  const initialStock = Number(product.initialStock ?? product.stock ?? 0);
+
+  if (stock > 0) {
+    return true;
+  }
+
+  if (initialStock > 0) {
+    return false;
+  }
+
+  return true;
+}
 
 export function uploadPaymentReceipt(orderId: string, receiptUri: string, amount: number) {
   state.orders = state.orders.map((order) => order.id === orderId ? { ...order, paymentStatus: 'pending_verification', paymentReceipt: { amount, date: new Date().toISOString(), receiptUri, verified: false } } : order);
@@ -1613,7 +2534,7 @@ export function markBuyListItemBought(itemId: string) {
   }
 
   state.productVariants = state.productVariants.map((variant) =>
-    variant.id === item.productVariantId ? { ...variant, stock: variant.stock + item.quantity } : variant
+    variant.id === item.productVariantId ? { ...variant, stock: variant.stock + item.quantity } : variant,
   );
 
   state.buyListItems = state.buyListItems.map((buyItem) => buyItem.id === itemId ? { ...buyItem, purchased: true } : buyItem);
@@ -1628,7 +2549,7 @@ export function markBuyListItemBought(itemId: string) {
 
   if (linkedOrder) {
     state.orders = state.orders.map((order) =>
-      order.id === linkedOrder.id ? { ...order, status: 'packing' } : order
+      order.id === linkedOrder.id ? { ...order, status: 'packing' } : order,
     );
   }
 
@@ -1656,7 +2577,7 @@ export function updateBuyListItemQuantity(itemId: string, quantity: number) {
   }
 
   state.buyListItems = state.buyListItems.map((item) =>
-    item.id === itemId ? { ...item, quantity } : item
+    item.id === itemId ? { ...item, quantity } : item,
   );
 
   emit();
@@ -1665,7 +2586,7 @@ export function updateBuyListItemQuantity(itemId: string, quantity: number) {
 
 export function addStock(productVariantId: string, amount: number) {
   state.productVariants = state.productVariants.map((variant) =>
-    variant.id === productVariantId ? { ...variant, stock: variant.stock + amount } : variant
+    variant.id === productVariantId ? { ...variant, stock: variant.stock + amount } : variant,
   );
   emit();
   return true;
@@ -1675,7 +2596,7 @@ export function reduceStock(productVariantId: string, amount: number) {
   state.productVariants = state.productVariants.map((variant) =>
     variant.id === productVariantId
       ? { ...variant, stock: Math.max(0, variant.stock - amount) }
-      : variant
+      : variant,
   );
   emit();
   return true;
@@ -1698,7 +2619,7 @@ export function getDashboardCounts(snapshot = state) {
       shipped: 0,
       delivered: 0,
       cancelled: 0,
-    } as Record<OrderStatus, number>
+    } as Record<OrderStatus, number>,
   );
 
   const salesToday = snapshot.orders

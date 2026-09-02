@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { ArrowLeft, Calendar } from 'lucide-react-native';
@@ -27,40 +27,52 @@ export default function CreateTripScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={18} color={THEME.primary} />
-          <Text style={styles.backText}>Back to Trips</Text>
-        </Pressable>
-        <Text style={styles.title}>Create Trip</Text>
-        <Text style={styles.subtitle}>Add a new journey to your personal shopper schedule.</Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'android' ? 32 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          alwaysBounceVertical={false}
+          bounces={false}
+        >
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={18} color={THEME.primary} />
+            <Text style={styles.backText}>Back to Trips</Text>
+          </Pressable>
+          <Text style={styles.title}>Create Trip</Text>
+          <Text style={styles.subtitle}>Add a new journey to your personal shopper schedule.</Text>
 
-        <View style={styles.form}>
-          <Field label="Trip Name" value={name} onChangeText={setName} placeholder="e.g. Bangkok Shopping" />
-          <Field label="Shopping Destination / Mall / Event" value={destination} onChangeText={setDestination} placeholder="e.g. ION Orchard" />
-          <Text style={styles.label}>Trip Date</Text>
-          <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-            <Text style={styles.dateText}>{tripDate.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-            <Calendar size={19} color={THEME.primary} />
-          </Pressable>
-          {showDatePicker && (
-            <DateTimePicker
-              value={tripDate}
-              mode="date"
-              display="default"
-              onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
-                setShowDatePicker(false);
-                if (event.type === 'set' && selectedDate) setTripDate(selectedDate);
-              }}
-            />
-          )}
-          <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional notes" multiline />
-          {!!error && <Text style={styles.error}>{error}</Text>}
-          <Pressable onPress={submit} style={styles.submitButton}>
-            <Text style={styles.submitText}>Create Trip</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+          <View style={styles.form}>
+            <Field label="Trip Name" value={name} onChangeText={setName} placeholder="e.g. Bangkok Shopping" />
+            <Field label="Shopping Destination / Mall / Event" value={destination} onChangeText={setDestination} placeholder="e.g. ION Orchard" />
+            <Text style={styles.label}>Trip Date</Text>
+            <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
+              <Text style={styles.dateText}>{tripDate.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+              <Calendar size={19} color={THEME.primary} />
+            </Pressable>
+            {showDatePicker && (
+              <DateTimePicker
+                value={tripDate}
+                mode="date"
+                display="default"
+                onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
+                  setShowDatePicker(false);
+                  if (event.type === 'set' && selectedDate) setTripDate(selectedDate);
+                }}
+              />
+            )}
+            <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional notes" multiline />
+            {!!error && <Text style={styles.error}>{error}</Text>}
+            <Pressable onPress={submit} style={styles.submitButton}>
+              <Text style={styles.submitText}>Create Trip</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -83,7 +95,8 @@ function Field({ label, value, onChangeText, placeholder, multiline = false }: {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: THEME.background },
-  content: { width: '100%', maxWidth: 760, alignSelf: 'center', padding: SPACING['2xl'], paddingBottom: SPACING['3xl'] },
+  flex: { flex: 1 },
+  content: { flexGrow: 1, width: '100%', maxWidth: 760, alignSelf: 'center', padding: SPACING['2xl'], paddingBottom: SPACING['3xl'] },
   backButton: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: SPACING.sm, paddingVertical: SPACING.sm },
   backText: { color: THEME.primary, fontWeight: '700' },
   title: { color: THEME.text.primary, fontSize: FONT_SIZES['2xl'], fontWeight: '800', marginTop: SPACING.xl },

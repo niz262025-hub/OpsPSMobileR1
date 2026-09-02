@@ -1,0 +1,518 @@
+{
+  "business-founder-founder-cors-1-1788021993003-test-com": {
+    "trips": [],
+    "products": [
+      {
+        "id": "product-1788022004305-0",
+        "businessId": "business-founder-founder-cors-1-1788021993003-test-com",
+        "tripId": "trip-1",
+        "name": "Product 1",
+        "image": "data:image/svg+xml;charset=utf-8,%0A%20%20%20%20%20%20%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22900%22%20viewBox%3D%220%200%201200%20900%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20x2%3D%221%22%20y1%3D%220%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%235B2BD9%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23EC4C99%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20width%3D%221200%22%20height%3D%22900%22%20fill%3D%22%23F5F3FF%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20x%3D%22120%22%20y%3D%22130%22%20width%3D%22960%22%20height%3D%22640%22%20rx%3D%2232%22%20fill%3D%22url(%23g)%22%20opacity%3D%220.9%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Ctext%20x%3D%22600%22%20y%3D%22470%22%20text-anchor%3D%22middle%22%20font-size%3D%2272%22%20font-family%3D%22Arial%2C%20sans-serif%22%20fill%3D%22white%22%20font-weight%3D%22700%22%3EProduct%201%3C%2Ftext%3E%0A%20%20%20%20%20%20%20%20%20%20%3C%2Fsvg%3E%0A%20%20%20%20%20%20%20%20",
+        "costPrice": 12,
+        "sellingPrice": 35,
+        "status": "ready",
+        "category": "Clothing",
+        "size": "M",
+        "stock": 49,
+        "initialStock": 49
+      }
+    ],
+    "productVariants": [
+      {
+        "id": "variant-1788022004305-1",
+        "businessId": "business-founder-founder-cors-1-1788021993003-test-com",
+        "productId": "product-1788022004305-0",
+        "size": "M",
+        "stock": 49
+      }
+    ],
+    "orders": [],
+    "orderItems": [],
+    "buyListItems": [],
+    "tripExpenses": [],
+    "tripCostOfGoods": [],
+    "financeTransactions": [],
+    "extraStockPurchases": [],
+    "customers": [],
+    "paymentSettings": {
+      "bankName": "",
+      "accountName": "",
+      "accountNumber": "",
+      "paymentReference": "Order ID",
+      "enabledPaymentMethods": [
+        "Bank Transfer",
+        "QR Payment"
+      ],
+      "bnplEnabled": true
+    },
+    "businessSettings": {
+      "businessName": "",
+      "phone": "",
+      "email": "",
+      "address": ""
+    },
+    "marketplaceSettings": {
+      "currency": "RM",
+      "defaultProductStatus": "ready",
+      "defaultMarkup": 0
+    },
+    "tripSettings": {
+      "defaultTripDate": "2026-08-29",
+      "destinationType": "Shopping Mall",
+      "clothingSizes": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "2XL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "2Y",
+        "3Y",
+        "4Y",
+        "5Y",
+        "6Y",
+        "7Y",
+        "8Y",
+        "9Y",
+        "10Y",
+        "11Y",
+        "12Y",
+        "13Y",
+        "14Y"
+      ],
+      "shoeSizes": [
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46"
+      ]
+    },
+    "shippingSettings": {
+      "defaultCourier": "J&T",
+      "senderName": "",
+      "senderPhone": "",
+      "senderAddress": "",
+      "integrationStatus": "Mock / Not Connected"
+    },
+    "notificationSettings": {
+      "paymentConfirmation": true,
+      "orderAvailability": true,
+      "shipping": true
+    },
+    "userSettings": {
+      "name": "",
+      "email": ""
+    }
+  },
+  "business-founder-founder-cors-2-1788022020473-test-com": {
+    "trips": [],
+    "products": [
+      {
+        "id": "product-1788022030401-0",
+        "businessId": "business-founder-founder-cors-2-1788022020473-test-com",
+        "tripId": "trip-1",
+        "name": "Product 2",
+        "image": "data:image/svg+xml;charset=utf-8,%0A%20%20%20%20%20%20%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22900%22%20viewBox%3D%220%200%201200%20900%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20x2%3D%221%22%20y1%3D%220%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%235B2BD9%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23EC4C99%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20width%3D%221200%22%20height%3D%22900%22%20fill%3D%22%23F5F3FF%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20x%3D%22120%22%20y%3D%22130%22%20width%3D%22960%22%20height%3D%22640%22%20rx%3D%2232%22%20fill%3D%22url(%23g)%22%20opacity%3D%220.9%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Ctext%20x%3D%22600%22%20y%3D%22470%22%20text-anchor%3D%22middle%22%20font-size%3D%2272%22%20font-family%3D%22Arial%2C%20sans-serif%22%20fill%3D%22white%22%20font-weight%3D%22700%22%3EProduct%202%3C%2Ftext%3E%0A%20%20%20%20%20%20%20%20%20%20%3C%2Fsvg%3E%0A%20%20%20%20%20%20%20%20",
+        "costPrice": 12,
+        "sellingPrice": 35,
+        "status": "ready",
+        "category": "Clothing",
+        "size": "M",
+        "stock": 49,
+        "initialStock": 49
+      }
+    ],
+    "productVariants": [
+      {
+        "id": "variant-1788022030401-1",
+        "businessId": "business-founder-founder-cors-2-1788022020473-test-com",
+        "productId": "product-1788022030401-0",
+        "size": "M",
+        "stock": 49
+      }
+    ],
+    "orders": [],
+    "orderItems": [],
+    "buyListItems": [],
+    "tripExpenses": [],
+    "tripCostOfGoods": [],
+    "financeTransactions": [],
+    "extraStockPurchases": [],
+    "customers": [],
+    "paymentSettings": {
+      "bankName": "",
+      "accountName": "",
+      "accountNumber": "",
+      "paymentReference": "Order ID",
+      "enabledPaymentMethods": [
+        "Bank Transfer",
+        "QR Payment"
+      ],
+      "bnplEnabled": true
+    },
+    "businessSettings": {
+      "businessName": "",
+      "phone": "",
+      "email": "",
+      "address": ""
+    },
+    "marketplaceSettings": {
+      "currency": "RM",
+      "defaultProductStatus": "ready",
+      "defaultMarkup": 0
+    },
+    "tripSettings": {
+      "defaultTripDate": "2026-08-29",
+      "destinationType": "Shopping Mall",
+      "clothingSizes": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "2XL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "2Y",
+        "3Y",
+        "4Y",
+        "5Y",
+        "6Y",
+        "7Y",
+        "8Y",
+        "9Y",
+        "10Y",
+        "11Y",
+        "12Y",
+        "13Y",
+        "14Y"
+      ],
+      "shoeSizes": [
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46"
+      ]
+    },
+    "shippingSettings": {
+      "defaultCourier": "J&T",
+      "senderName": "",
+      "senderPhone": "",
+      "senderAddress": "",
+      "integrationStatus": "Mock / Not Connected"
+    },
+    "notificationSettings": {
+      "paymentConfirmation": true,
+      "orderAvailability": true,
+      "shipping": true
+    },
+    "userSettings": {
+      "name": "",
+      "email": ""
+    }
+  },
+  "business-founder-founder-post-cors-1-1788022212747-test-c": {
+    "trips": [],
+    "products": [
+      {
+        "id": "product-1788022223083-0",
+        "businessId": "business-founder-founder-post-cors-1-1788022212747-test-c",
+        "tripId": "trip-1",
+        "name": "Product 1",
+        "image": "data:image/svg+xml;charset=utf-8,%0A%20%20%20%20%20%20%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22900%22%20viewBox%3D%220%200%201200%20900%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20x2%3D%221%22%20y1%3D%220%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%235B2BD9%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23EC4C99%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20width%3D%221200%22%20height%3D%22900%22%20fill%3D%22%23F5F3FF%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20x%3D%22120%22%20y%3D%22130%22%20width%3D%22960%22%20height%3D%22640%22%20rx%3D%2232%22%20fill%3D%22url(%23g)%22%20opacity%3D%220.9%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Ctext%20x%3D%22600%22%20y%3D%22470%22%20text-anchor%3D%22middle%22%20font-size%3D%2272%22%20font-family%3D%22Arial%2C%20sans-serif%22%20fill%3D%22white%22%20font-weight%3D%22700%22%3EProduct%201%3C%2Ftext%3E%0A%20%20%20%20%20%20%20%20%20%20%3C%2Fsvg%3E%0A%20%20%20%20%20%20%20%20",
+        "costPrice": 12,
+        "sellingPrice": 35,
+        "status": "ready",
+        "category": "Clothing",
+        "size": "M",
+        "stock": 49,
+        "initialStock": 49
+      }
+    ],
+    "productVariants": [
+      {
+        "id": "variant-1788022223083-1",
+        "businessId": "business-founder-founder-post-cors-1-1788022212747-test-c",
+        "productId": "product-1788022223083-0",
+        "size": "M",
+        "stock": 49
+      }
+    ],
+    "orders": [],
+    "orderItems": [],
+    "buyListItems": [],
+    "tripExpenses": [],
+    "tripCostOfGoods": [],
+    "financeTransactions": [],
+    "extraStockPurchases": [],
+    "customers": [],
+    "paymentSettings": {
+      "bankName": "",
+      "accountName": "",
+      "accountNumber": "",
+      "paymentReference": "Order ID",
+      "enabledPaymentMethods": [
+        "Bank Transfer",
+        "QR Payment"
+      ],
+      "bnplEnabled": true
+    },
+    "businessSettings": {
+      "businessName": "",
+      "phone": "",
+      "email": "",
+      "address": ""
+    },
+    "marketplaceSettings": {
+      "currency": "RM",
+      "defaultProductStatus": "ready",
+      "defaultMarkup": 0
+    },
+    "tripSettings": {
+      "defaultTripDate": "2026-08-29",
+      "destinationType": "Shopping Mall",
+      "clothingSizes": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "2XL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "2Y",
+        "3Y",
+        "4Y",
+        "5Y",
+        "6Y",
+        "7Y",
+        "8Y",
+        "9Y",
+        "10Y",
+        "11Y",
+        "12Y",
+        "13Y",
+        "14Y"
+      ],
+      "shoeSizes": [
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46"
+      ]
+    },
+    "shippingSettings": {
+      "defaultCourier": "J&T",
+      "senderName": "",
+      "senderPhone": "",
+      "senderAddress": "",
+      "integrationStatus": "Mock / Not Connected"
+    },
+    "notificationSettings": {
+      "paymentConfirmation": true,
+      "orderAvailability": true,
+      "shipping": true
+    },
+    "userSettings": {
+      "name": "",
+      "email": ""
+    }
+  },
+  "business-founder-founder-post-cors-2-1788022243182-test-c": {
+    "trips": [],
+    "products": [
+      {
+        "id": "product-1788022252711-0",
+        "businessId": "business-founder-founder-post-cors-2-1788022243182-test-c",
+        "tripId": "trip-1",
+        "name": "Product 2",
+        "image": "data:image/svg+xml;charset=utf-8,%0A%20%20%20%20%20%20%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22900%22%20viewBox%3D%220%200%201200%20900%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20x2%3D%221%22%20y1%3D%220%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%235B2BD9%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23EC4C99%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20width%3D%221200%22%20height%3D%22900%22%20fill%3D%22%23F5F3FF%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Crect%20x%3D%22120%22%20y%3D%22130%22%20width%3D%22960%22%20height%3D%22640%22%20rx%3D%2232%22%20fill%3D%22url(%23g)%22%20opacity%3D%220.9%22%2F%3E%0A%20%20%20%20%20%20%20%20%20%20%20%20%3Ctext%20x%3D%22600%22%20y%3D%22470%22%20text-anchor%3D%22middle%22%20font-size%3D%2272%22%20font-family%3D%22Arial%2C%20sans-serif%22%20fill%3D%22white%22%20font-weight%3D%22700%22%3EProduct%202%3C%2Ftext%3E%0A%20%20%20%20%20%20%20%20%20%20%3C%2Fsvg%3E%0A%20%20%20%20%20%20%20%20",
+        "costPrice": 12,
+        "sellingPrice": 35,
+        "status": "ready",
+        "category": "Clothing",
+        "size": "M",
+        "stock": 49,
+        "initialStock": 49
+      }
+    ],
+    "productVariants": [
+      {
+        "id": "variant-1788022252711-1",
+        "businessId": "business-founder-founder-post-cors-2-1788022243182-test-c",
+        "productId": "product-1788022252711-0",
+        "size": "M",
+        "stock": 49
+      }
+    ],
+    "orders": [],
+    "orderItems": [],
+    "buyListItems": [],
+    "tripExpenses": [],
+    "tripCostOfGoods": [],
+    "financeTransactions": [],
+    "extraStockPurchases": [],
+    "customers": [],
+    "paymentSettings": {
+      "bankName": "",
+      "accountName": "",
+      "accountNumber": "",
+      "paymentReference": "Order ID",
+      "enabledPaymentMethods": [
+        "Bank Transfer",
+        "QR Payment"
+      ],
+      "bnplEnabled": true
+    },
+    "businessSettings": {
+      "businessName": "",
+      "phone": "",
+      "email": "",
+      "address": ""
+    },
+    "marketplaceSettings": {
+      "currency": "RM",
+      "defaultProductStatus": "ready",
+      "defaultMarkup": 0
+    },
+    "tripSettings": {
+      "defaultTripDate": "2026-08-29",
+      "destinationType": "Shopping Mall",
+      "clothingSizes": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "2XL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "2Y",
+        "3Y",
+        "4Y",
+        "5Y",
+        "6Y",
+        "7Y",
+        "8Y",
+        "9Y",
+        "10Y",
+        "11Y",
+        "12Y",
+        "13Y",
+        "14Y"
+      ],
+      "shoeSizes": [
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46"
+      ]
+    },
+    "shippingSettings": {
+      "defaultCourier": "J&T",
+      "senderName": "",
+      "senderPhone": "",
+      "senderAddress": "",
+      "integrationStatus": "Mock / Not Connected"
+    },
+    "notificationSettings": {
+      "paymentConfirmation": true,
+      "orderAvailability": true,
+      "shipping": true
+    },
+    "userSettings": {
+      "name": "",
+      "email": ""
+    }
+  }
+}

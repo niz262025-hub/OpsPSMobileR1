@@ -6,6 +6,7 @@ import {
   Image,
   Pressable,
   ScrollView,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -55,27 +56,28 @@ const content = {
 
     pricingTitle: 'Pilih Pelan OpsPS',
     pricingSub:
-      'Cuba percuma dengan 2 Trips atau sertai 100 pengguna Founder pertama.',
+      'Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.',
 
-    founder: 'FOUNDER 100',
-    founderUsers: '100 pengguna pertama',
-    founderPrice: 'RM39',
-    month: '/bulan',
+    founder: 'FOUNDER',
+    founderUsers: 'RM29/bulan',
+    founderPrice: 'RM29',
+    founderCycle: '/bulan',
     founderDescription:
-      'Harga Founder RM39/bulan untuk 100 pengguna pertama.',
-    founder1: 'Harga Founder dikunci',
-    founder2: 'Untuk 100 pengguna pertama',
-    founder3: 'Semua fungsi OpsPS',
+      'Founder plan untuk 100 perniagaan pertama.',
+    founder1: 'RM29 sebulan semasa aktif',
+    founder2: 'Untuk 100 perniagaan pertama',
+    founder3: 'Akses penuh OpsPS',
     founderButton: 'Jadi Founder',
 
-    standard: 'STANDARD',
-    standardUsers: 'Selepas Founder 100 habis',
+    standard: 'PRO',
+    standardUsers: 'RM49/bulan',
     standardPrice: 'RM49',
+    standardCycle: '/bulan',
     standardDescription:
-      'Harga standard selepas semua 100 slot Founder telah habis.',
-    standard1: 'Selepas 100 Founder',
-    standard2: 'Harga standard RM49/bulan',
-    standard3: 'Semua fungsi OpsPS',
+      'Pro plan untuk operasi OpsPS yang berkembang.',
+    standard1: 'RM49 setiap bulan',
+    standard2: 'Akses penuh OpsPS',
+    standard3: 'Untuk perniagaan aktif',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
@@ -111,27 +113,28 @@ const content = {
 
     pricingTitle: 'Choose Your OpsPS Plan',
     pricingSub:
-      'Start free with 2 Trips or become one of the first 100 Founders.',
+      'Free RM0 • Founder RM29/month • Pro RM49/month • Team +RM10/user/month.',
 
-    founder: 'FOUNDER 100',
-    founderUsers: 'First 100 users',
-    founderPrice: 'RM39',
-    month: '/month',
+    founder: 'FOUNDER',
+    founderUsers: 'RM29/month',
+    founderPrice: 'RM29',
+    founderCycle: '/month',
     founderDescription:
-      'Founder price RM39/month for the first 100 users.',
-    founder1: 'Founder price locked',
-    founder2: 'For the first 100 users',
-    founder3: 'All OpsPS features',
+      'Founder plan for the first 100 businesses.',
+    founder1: 'RM29/month while active',
+    founder2: 'For the first 100 businesses',
+    founder3: 'Full OpsPS access',
     founderButton: 'Become a Founder',
 
-    standard: 'STANDARD',
-    standardUsers: 'After Founder 100 is full',
+    standard: 'PRO',
+    standardUsers: 'RM49/month',
     standardPrice: 'RM49',
+    standardCycle: '/month',
     standardDescription:
-      'Standard price after all 100 Founder slots are taken.',
-    standard1: 'After 100 Founders',
-    standard2: 'Standard RM49/month',
-    standard3: 'All OpsPS features',
+      'Pro plan for growing OpsPS operations.',
+    standard1: 'RM49 per month',
+    standard2: 'Full OpsPS access',
+    standard3: 'For active businesses',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
@@ -167,27 +170,28 @@ const content = {
 
     pricingTitle: 'अपना OpsPS Plan चुनें',
     pricingSub:
-      '2 Trips के साथ मुफ्त शुरू करें या पहले 100 Founders में शामिल हों।',
+      'Free RM0 • Founder RM29/माह • Pro RM49/माह • Team +RM10/यूज़र/माह.',
 
-    founder: 'FOUNDER 100',
-    founderUsers: 'पहले 100 users',
-    founderPrice: 'RM39',
-    month: '/month',
+    founder: 'FOUNDER',
+    founderUsers: 'RM29/माह',
+    founderPrice: 'RM29',
+    founderCycle: '/माह',
     founderDescription:
-      'पहले 100 users के लिए Founder price RM39/month।',
-    founder1: 'Founder price locked',
-    founder2: 'पहले 100 users के लिए',
-    founder3: 'सभी OpsPS features',
+      'Founder plan पहले 100 businesses के लिए।',
+    founder1: 'RM29/माह जबकि सक्रिय',
+    founder2: 'पहले 100 businesses के लिए',
+    founder3: 'पूर्ण OpsPS एक्सेस',
     founderButton: 'Founder बनें',
 
-    standard: 'STANDARD',
-    standardUsers: 'Founder 100 पूरा होने के बाद',
+    standard: 'PRO',
+    standardUsers: 'RM49/माह',
     standardPrice: 'RM49',
+    standardCycle: '/माह',
     standardDescription:
-      'सभी 100 Founder slots भरने के बाद standard price लागू होगा।',
-    standard1: '100 Founders के बाद',
-    standard2: 'Standard RM49/month',
-    standard3: 'सभी OpsPS features',
+      'बढ़ते OpsPS ऑपरेशन के लिए Pro प्लान।',
+    standard1: 'RM49 प्रति माह',
+    standard2: 'पूर्ण OpsPS एक्सेस',
+    standard3: 'सक्रिय businesses के लिए',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
@@ -223,27 +227,28 @@ const content = {
 
     pricingTitle: '选择 OpsPS 方案',
     pricingSub:
-      '免费开始使用 2 Trips，或成为前 100 位 Founder。',
+      'Free RM0 • Founder RM29/月 • Pro RM49/月 • Team +RM10/用户/月.',
 
-    founder: 'FOUNDER 100',
-    founderUsers: '前100位用户',
-    founderPrice: 'RM39',
-    month: '/月',
+    founder: 'FOUNDER',
+    founderUsers: 'RM29/月',
+    founderPrice: 'RM29',
+    founderCycle: '/月',
     founderDescription:
-      '前100位用户享有 RM39/月 Founder 价格。',
-    founder1: '锁定 Founder 价格',
-    founder2: '前100位用户',
-    founder3: '完整 OpsPS 功能',
+      'Founder 方案适用于前 100 家业务。',
+    founder1: '活动期间 RM29/月',
+    founder2: '适用于前 100 家业务',
+    founder3: '完整 OpsPS 权限',
     founderButton: '成为 Founder',
 
-    standard: 'STANDARD',
-    standardUsers: 'Founder 100 名额用完后',
+    standard: 'PRO',
+    standardUsers: 'RM49/月',
     standardPrice: 'RM49',
+    standardCycle: '/月',
     standardDescription:
-      '100 个 Founder 名额用完后采用标准价格。',
-    standard1: '100 位 Founder 之后',
-    standard2: '标准 RM49/月',
-    standard3: '完整 OpsPS 功能',
+      '适合增长中的 OpsPS 业务的 Pro 方案。',
+    standard1: '每月 RM49',
+    standard2: '完整 OpsPS 权限',
+    standard3: '适合活跃业务',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
@@ -257,13 +262,51 @@ function goFounderRegistration() {
   router.push('/register/founder');
 }
 
+function openOfficialLink(url: string) {
+  void Linking.openURL(url);
+}
+
 export default function LandingPage() {
   const { width } = useWindowDimensions();
   const [language, setLanguage] =
-    React.useState<Language>('BM');
+    React.useState<Language>('EN');
 
   const t = content[language];
   const desktop = width >= 900;
+
+  const legalLinks = [
+    {
+      label: 'Privacy Policy',
+      route: '/legal/privacy-policy',
+    },
+    {
+      label: 'Terms & Conditions',
+      route: '/legal/terms-conditions',
+    },
+    {
+      label: 'Payment Policy',
+      route: '/legal/payment-policy',
+    },
+    {
+      label: 'Return & Refund Policy',
+      route: '/legal/return-refund-policy',
+    },
+    {
+      label: 'Data Deletion Request',
+      route: '/legal/data-deletion-request',
+    },
+  ];
+
+  const contactLinks = [
+    {
+      label: 'WhatsApp: 012-2719377',
+      url: 'https://wa.me/60122719377',
+    },
+    {
+      label: 'Email: southerndotcom8@gmail.com',
+      url: 'mailto:southerndotcom8@gmail.com',
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -545,7 +588,7 @@ export default function LandingPage() {
                 </Text>
 
                 <Text style={styles.founderMonth}>
-                  {t.month}
+                  {t.founderCycle}
                 </Text>
 
               </View>
@@ -611,7 +654,7 @@ export default function LandingPage() {
                 </Text>
 
                 <Text style={styles.standardMonth}>
-                  {t.month}
+                  {t.standardCycle}
                 </Text>
 
               </View>
@@ -649,19 +692,49 @@ export default function LandingPage() {
 
         <View style={styles.footer}>
 
-          <Text style={styles.footerLogo}>
-            <Text style={styles.ops}>
-              Ops
+          <View style={styles.footerBranding}>
+            <Text style={styles.footerLogo}>
+              <Text style={styles.ops}>
+                Ops
+              </Text>
+
+              <Text style={styles.ps}>
+                PS
+              </Text>
             </Text>
 
-            <Text style={styles.ps}>
-              PS
+            <Text style={styles.footerText}>
+              {t.footer}
             </Text>
-          </Text>
+          </View>
 
-          <Text style={styles.footerText}>
-            {t.footer}
-          </Text>
+          <View style={styles.footerLinksWrap}>
+            <Text style={styles.linkGroupTitle}>Legal</Text>
+            <View style={styles.linkRow}>
+              {legalLinks.map((link) => (
+                <Pressable
+                  key={link.label}
+                  onPress={() => router.push(link.route)}
+                  style={styles.footerLinkButton}
+                >
+                  <Text style={styles.footerLinkText}>{link.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.linkGroupTitle}>Contact</Text>
+            <View style={styles.linkRow}>
+              {contactLinks.map((link) => (
+                <Pressable
+                  key={link.label}
+                  onPress={() => openOfficialLink(link.url)}
+                  style={styles.footerLinkButton}
+                >
+                  <Text style={styles.footerLinkText}>{link.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
 
         </View>
 
@@ -1278,8 +1351,50 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E3DFEA',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 24,
+    flexWrap: 'wrap',
+  },
+
+  footerBranding: {
+    flex: 1,
+    minWidth: 180,
+  },
+
+  footerLinksWrap: {
+    flex: 2,
+    minWidth: 220,
+  },
+
+  linkGroupTitle: {
+    color: '#181145',
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+
+  linkRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+
+  footerLinkButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#F3F0FA',
+    borderWidth: 1,
+    borderColor: '#E3DFEA',
+    marginBottom: 6,
+  },
+
+  footerLinkText: {
+    color: '#5B2BD9',
+    fontSize: 11,
+    fontWeight: '700',
   },
 
   footerLogo: {
@@ -1290,5 +1405,6 @@ const styles = StyleSheet.create({
   footerText: {
     color: '#9994A5',
     fontSize: 10,
+    marginTop: 6,
   },
 });

@@ -89,11 +89,11 @@ export default function Index() {
           </View>
 
           <Text style={styles.pricingDesc}>
-            Basic Launch (lifetime price) • Free RM0 termasuk 2 Trips + 2 Products.
+            Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.
           </Text>
 
           <Text style={styles.standardNote}>
-            Basic Standard RM49/bulan selepas kuota launch habis • Team User RM10/bulan setiap user.
+            Tiada percubaan percuma. Pilih plan yang sesuai untuk perniagaan anda.
           </Text>
         </View>
 
