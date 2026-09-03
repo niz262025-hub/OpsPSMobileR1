@@ -2375,6 +2375,31 @@ export function createBuyerOrder(input: { productId: string; quantity: number; c
   return order;
 }
 
+export function getLatestOrderForProduct(productId: string, businessId: string | null = activeBusinessId, snapshot = state) {
+  if (!productId) {
+    return undefined;
+  }
+
+  const scope = (businessId ?? activeBusinessId ?? '').trim();
+  const matchingOrders = scope
+    ? snapshot.orders.filter((order) => order.productId === productId && order.businessId === scope)
+    : snapshot.orders.filter((order) => order.productId === productId);
+
+  if (matchingOrders.length > 0) {
+    return [...matchingOrders].sort((left, right) => new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime())[0];
+  }
+
+  const scopedMatches = scope
+    ? [...businessSnapshots.values()].flatMap((entry) => entry.orders.filter((order) => order.productId === productId && order.businessId === scope))
+    : [...businessSnapshots.values()].flatMap((entry) => entry.orders.filter((order) => order.productId === productId));
+
+  if (scopedMatches.length > 0) {
+    return [...scopedMatches].sort((left, right) => new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime())[0];
+  }
+
+  return undefined;
+}
+
 export function getCustomerRequestForProduct(productId: string, customerIdentifier?: string, snapshot = state) {
   if (!productId) {
     return undefined;

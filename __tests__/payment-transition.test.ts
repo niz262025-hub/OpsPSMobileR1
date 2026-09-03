@@ -209,4 +209,44 @@ describe('customer payment transition', () => {
     const variant = db.getProductVariant(product.id, db.getMockDatabaseSnapshot(), businessId);
     expect(variant?.stock).toBe(1);
   });
+
+  it('resolves the latest business-scoped order so the customer sees PAYMENT_REQUIRED after founder pay now', async () => {
+    const db = await import('../services/mockDatabase');
+    const businessId = 'business-customer-payment-required-ui';
+
+    db.setActiveBusinessScope(businessId);
+    const product = db.createProduct({
+      name: 'Customer Payment Required Tee',
+      category: 'Clothing',
+      image: 'https://example.com/customer-required.png',
+      tripId: 'trip-1',
+      costPrice: 16,
+      sellingPrice: 42,
+      size: 'L',
+      stock: 10,
+      businessId,
+    });
+
+    const order = db.submitCustomerOrder({
+      productId: product.id,
+      productVariantId: product.id,
+      quantity: 1,
+      customerName: 'Customer UI QA',
+      customerPhone: '0123456786',
+      deliveryAddress: '77 UI Street',
+      businessId,
+    });
+    expect(order).not.toBeNull();
+
+    const orderId = order!.id;
+    db.confirmOrderAvailability(orderId, true);
+    db.offerCustomerPaymentOption(orderId, 'pay_now');
+
+    const latestOrder = db.getLatestOrderForProduct(product.id, businessId, db.getMockDatabaseSnapshot());
+
+    expect(latestOrder?.id).toBe(orderId);
+    expect(latestOrder?.requestStatus).toBe('PAYMENT_REQUIRED');
+    expect(latestOrder?.paymentMode).toBe('customer_pays_first');
+    expect(db.getOrder(orderId, db.getMockDatabaseSnapshot(), businessId)?.requestStatus).toBe('PAYMENT_REQUIRED');
+  });
 });

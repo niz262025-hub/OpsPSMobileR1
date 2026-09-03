@@ -23,6 +23,7 @@ import {
   confirmPayLater,
   getConfiguredPaymentMethods,
   getCustomerProfileByPhone,
+  getLatestOrderForProduct,
   getOrder,
   getProduct,
   getProductVariantByProduct,
@@ -193,21 +194,17 @@ export default function ProductDetailScreen() {
       return;
     }
 
-    const matchingOrders = db.orders
-      .filter((order) => order.productId === product.id && order.businessId === productBusinessId)
-      .sort((left, right) => new Date(left.orderDate).getTime() - new Date(right.orderDate).getTime());
-
-    if (matchingOrders.length === 0) {
+    const latestOrder = getLatestOrderForProduct(product.id, productBusinessId, db);
+    if (!latestOrder) {
       return;
     }
 
-    const latestOrder = matchingOrders[matchingOrders.length - 1];
     if (!requestId || requestId !== latestOrder.id) {
       setRequestId(latestOrder.id);
     }
     setRequestSent(true);
     setRequestStatus(latestOrder.requestStatus ?? 'PENDING_AVAILABILITY');
-  }, [db.orders, product, productBusinessId, requestId]);
+  }, [db, product, productBusinessId, requestId]);
 
   const variants = useMemo(
     () => (product ? getProductVariantByProduct(product.id, db, productBusinessId ?? null) : []),
