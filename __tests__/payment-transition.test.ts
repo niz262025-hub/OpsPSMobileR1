@@ -249,4 +249,48 @@ describe('customer payment transition', () => {
     expect(latestOrder?.paymentMode).toBe('customer_pays_first');
     expect(db.getOrder(orderId, db.getMockDatabaseSnapshot(), businessId)?.requestStatus).toBe('PAYMENT_REQUIRED');
   });
+
+  it('starts packing in the correct business scope even when the active business differs', async () => {
+    const db = await import('../services/mockDatabase');
+    const sourceBusinessId = 'business-scoped-start-packing-source';
+    const activeBusinessId = 'business-scoped-start-packing-active';
+
+    db.setActiveBusinessScope(sourceBusinessId);
+    const product = db.createProduct({
+      name: 'Packing Scope Tee',
+      category: 'Clothing',
+      image: 'https://example.com/packing-scope.png',
+      tripId: 'trip-1',
+      costPrice: 18,
+      sellingPrice: 40,
+      size: 'S',
+      stock: 12,
+      businessId: sourceBusinessId,
+    });
+
+    const order = db.submitCustomerOrder({
+      productId: product.id,
+      productVariantId: product.id,
+      quantity: 1,
+      customerName: 'Packing Scope Customer',
+      customerPhone: '0123456790',
+      deliveryAddress: '88 Packing Avenue',
+      businessId: sourceBusinessId,
+    });
+    expect(order).not.toBeNull();
+
+    db.completeCustomerPayment(order!.id, 'Bank Transfer');
+    db.setActiveBusinessScope(activeBusinessId);
+
+    const beforePacking = db.getOrder(order!.id, db.getMockDatabaseSnapshot(), sourceBusinessId);
+    expect(beforePacking?.status).toBe('payment_received');
+    expect(beforePacking?.requestStatus).toBe('PAYMENT_RECEIVED');
+
+    const result = db.startPacking(order!.id);
+
+    expect(result).toBe(true);
+    const afterPacking = db.getOrder(order!.id, db.getMockDatabaseSnapshot(), sourceBusinessId);
+    expect(afterPacking?.status).toBe('packing');
+    expect(afterPacking?.requestStatus).toBe('PACKING');
+  });
 });

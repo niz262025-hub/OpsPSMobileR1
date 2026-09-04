@@ -1954,9 +1954,15 @@ export function confirmPurchase(orderId: string, purchase: NonNullable<Order['pu
 }
 
 export function startPacking(orderId: string) {
-  const order = state.orders.find((entry) => entry.id === orderId);
+  const order = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
   if (!order) {
     return false;
+  }
+
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
   }
 
   state.orders = state.orders.map((entry) => entry.id === orderId ? {
@@ -1965,11 +1971,26 @@ export function startPacking(orderId: string) {
     status: 'packing',
     requestStatus: 'PACKING',
   } : entry);
-  emit();
+
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return true;
 }
 
 export function markOrderPacked(orderId: string) {
+  const order = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
+  if (!order) {
+    return false;
+  }
+
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
   const items = state.orderItems.filter((item) => item.orderId === orderId);
   if (!items.length || items.some((item) => (item.packedQuantity ?? 0) < item.quantity)) return false;
   state.orders = state.orders.map((order) => order.id === orderId ? {
@@ -1978,7 +1999,11 @@ export function markOrderPacked(orderId: string) {
     status: 'packing',
     requestStatus: 'PACKING',
   } : order);
-  emit();
+
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return true;
 }
 
