@@ -5,13 +5,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
 import { PRODUCT_SIZE_OPTIONS, updatePaymentSettings, updateSettings, useMockDatabase } from '../../services/mockDatabase';
+import {
+  OPSPS_PLAN_DEFINITIONS,
+  getDefaultSubscriptionForRole,
+  isSubscriptionActive,
+} from '../../services/subscriptionFoundation';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 const paymentMethodOptions = ['Bank Transfer', 'QR Payment', 'DuitNow', 'Touch & Go', 'Atome', 'Buy Now Pay Later'];
 
 export default function SettingsScreen() {
   const db = useMockDatabase();
-  const { logout } = useAuth();
+  const { logout, currentUser } = useAuth();
   const [business, setBusiness] = useState(db.businessSettings);
   const [payment, setPayment] = useState(db.paymentSettings);
   const [marketplace, setMarketplace] = useState(db.marketplaceSettings);
@@ -19,6 +24,14 @@ export default function SettingsScreen() {
   const [shipping, setShipping] = useState(db.shippingSettings);
   const [notifications, setNotifications] = useState(db.notificationSettings);
   const [user, setUser] = useState(db.userSettings);
+
+  const subscription = currentUser
+    ? getDefaultSubscriptionForRole(
+        currentUser.role,
+        currentUser.businessId ?? 'business-default',
+        currentUser.email,
+      )
+    : null;
 
   const field = (value: string, onChangeText: (value: string) => void, placeholder: string) => (
     <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={THEME.text.light} style={styles.input} />
@@ -121,6 +134,16 @@ export default function SettingsScreen() {
             <Text style={styles.secondaryText}>Logout</Text>
           </Pressable>
         </Section>
+
+        {subscription && (
+          <Section title="Subscription Status">
+            <Text style={styles.note}>Plan: {OPSPS_PLAN_DEFINITIONS[subscription.plan].label}</Text>
+            <Text style={styles.note}>Status: {isSubscriptionActive(subscription) ? 'Active' : 'Restricted'}</Text>
+            <Text style={styles.note}>Billing: {subscription.billingCycle}</Text>
+            <Text style={styles.note}>Start: {subscription.startDate}</Text>
+            <Text style={styles.note}>Renewal: {subscription.renewalDate ?? 'No renewal required'}</Text>
+          </Section>
+        )}
 
         <Pressable style={styles.primary} onPress={saveAll}>
           <Text style={styles.primaryText}>Save Settings</Text>
