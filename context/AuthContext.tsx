@@ -39,6 +39,43 @@ type AuthContextValue = {
 
 const ACCOUNTS_KEY = '@opsps_accounts';
 const SESSION_KEY = '@opsps_session';
+const ACTIVE_BUSINESS_KEY = '@opsps_active_business_id';
+
+function syncBrowserAuthState(user: AuthAccount | null) {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    if (!user) {
+      window.localStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(ACTIVE_BUSINESS_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    if (user.role === 'founder' && user.businessId) {
+      window.localStorage.setItem(ACTIVE_BUSINESS_KEY, user.businessId);
+      return;
+    }
+
+    window.localStorage.removeItem(ACTIVE_BUSINESS_KEY);
+  } catch {
+    // Ignore browser storage write failures in restricted contexts.
+  }
+}
+
+function syncBrowserAccounts(accounts: AuthAccount[]) {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch {
+    // Ignore browser storage write failures in restricted contexts.
+  }
+}
 
 const AuthContext = createContext<AuthContextValue | undefined>(
   undefined
@@ -120,10 +157,12 @@ export function AuthProvider({
   const applyBusinessScopeForUser = (user: AuthAccount | null) => {
     if (user?.role === 'founder' && user.businessId) {
       setActiveBusinessScope(user.businessId);
+      syncBrowserAuthState(user);
       return;
     }
 
     clearActiveBusinessScope();
+    syncBrowserAuthState(null);
   };
 
   /**
@@ -177,6 +216,8 @@ export function AuthProvider({
           );
         }
 
+        syncBrowserAccounts(normalizedAccounts);
+
         const savedSession = storedSession
           ? (JSON.parse(
               storedSession
@@ -194,6 +235,7 @@ export function AuthProvider({
         if (normalizedSession) {
           setCurrentUser(normalizedSession);
           applyBusinessScopeForUser(normalizedSession);
+          syncBrowserAuthState(normalizedSession);
 
           /**
            * Persist the normalized session too, especially
@@ -205,6 +247,7 @@ export function AuthProvider({
           );
         } else {
           clearActiveBusinessScope();
+          syncBrowserAuthState(null);
         }
       } catch (error) {
         console.warn(
@@ -255,6 +298,7 @@ export function AuthProvider({
     ];
 
     setAccounts(nextAccounts);
+    syncBrowserAccounts(nextAccounts);
 
     await AsyncStorage.setItem(
       ACCOUNTS_KEY,
@@ -295,6 +339,7 @@ export function AuthProvider({
 
     setCurrentUser(resolvedAccount);
     applyBusinessScopeForUser(resolvedAccount);
+    syncBrowserAuthState(resolvedAccount);
 
     await AsyncStorage.setItem(
       SESSION_KEY,
@@ -315,6 +360,7 @@ export function AuthProvider({
     );
 
     setAccounts(updatedAccounts);
+    syncBrowserAccounts(updatedAccounts);
 
     await AsyncStorage.setItem(
       ACCOUNTS_KEY,
@@ -331,6 +377,7 @@ export function AuthProvider({
     setCurrentUser(null);
 
     clearActiveBusinessScope();
+    syncBrowserAuthState(null);
 
     await AsyncStorage.removeItem(
       SESSION_KEY
