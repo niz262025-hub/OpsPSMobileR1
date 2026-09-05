@@ -11,7 +11,7 @@ import {
   setActiveBusinessScope,
 } from '../services/mockDatabase';
 
-export type UserRole = 'founder' | 'customer';
+export type UserRole = 'founder' | 'customer' | 'admin' | 'support';
 
 export type AuthAccount = {
   email: string;
@@ -119,7 +119,11 @@ function normalizeAccount(
   const role: UserRole =
     account.role === 'customer'
       ? 'customer'
-      : 'founder';
+      : account.role === 'admin'
+        ? 'admin'
+        : account.role === 'support'
+          ? 'support'
+          : 'founder';
 
   const name = String(account.name ?? '');
 
