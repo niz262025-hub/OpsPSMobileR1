@@ -33,6 +33,8 @@ export type SupabaseEnvState = {
   mode: 'mock' | 'configured';
 };
 
+export type SupabasePublicConfig = Pick<SupabaseEnvState, 'configured' | 'url' | 'anonKey' | 'mode'>;
+
 function isSupabaseUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -71,5 +73,18 @@ export function buildSupabaseEnvState(
     missing,
     invalid,
     mode: configured ? 'configured' : 'mock',
+  };
+}
+
+export function getSupabasePublicConfig(
+  source: Record<string, string | undefined> = typeof process !== 'undefined' && process.env ? process.env : {}
+): SupabasePublicConfig {
+  const env = buildSupabaseEnvState(source);
+
+  return {
+    configured: env.configured,
+    url: env.url,
+    anonKey: env.anonKey,
+    mode: env.mode,
   };
 }
