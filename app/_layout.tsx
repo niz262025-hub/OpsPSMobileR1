@@ -16,6 +16,7 @@ function AuthRouteGuard() {
       return;
     }
 
+    const protectedAdminRoutes = ['/admin'];
     const protectedFounderRoutes = [
       '/(tabs)',
       '/settings',
@@ -25,9 +26,18 @@ function AuthRouteGuard() {
       '/order',
     ];
 
+    const isProtectedAdminRoute = protectedAdminRoutes.some((route) =>
+      pathname === route || pathname.startsWith(`${route}/`),
+    );
+
     const isProtectedFounderRoute = protectedFounderRoutes.some((route) =>
       pathname === route || pathname.startsWith(`${route}/`),
     );
+
+    if (isProtectedAdminRoute && (!currentUser || currentUser.role !== 'admin')) {
+      router.replace('/login');
+      return;
+    }
 
     if (isProtectedFounderRoute && (!currentUser || currentUser.role !== 'founder')) {
       router.replace('/login');
@@ -59,6 +69,7 @@ export default function RootLayout() {
           <Stack.Screen name="order" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="legal" />
+          <Stack.Screen name="admin" />
         </Stack>
       </AuthProvider>
     </LanguageProvider>

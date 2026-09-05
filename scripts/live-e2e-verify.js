@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-const BASE_URL = 'http://localhost:8081';
+const BASE_URL = 'http://localhost:41787';
 const FOUNDER_EMAIL = 'qa.founder.live@example.com';
 const FOUNDER_PASSWORD = 'Pass123!';
 const CUSTOMER_EMAIL = 'qa.customer.live@example.com';
@@ -77,6 +77,17 @@ async function fillTripForm(page, tripName, destination, notes) {
   await fields.nth(2).fill(notes);
 }
 
+async function logBrowserState(page, label) {
+  const state = await page.evaluate(() => ({
+    url: location.href,
+    activeBusinessId: localStorage.getItem('@opsps_active_business_id'),
+    session: localStorage.getItem('@opsps_session'),
+    accounts: localStorage.getItem('@opsps_accounts'),
+    businessKeys: Object.keys(localStorage).filter((key) => key.startsWith('@opsps_business_data_')).sort(),
+  }));
+  console.log(`STATE ${label}`, JSON.stringify(state));
+}
+
 async function logStep(page, stepName, action) {
   const startedAt = Date.now();
   const url = page.url();
@@ -105,13 +116,11 @@ async function logStep(page, stepName, action) {
 
   try {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.evaluate(() => localStorage.clear());
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await logBrowserState(page, 'initial-app-load');
 
     await logStep(page, '1: Founder landing page', async () => {
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.evaluate(() => localStorage.clear());
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+      await logBrowserState(page, 'before-founder-selection');
       await clickExact(page, 'Founder');
     });
 
@@ -142,6 +151,8 @@ async function logStep(page, stepName, action) {
       await emailInput.fill(FOUNDER_EMAIL);
       await passwordInput.fill(FOUNDER_PASSWORD);
       await clickExact(page, 'Log Masuk');
+      await page.waitForURL(/\/\(tabs\)\/dashboard|\/dashboard/, { timeout: 30000 });
+      await logBrowserState(page, 'after-founder-login');
     });
 
     await logStep(page, '5: Founder dashboard', async () => {
