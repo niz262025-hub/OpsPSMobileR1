@@ -1,0 +1,69 @@
+name: Supabase Connectivity Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  supabase-connectivity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify Supabase auth endpoint via repo secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -n "${EXPO_PUBLIC_SUPABASE_URL:-}" ]; then
+            echo "URL_PRESENT: PASS"
+          else
+            echo "URL_PRESENT: FAIL"
+          fi
+
+          if [ -n "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" ]; then
+            echo "KEY_PRESENT: PASS"
+          else
+            echo "KEY_PRESENT: FAIL"
+          fi
+
+          if [ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" ] || [ -z "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" ]; then
+            echo "AUTH_HTTP_STATUS: 0"
+            echo "PUBLIC_KEY_TEST: FAIL"
+            exit 0
+          fi
+
+          node <<'NODE'
+          const url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+          const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+          const target = `${url.replace(/\/$/, '')}/auth/v1/settings`;
+
+          fetch(target, {
+            method: 'GET',
+            headers: {
+              apikey: key,
+            },
+          })
+            .then(async (response) => {
+              const status = response.status;
+              console.log(`AUTH_HTTP_STATUS: ${status}`);
+              console.log(`PUBLIC_KEY_TEST: ${status >= 200 && status < 300 ? 'PASS' : 'FAIL'}`);
+            })
+            .catch((error) => {
+              console.log('AUTH_HTTP_STATUS: 0');
+              console.log('PUBLIC_KEY_TEST: FAIL');
+              console.error(error.message);
+            });
+          NODE
