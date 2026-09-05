@@ -7,7 +7,7 @@ import {
   OPSPS_REQUIRED_TABLES,
   buildSupabaseEnvState,
 } from '../services/supabaseSchema';
-import { diagnoseSupabaseConnection } from '../services/supabaseClient';
+import { diagnoseSupabaseConnection, getSupabasePublicClientConfig } from '../services/supabaseClient';
 
 describe('backend foundation contracts', () => {
   beforeEach(() => {
@@ -49,6 +49,34 @@ describe('backend foundation contracts', () => {
     for (const table of OPSPS_REQUIRED_TABLES) {
       expect(schemaSql).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
     }
+  });
+
+  it('keeps the public Supabase config free of service-role secrets', () => {
+    process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'anon-key-with-enough-length';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'super-secret-service-role';
+
+    const publicConfig = getSupabasePublicClientConfig();
+
+    expect(publicConfig).toEqual({
+      configured: true,
+      url: 'https://example.supabase.co',
+      anonKey: 'anon-key-with-enough-length',
+      mode: 'configured',
+    });
+    expect(Object.keys(publicConfig)).not.toContain('serviceRoleKey');
+  });
+
+  it('prepares membership and RLS safeguards in the migration layer', () => {
+    const migrationPath = join(process.cwd(), 'supabase', 'migrations', '002_opsps_auth_membership_rls.sql');
+    expect(existsSync(migrationPath)).toBe(true);
+
+    const migrationSql = readFileSync(migrationPath, 'utf8');
+    expect(migrationSql).toContain('business_memberships');
+    expect(migrationSql).toContain('auth_user_id');
+    expect(migrationSql).toContain('ENABLE ROW LEVEL SECURITY');
+    expect(migrationSql).toContain('CREATE POLICY');
+    expect(migrationSql).toContain('bm.role IN (\'founder\', \'admin\')');
   });
 
   it('switches to configured when the required Supabase variables are supplied', () => {
