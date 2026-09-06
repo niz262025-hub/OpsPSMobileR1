@@ -41,13 +41,22 @@ describe('backend foundation contracts', () => {
     );
   });
 
-  it('includes the core schema migration file with the required tables', () => {
-    const schemaPath = join(process.cwd(), 'supabase', 'migrations', '001_opsps_core_schema.sql');
-    expect(existsSync(schemaPath)).toBe(true);
+  it('includes the required tables across the Supabase migration set', () => {
+    const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
+    expect(existsSync(migrationsDir)).toBe(true);
 
-    const schemaSql = readFileSync(schemaPath, 'utf8');
+    const migrationFiles = ['001_opsps_core_schema.sql', '002_opsps_auth_membership_rls.sql'];
+    const combinedSql = migrationFiles
+      .map((fileName) => join(migrationsDir, fileName))
+      .filter((filePath) => existsSync(filePath))
+      .map((filePath) => readFileSync(filePath, 'utf8'))
+      .join('\n');
+
     for (const table of OPSPS_REQUIRED_TABLES) {
-      expect(schemaSql).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
+      expect(
+        combinedSql.includes(`CREATE TABLE IF NOT EXISTS ${table}`) ||
+          combinedSql.includes(`CREATE TABLE IF NOT EXISTS public.${table}`)
+      ).toBe(true);
     }
   });
 
