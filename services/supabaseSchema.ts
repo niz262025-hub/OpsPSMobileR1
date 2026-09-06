@@ -1,6 +1,7 @@
 export const OPSPS_REQUIRED_TABLES = [
   'businesses',
   'profiles',
+  'business_memberships',
   'trips',
   'products',
   'product_variants',
