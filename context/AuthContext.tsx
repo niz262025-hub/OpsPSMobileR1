@@ -10,6 +10,7 @@ import {
   clearActiveBusinessScope,
   setActiveBusinessScope,
 } from '../services/mockDatabase';
+import { getSupabaseClient } from '../services/supabaseClient';
 
 export type UserRole = 'founder' | 'customer' | 'admin' | 'support';
 
@@ -169,6 +170,49 @@ export function AuthProvider({
     syncBrowserAuthState(null);
   };
 
+  const applySupabaseSession = async () => {
+    const client = getSupabaseClient();
+    if (!client) {
+      return null;
+    }
+
+    const { data, error } = await client.auth.getSession();
+    if (error || !data.session) {
+      return null;
+    }
+
+    const user = data.session.user;
+    const { data: profileData } = await client
+      .from('profiles')
+      .select('*')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+
+    const { data: membershipData } = await client
+      .from('business_memberships')
+      .select('business_id, role')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    const businessId = membershipData?.[0]?.business_id ?? undefined;
+    const normalizedRole = (profileData?.role as UserRole) || (membershipData?.[0]?.role as UserRole) || 'customer';
+    const normalizedUser: AuthAccount = {
+      email: user.email ?? '',
+      password: '',
+      role: normalizedRole,
+      name: profileData?.full_name ?? user.user_metadata?.full_name ?? user.email ?? 'User',
+      businessId,
+      businessName: profileData?.business_id ? 'Supabase Business' : '',
+      phone: profileData?.phone ?? '',
+      address: profileData?.address ?? '',
+    };
+
+    setCurrentUser(normalizedUser);
+    applyBusinessScopeForUser(normalizedUser);
+    syncBrowserAuthState(normalizedUser);
+    return normalizedUser;
+  };
+
   /**
    * Restore accounts and existing session.
    */
@@ -177,6 +221,15 @@ export function AuthProvider({
 
     const restoreAuth = async () => {
       try {
+        const client = getSupabaseClient();
+        if (client) {
+          const supabaseSession = await applySupabaseSession();
+          if (supabaseSession && active) {
+            setReady(true);
+            return;
+          }
+        }
+
         const [
           storedAccounts,
           storedSession,
@@ -282,6 +335,45 @@ export function AuthProvider({
   const register = async (
     account: AuthAccount
   ): Promise<boolean> => {
+    const client = getSupabaseClient();
+    if (client) {
+      const { data, error } = await client.auth.signUp({
+        email: account.email,
+        password: account.password,
+        options: {
+          data: {
+            full_name: account.name,
+            role: account.role,
+          },
+        },
+      });
+
+      if (error || !data.user) {
+        return false;
+      }
+
+      const { error: profileError } = await client.from('profiles').upsert({
+        auth_user_id: data.user.id,
+        full_name: account.name,
+        email: account.email,
+        phone: account.phone ?? '',
+        address: account.address ?? '',
+        role: account.role,
+        business_id: account.businessId ?? null,
+      }, { onConflict: 'auth_user_id' });
+
+      if (profileError) {
+        return false;
+      }
+
+      const normalizedAccount = normalizeAccount(account);
+      setCurrentUser(normalizedAccount);
+      applyBusinessScopeForUser(normalizedAccount);
+      syncBrowserAuthState(normalizedAccount);
+      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(normalizedAccount));
+      return true;
+    }
+
     const normalizedAccount =
       normalizeAccount(account);
 
@@ -320,6 +412,51 @@ export function AuthProvider({
     password: string,
     role: UserRole
   ): Promise<boolean> => {
+    const client = getSupabaseClient();
+    if (client) {
+      const { data, error } = await client.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error || !data.user) {
+        return false;
+      }
+
+      const { data: profileData } = await client
+        .from('profiles')
+        .select('*')
+        .eq('auth_user_id', data.user.id)
+        .maybeSingle();
+
+      if (profileData && profileData.role !== role && role !== 'customer') {
+        return false;
+      }
+
+      const { data: membershipData } = await client
+        .from('business_memberships')
+        .select('business_id')
+        .eq('user_id', data.user.id)
+        .limit(1);
+
+      const normalizedAccount: AuthAccount = {
+        email: data.user.email ?? email.trim(),
+        password,
+        role: profileData?.role ?? role,
+        name: profileData?.full_name ?? data.user.user_metadata?.full_name ?? email.trim(),
+        businessId: membershipData?.[0]?.business_id ?? undefined,
+        businessName: membershipData?.[0]?.business_id ? 'Supabase Business' : '',
+        phone: profileData?.phone ?? '',
+        address: profileData?.address ?? '',
+      };
+
+      setCurrentUser(normalizedAccount);
+      applyBusinessScopeForUser(normalizedAccount);
+      syncBrowserAuthState(normalizedAccount);
+      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(normalizedAccount));
+      return true;
+    }
+
     const sanitizedEmail = email.trim();
 
     const account = accounts.find(
@@ -334,10 +471,6 @@ export function AuthProvider({
       return false;
     }
 
-    /**
-     * Normalize the account so older accounts without
-     * businessId are migrated safely.
-     */
     const resolvedAccount =
       normalizeAccount(account);
 
@@ -350,10 +483,6 @@ export function AuthProvider({
       JSON.stringify(resolvedAccount)
     );
 
-    /**
-     * Persist the normalized account back into the account list.
-     * This ensures businessId remains stable forever.
-     */
     const updatedAccounts = accounts.map(
       (entry) =>
         entry.email.toLowerCase() ===

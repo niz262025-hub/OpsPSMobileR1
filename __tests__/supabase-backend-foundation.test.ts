@@ -60,6 +60,22 @@ describe('backend foundation contracts', () => {
     }
   });
 
+  it('adds tenant RLS and auth membership integrity for business-scoped tables', () => {
+    const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
+    const migrationFiles = ['001_opsps_core_schema.sql', '002_opsps_auth_membership_rls.sql'];
+    const combinedSql = migrationFiles
+      .map((fileName) => join(migrationsDir, fileName))
+      .filter((filePath) => existsSync(filePath))
+      .map((filePath) => readFileSync(filePath, 'utf8'))
+      .join('\n');
+
+    expect(combinedSql.includes('business_memberships')).toBe(true);
+    expect(combinedSql.includes('ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY')).toBe(true);
+    expect(combinedSql.includes('auth.uid()')).toBe(true);
+    expect(combinedSql.includes('CREATE POLICY')).toBe(true);
+    expect(combinedSql.includes('WITH CHECK (')).toBe(true);
+  });
+
   it('switches to configured when the required Supabase variables are supplied', () => {
     process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'anon-key-with-enough-length';
