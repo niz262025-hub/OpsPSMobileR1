@@ -1,10 +1,11 @@
+import React, { useEffect } from 'react';
 import { Stack, usePathname, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
 import { LanguageProvider } from '../context/LanguageContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { isAdminRole } from '../services/adminFoundation';
 
-function AuthRouteGuard() {
+export function AuthRouteGuard() {
   const pathname = usePathname();
   const { currentUser, ready } = useAuth();
 
@@ -34,7 +35,7 @@ function AuthRouteGuard() {
       pathname === route || pathname.startsWith(`${route}/`),
     );
 
-    if (isProtectedAdminRoute && (!currentUser || currentUser.role !== 'admin')) {
+    if (isProtectedAdminRoute && (!currentUser || !isAdminRole(currentUser.role))) {
       router.replace('/login');
       return;
     }

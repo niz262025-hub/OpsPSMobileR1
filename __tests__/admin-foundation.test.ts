@@ -11,6 +11,12 @@ import {
 } from '../services/adminFoundation';
 
 describe('admin foundation', () => {
+  it('allows support users to access admin routes', () => {
+    expect(isAdminRole('support')).toBe(true);
+    expect(canAccessAdminRoute('support')).toBe(true);
+    expect(normalizeAdminRole('SUPPORT')).toBe('support');
+  });
+
   it('recognizes admin role', () => {
     expect(isAdminRole('admin')).toBe(true);
     expect(isAdminRole('founder')).toBe(false);
