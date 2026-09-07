@@ -42,6 +42,16 @@ const ACCOUNTS_KEY = '@opsps_accounts';
 const SESSION_KEY = '@opsps_session';
 const ACTIVE_BUSINESS_KEY = '@opsps_active_business_id';
 
+export function sanitizePersistedAccount(account: Partial<AuthAccount> | null | undefined) {
+  if (!account) {
+    return null;
+  }
+
+  const sanitized = { ...account };
+  delete sanitized.password;
+  return sanitized;
+}
+
 function syncBrowserAuthState(user: AuthAccount | null) {
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
     return;
@@ -54,7 +64,10 @@ function syncBrowserAuthState(user: AuthAccount | null) {
       return;
     }
 
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    window.localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify(sanitizePersistedAccount(user))
+    );
     if (user.role === 'founder' && user.businessId) {
       window.localStorage.setItem(ACTIVE_BUSINESS_KEY, user.businessId);
       return;
@@ -72,7 +85,10 @@ function syncBrowserAccounts(accounts: AuthAccount[]) {
   }
 
   try {
-    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    window.localStorage.setItem(
+      ACCOUNTS_KEY,
+      JSON.stringify(accounts.map((account) => sanitizePersistedAccount(account)))
+    );
   } catch {
     // Ignore browser storage write failures in restricted contexts.
   }
@@ -278,7 +294,7 @@ export function AuthProvider({
         ) {
           await AsyncStorage.setItem(
             ACCOUNTS_KEY,
-            JSON.stringify(normalizedAccounts)
+            JSON.stringify(normalizedAccounts.map((account) => sanitizePersistedAccount(account)))
           );
         }
 
@@ -309,7 +325,7 @@ export function AuthProvider({
            */
           await AsyncStorage.setItem(
             SESSION_KEY,
-            JSON.stringify(normalizedSession)
+            JSON.stringify(sanitizePersistedAccount(normalizedSession))
           );
         } else {
           clearActiveBusinessScope();
@@ -383,7 +399,10 @@ export function AuthProvider({
       setCurrentUser(normalizedAccount);
       applyBusinessScopeForUser(normalizedAccount);
       syncBrowserAuthState(normalizedAccount);
-      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(normalizedAccount));
+      await AsyncStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify(sanitizePersistedAccount(normalizedAccount))
+      );
       return true;
     }
 
@@ -411,7 +430,7 @@ export function AuthProvider({
 
     await AsyncStorage.setItem(
       ACCOUNTS_KEY,
-      JSON.stringify(nextAccounts)
+      JSON.stringify(nextAccounts.map((account) => sanitizePersistedAccount(account)))
     );
 
     return true;
@@ -497,7 +516,7 @@ export function AuthProvider({
 
     await AsyncStorage.setItem(
       SESSION_KEY,
-      JSON.stringify(resolvedAccount)
+      JSON.stringify(sanitizePersistedAccount(resolvedAccount))
     );
 
     const updatedAccounts = accounts.map(
@@ -514,7 +533,7 @@ export function AuthProvider({
 
     await AsyncStorage.setItem(
       ACCOUNTS_KEY,
-      JSON.stringify(updatedAccounts)
+      JSON.stringify(updatedAccounts.map((account) => sanitizePersistedAccount(account)))
     );
 
     return true;

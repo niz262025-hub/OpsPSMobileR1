@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { sanitizePersistedAccount } from '../context/AuthContext';
+
 const SESSION_KEY = '@opsps_session';
 const ACTIVE_BUSINESS_KEY = '@opsps_active_business_id';
 const ACCOUNTS_KEY = '@opsps_accounts';
@@ -53,5 +55,27 @@ describe('auth persistence', () => {
     expect(JSON.parse(window.localStorage.getItem(SESSION_KEY) || '{}').role).toBe('founder');
     expect(ctx).toBeTruthy();
     expect(value).toBeTruthy();
+  });
+
+  it('does not persist plaintext passwords in the browser session or account storage', () => {
+    const account = {
+      name: 'Founder One',
+      businessName: 'Founder One Business',
+      email: 'founder@persist.test',
+      password: 'Pass123!',
+      role: 'founder' as const,
+      phone: '0123456789',
+      address: 'Test Address',
+      businessId: 'business-founder-persist',
+    };
+
+    const sanitizedAccount = sanitizePersistedAccount(account);
+    const serializedSession = JSON.stringify(sanitizedAccount);
+    const serializedAccounts = JSON.stringify([sanitizedAccount]);
+
+    expect(sanitizedAccount).not.toBeNull();
+    expect((sanitizedAccount as any)?.password).toBeUndefined();
+    expect(serializedSession).not.toContain('Pass123!');
+    expect(serializedAccounts).not.toContain('Pass123!');
   });
 });
