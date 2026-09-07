@@ -45,6 +45,13 @@ describe('subscription foundation', () => {
     expect(isSubscriptionActive({ ...activeSubscription, status: 'active', billingCycle: 'lifetime' })).toBe(true);
   });
 
+  it('denies access when no subscription state is present', () => {
+    expect(isSubscriptionActive()).toBe(false);
+    expect(isSubscriptionActive(null)).toBe(false);
+    expect(canAccessFounderSubscriptionControls('founder')).toBe(false);
+    expect(canAccessFounderSubscriptionControls('founder', null)).toBe(false);
+  });
+
   it('allows admin to inspect subscription state', () => {
     expect(canInspectSubscriptionState('admin')).toBe(true);
     expect(canInspectSubscriptionState('support')).toBe(true);

@@ -85,7 +85,7 @@ export function isSubscriptionActive(
   record?: Partial<SubscriptionRecord> | null
 ): boolean {
   if (!record) {
-    return true;
+    return false;
   }
 
   const status = normalizeSubscriptionState(record.status ?? 'active');
@@ -124,7 +124,7 @@ export function canAccessFounderSubscriptionControls(
   }
 
   if (!record) {
-    return true;
+    return false;
   }
 
   return isSubscriptionActive(record);
