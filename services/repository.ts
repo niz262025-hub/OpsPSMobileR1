@@ -98,11 +98,123 @@ export interface ProductRepository {
   getProductVariant(productVariantId: string, businessId: string): Promise<{ id: string; productId: string; size: string; stock: number } | null>;
 }
 
+export interface OrderRecord {
+  id: string;
+  businessId?: string;
+  tripId?: string;
+  productId?: string;
+  customerProfileId?: string | null;
+  customerId?: string | null;
+  customerName: string;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
+  orderDate: string;
+  subtotal: number;
+  shippingFee: number;
+  total: number;
+  paymentMethod?: string;
+  paymentStatus: string;
+  orderStatus: string;
+  requestStatus?: string;
+  paymentOption?: string;
+  paymentMode?: string;
+  availabilityStatus?: string;
+  paymentRequestedAt?: string;
+  paymentVerifiedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OrderItemRecord {
+  id: string;
+  businessId?: string;
+  orderId: string;
+  productVariantId: string;
+  quantity: number;
+  packedQuantity: number;
+}
+
+export interface OrderRepository {
+  listForBusiness(businessId: string): Promise<OrderRecord[]>;
+  getForBusiness(businessId: string, orderId: string): Promise<OrderRecord | null>;
+  listItemsForOrder(orderId: string, businessId: string): Promise<OrderItemRecord[]>;
+  create(input: {
+    businessId: string;
+    tripId: string;
+    productId: string;
+    productVariantId: string;
+    customerName: string;
+    customerPhone?: string;
+    deliveryAddress?: string;
+    quantity: number;
+    customerId?: string;
+    customerProfileId?: string | null;
+    paymentMethod?: string;
+    shippingFee?: number;
+  }): Promise<OrderRecord | null>;
+  getForCustomer(customerId: string, orderId: string): Promise<OrderRecord | null>;
+  listForCustomer(customerId: string): Promise<OrderRecord[]>;
+}
+
+export type PaymentRepositoryStatus = 'pending' | 'authorized' | 'paid' | 'failed' | 'cancelled' | 'refunded';
+
+export type PaymentRecordRow = {
+  id: string;
+  business_id: string;
+  order_id: string;
+  payment_method?: string;
+  payment_status?: string;
+  status?: string;
+  amount: number;
+  currency?: string;
+  provider?: string;
+  provider_reference?: string;
+  provider_transaction_id?: string;
+  idempotency_key?: string;
+  callback_event_id?: string;
+  webhook_verified?: boolean;
+  verified?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export interface PaymentRepository {
+  create(input: {
+    businessId: string;
+    orderId: string;
+    amount: number;
+    currency?: string;
+    provider?: string;
+    paymentMethod?: string;
+    providerReference?: string;
+    providerTransactionId?: string;
+    idempotencyKey?: string;
+    callbackEventId?: string;
+    webhookVerified?: boolean;
+  }): Promise<PaymentRecordRow | null>;
+  getById(paymentId: string, businessId: string): Promise<PaymentRecordRow | null>;
+  getByOrder(businessId: string, orderId: string): Promise<PaymentRecordRow | null>;
+  listForBusiness(businessId: string): Promise<PaymentRecordRow[]>;
+  transition(paymentId: string, businessId: string, nextStatus: PaymentRepositoryStatus, overrides?: {
+    providerReference?: string;
+    providerTransactionId?: string;
+    callbackEventId?: string;
+    webhookVerified?: boolean;
+    verified?: boolean;
+    metadata?: Record<string, unknown>;
+  }): Promise<PaymentRecordRow | null>;
+  refund(paymentId: string, businessId: string, reason?: string): Promise<PaymentRecordRow | null>;
+  cancel(paymentId: string, businessId: string): Promise<PaymentRecordRow | null>;
+  reconcileFinanceForPayment(paymentId: string, businessId: string): Promise<Array<Record<string, unknown>>>;
+}
+
 export interface DataSource {
   auth: AuthRepository;
   business: BusinessRepository;
   trips: TripRepository;
   products: ProductRepository;
+  orders: OrderRepository;
+  payments: PaymentRepository;
 }
 
 function slugify(value: string) {
@@ -120,15 +232,6 @@ function mapTripRow(row: any): TripRecord {
     notes: row.notes ?? '',
     status: (row.status === 'open' || row.status === 'planning' || row.status === 'closed') ? row.status : 'planning',
     createdAt: row.created_at ?? new Date().toISOString(),
-  };
-}
-
-function mapProductVariantRow(row: any) {
-  return {
-    id: row.id,
-    productId: row.product_id,
-    size: row.size ?? 'Standard',
-    stock: Number(row.stock ?? 0),
   };
 }
 
@@ -150,6 +253,78 @@ function mapProductRow(row: any, fallbackVariants: Array<{ size: string; stock: 
     size: primaryVariant?.size ?? undefined,
     stock: variantStock > 0 ? variantStock : undefined,
     initialStock: variantStock > 0 ? variantStock : undefined,
+  };
+}
+
+function mapProductVariantRow(row: any) {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    size: row.size ?? 'Standard',
+    stock: Number(row.stock ?? 0),
+  };
+}
+
+function mapOrderRow(row: any): OrderRecord {
+  return {
+    id: row.id,
+    businessId: row.business_id ?? undefined,
+    tripId: row.trip_id ?? undefined,
+    productId: row.product_id ?? undefined,
+    customerProfileId: row.customer_profile_id ?? row.customer_id ?? null,
+    customerId: row.customer_id ?? row.customer_profile_id ?? null,
+    customerName: row.customer_name ?? 'Customer',
+    customerPhone: row.customer_phone ?? null,
+    deliveryAddress: row.delivery_address ?? null,
+    orderDate: row.order_date ?? row.created_at ?? new Date().toISOString(),
+    subtotal: Number(row.subtotal ?? 0),
+    shippingFee: Number(row.shipping_fee ?? 0),
+    total: Number(row.total ?? 0),
+    paymentMethod: row.payment_method ?? row.paymentMode ?? undefined,
+    paymentStatus: row.payment_status ?? 'pending',
+    orderStatus: row.order_status ?? 'pending',
+    requestStatus: row.request_status ?? undefined,
+    paymentOption: row.payment_option ?? undefined,
+    paymentMode: row.payment_mode ?? undefined,
+    availabilityStatus: row.availability_status ?? undefined,
+    paymentRequestedAt: row.payment_requested_at ?? undefined,
+    paymentVerifiedAt: row.payment_verified_at ?? undefined,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
+  };
+}
+
+function mapOrderItemRow(row: any): OrderItemRecord {
+  return {
+    id: row.id,
+    businessId: row.business_id ?? undefined,
+    orderId: row.order_id,
+    productVariantId: row.product_variant_id,
+    quantity: Number(row.quantity ?? 0),
+    packedQuantity: Number(row.packed_quantity ?? 0),
+  };
+}
+
+function mapPaymentRow(row: any): PaymentRecordRow {
+  const paymentStatus = row.payment_status ?? row.status ?? 'pending';
+  return {
+    id: row.id,
+    business_id: row.business_id,
+    order_id: row.order_id,
+    payment_method: row.payment_method ?? 'bank',
+    payment_status: paymentStatus,
+    status: paymentStatus,
+    amount: Number(row.amount ?? 0),
+    currency: row.currency ?? 'MYR',
+    provider: row.provider ?? 'mock',
+    provider_reference: row.provider_reference ?? undefined,
+    provider_transaction_id: row.provider_transaction_id ?? undefined,
+    idempotency_key: row.idempotency_key ?? undefined,
+    callback_event_id: row.callback_event_id ?? undefined,
+    webhook_verified: Boolean(row.webhook_verified ?? false),
+    verified: Boolean(row.verified ?? false),
+    created_at: row.created_at ?? new Date().toISOString(),
+    updated_at: row.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -262,6 +437,270 @@ class MockDataSource implements DataSource {
       };
     },
   };
+
+  orders: OrderRepository = {
+    async listForBusiness(businessId: string) {
+      return getMockDatabaseSnapshot().orders.filter((order) => order.businessId === businessId).map((order) => ({
+        id: order.id,
+        businessId: order.businessId,
+        tripId: order.tripId,
+        productId: order.productId,
+        customerProfileId: order.customerId ?? null,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone ?? null,
+        deliveryAddress: order.deliveryAddress ?? null,
+        orderDate: order.orderDate,
+        subtotal: Number(order.total ?? 0),
+        shippingFee: Number(order.shippingFee ?? 0),
+        total: Number(order.total ?? 0),
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        requestStatus: order.requestStatus,
+        paymentOption: order.paymentOption,
+        paymentMode: order.paymentMode,
+        availabilityStatus: order.availabilityStatus,
+        paymentRequestedAt: order.paymentRequestedAt,
+        paymentVerifiedAt: order.paymentVerifiedAt,
+      }));
+    },
+    async getForBusiness(businessId: string, orderId: string) {
+      const order = getMockDatabaseSnapshot().orders.find((entry) => entry.businessId === businessId && entry.id === orderId);
+      if (!order) {
+        return null;
+      }
+      return {
+        id: order.id,
+        businessId: order.businessId,
+        tripId: order.tripId,
+        productId: order.productId,
+        customerProfileId: order.customerId ?? null,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone ?? null,
+        deliveryAddress: order.deliveryAddress ?? null,
+        orderDate: order.orderDate,
+        subtotal: Number(order.total ?? 0),
+        shippingFee: Number(order.shippingFee ?? 0),
+        total: Number(order.total ?? 0),
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        requestStatus: order.requestStatus,
+        paymentOption: order.paymentOption,
+        paymentMode: order.paymentMode,
+        availabilityStatus: order.availabilityStatus,
+        paymentRequestedAt: order.paymentRequestedAt,
+        paymentVerifiedAt: order.paymentVerifiedAt,
+      };
+    },
+    async listItemsForOrder(orderId: string, businessId: string) {
+      return getMockDatabaseSnapshot().orderItems.filter((entry) => entry.orderId === orderId && getMockDatabaseSnapshot().orders.find((order) => order.id === entry.orderId)?.businessId === businessId).map((entry) => ({
+        id: entry.id,
+        businessId: getMockDatabaseSnapshot().orders.find((order) => order.id === entry.orderId)?.businessId,
+        orderId: entry.orderId,
+        productVariantId: entry.productVariantId,
+        quantity: entry.quantity,
+        packedQuantity: entry.packedQuantity ?? 0,
+      }));
+    },
+    async create(input) {
+      const product = getProduct(input.productId, getMockDatabaseSnapshot(), input.businessId);
+      const variant = getProductVariant(input.productVariantId, getMockDatabaseSnapshot(), input.businessId);
+      if (!product || !variant || variant.productId !== input.productId || product.tripId !== input.tripId) {
+        return null;
+      }
+      const order = {
+        id: `order-${Date.now()}`,
+        businessId: input.businessId,
+        tripId: input.tripId,
+        productId: input.productId,
+        customerName: input.customerName,
+        customerId: input.customerId ?? null,
+        customerPhone: input.customerPhone,
+        deliveryAddress: input.deliveryAddress,
+        orderDate: new Date().toISOString(),
+        paymentMethod: input.paymentMethod ?? 'bank',
+        paymentStatus: 'pending',
+        requestStatus: 'PENDING_AVAILABILITY',
+        shippingFee: input.shippingFee ?? 0,
+        total: Number(product.sellingPrice) * Math.max(1, input.quantity),
+        status: 'pending',
+      } as any;
+      const snapshot = getMockDatabaseSnapshot();
+      snapshot.orders = [...snapshot.orders, order];
+      snapshot.orderItems = [...snapshot.orderItems, {
+        id: `order-item-${Date.now()}`,
+        orderId: order.id,
+        productVariantId: input.productVariantId,
+        quantity: input.quantity,
+        packedQuantity: 0,
+      }];
+      return {
+        id: order.id,
+        businessId: order.businessId,
+        tripId: order.tripId,
+        productId: order.productId,
+        customerProfileId: input.customerProfileId ?? input.customerId ?? null,
+        customerId: input.customerId ?? null,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone ?? null,
+        deliveryAddress: order.deliveryAddress ?? null,
+        orderDate: order.orderDate,
+        subtotal: Number(order.total ?? 0),
+        shippingFee: Number(order.shippingFee ?? 0),
+        total: Number(order.total ?? 0),
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        requestStatus: order.requestStatus,
+      };
+    },
+    async getForCustomer(customerId: string, orderId: string) {
+      const order = getMockDatabaseSnapshot().orders.find((entry) => entry.id === orderId && entry.customerId === customerId);
+      if (!order) {
+        return null;
+      }
+      return {
+        id: order.id,
+        businessId: order.businessId,
+        tripId: order.tripId,
+        productId: order.productId,
+        customerProfileId: order.customerId ?? null,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone ?? null,
+        deliveryAddress: order.deliveryAddress ?? null,
+        orderDate: order.orderDate,
+        subtotal: Number(order.total ?? 0),
+        shippingFee: Number(order.shippingFee ?? 0),
+        total: Number(order.total ?? 0),
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        requestStatus: order.requestStatus,
+      };
+    },
+    async listForCustomer(customerId: string) {
+      return getMockDatabaseSnapshot().orders.filter((order) => order.customerId === customerId).map((order) => ({
+        id: order.id,
+        businessId: order.businessId,
+        tripId: order.tripId,
+        productId: order.productId,
+        customerProfileId: order.customerId ?? null,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone ?? null,
+        deliveryAddress: order.deliveryAddress ?? null,
+        orderDate: order.orderDate,
+        subtotal: Number(order.total ?? 0),
+        shippingFee: Number(order.shippingFee ?? 0),
+        total: Number(order.total ?? 0),
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        requestStatus: order.requestStatus,
+      }));
+    },
+  };
+
+  payments: PaymentRepository = {
+    async create(input) {
+      return {
+        id: `payment-mock-${Date.now()}`,
+        business_id: input.businessId,
+        order_id: input.orderId,
+        payment_method: input.paymentMethod ?? 'bank',
+        payment_status: 'pending',
+        status: 'pending',
+        amount: Number(input.amount ?? 0),
+        currency: input.currency ?? 'MYR',
+        provider: input.provider ?? 'mock',
+        provider_reference: input.providerReference ?? undefined,
+        provider_transaction_id: input.providerTransactionId ?? undefined,
+        idempotency_key: input.idempotencyKey ?? `${input.orderId}:${input.businessId}`,
+        callback_event_id: input.callbackEventId ?? undefined,
+        webhook_verified: Boolean(input.webhookVerified ?? false),
+        verified: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    },
+    async getById(paymentId, businessId) {
+      return {
+        id: paymentId,
+        business_id: businessId,
+        order_id: 'order-mock',
+        payment_method: 'bank',
+        payment_status: 'pending',
+        status: 'pending',
+        amount: 0,
+        currency: 'MYR',
+        provider: 'mock',
+        idempotency_key: `${paymentId}:${businessId}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    },
+    async getByOrder(businessId, orderId) {
+      return {
+        id: `payment-mock-${orderId}`,
+        business_id: businessId,
+        order_id: orderId,
+        payment_method: 'bank',
+        payment_status: 'pending',
+        status: 'pending',
+        amount: 0,
+        currency: 'MYR',
+        provider: 'mock',
+        idempotency_key: `${orderId}:${businessId}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    },
+    async listForBusiness(businessId) {
+      return [{
+        id: `payment-mock-${businessId}`,
+        business_id: businessId,
+        order_id: 'order-mock',
+        payment_method: 'bank',
+        payment_status: 'pending',
+        status: 'pending',
+        amount: 0,
+        currency: 'MYR',
+        provider: 'mock',
+        idempotency_key: `${businessId}-mock`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }];
+    },
+    async transition(paymentId, businessId, nextStatus) {
+      return {
+        id: paymentId,
+        business_id: businessId,
+        order_id: 'order-mock',
+        payment_method: 'bank',
+        payment_status: nextStatus,
+        status: nextStatus,
+        amount: 0,
+        currency: 'MYR',
+        provider: 'mock',
+        idempotency_key: `${paymentId}:${businessId}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    },
+    async refund(paymentId, businessId, reason) {
+      return this.transition(paymentId, businessId, 'refunded');
+    },
+    async cancel(paymentId, businessId) {
+      return this.transition(paymentId, businessId, 'cancelled');
+    },
+    async reconcileFinanceForPayment() {
+      return [];
+    },
+  };
 }
 
 async function getUserIdFromAuth(client: ReturnType<typeof getSupabaseClient>): Promise<string | null> {
@@ -296,6 +735,66 @@ async function hasMembership(client: ReturnType<typeof getSupabaseClient>, busin
 
   const membership = data as { business_id?: string } | null;
   return !error && !!membership && membership.business_id === businessId;
+}
+
+async function getCurrentProfileId(client: ReturnType<typeof getSupabaseClient>): Promise<string | null> {
+  if (!client) {
+    return null;
+  }
+
+  const userId = await getUserIdFromAuth(client);
+  if (!userId) {
+    return null;
+  }
+
+  const { data, error } = await client
+    .from('profiles')
+    .select('id')
+    .eq('auth_user_id', userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return (data as { id?: string }).id ?? null;
+}
+
+async function ensureCustomerProfile(client: ReturnType<typeof getSupabaseClient>, input: { businessId: string; customerName: string; customerPhone?: string; deliveryAddress?: string; customerId?: string }) {
+  if (!client) {
+    return null;
+  }
+
+  const existingProfileId = await getCurrentProfileId(client);
+  if (existingProfileId) {
+    return existingProfileId;
+  }
+
+  const userId = await getUserIdFromAuth(client);
+  if (!userId) {
+    return null;
+  }
+
+  const profileEmail = `${userId}@customer.opsps.local`;
+  const { data, error } = await client
+    .from('profiles')
+    .insert({
+      business_id: input.businessId,
+      auth_user_id: userId,
+      full_name: input.customerName,
+      email: profileEmail,
+      phone: input.customerPhone ?? null,
+      address: input.deliveryAddress ?? null,
+      role: 'customer',
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return (data as { id?: string }).id ?? null;
 }
 
 async function verifyTripBelongsToBusiness(client: ReturnType<typeof getSupabaseClient>, businessId: string, tripId: string): Promise<boolean> {
@@ -763,6 +1262,442 @@ class SupabaseDataSource implements DataSource {
       return mapProductVariantRow(data);
     },
   };
+
+  orders: OrderRepository = {
+    async listForBusiness(businessId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return [];
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data, error } = await client.from('orders').select('*').eq('business_id', businessId);
+      if (error || !data) {
+        return [];
+      }
+
+      return (data as any[]).map((row) => mapOrderRow(row));
+    },
+    async getForBusiness(businessId: string, orderId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data, error } = await client.from('orders').select('*').eq('business_id', businessId).eq('id', orderId).maybeSingle();
+      if (error || !data) {
+        return null;
+      }
+
+      return mapOrderRow(data);
+    },
+    async listItemsForOrder(orderId: string, businessId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return [];
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data, error } = await client.from('order_items').select('*').eq('order_id', orderId).eq('business_id', businessId);
+      if (error || !data) {
+        return [];
+      }
+
+      return (data as any[]).map((row) => mapOrderItemRow(row));
+    },
+    async create(input) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      const { data: productData, error: productError } = await client.from('products').select('*').eq('id', input.productId).maybeSingle();
+      if (productError || !productData) {
+        return null;
+      }
+
+      const product = productData as any;
+      if (product.business_id !== input.businessId) {
+        return null;
+      }
+
+      if (input.tripId && product.trip_id && product.trip_id !== input.tripId) {
+        return null;
+      }
+
+      const { data: variantData, error: variantError } = await client
+        .from('product_variants')
+        .select('*')
+        .eq('id', input.productVariantId)
+        .eq('product_id', input.productId)
+        .eq('business_id', input.businessId)
+        .maybeSingle();
+
+      if (variantError || !variantData) {
+        return null;
+      }
+
+      const isFounder = await hasMembership(client, input.businessId);
+      if (!isFounder && !product.is_published) {
+        return null;
+      }
+
+      const customerProfileId = await ensureCustomerProfile(client, {
+        businessId: input.businessId,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        deliveryAddress: input.deliveryAddress,
+        customerId: input.customerId,
+      });
+
+      if (!customerProfileId && !isFounder) {
+        return null;
+      }
+
+      const quantity = Math.max(1, Number(input.quantity ?? 1));
+      const subtotal = Number(product.selling_price ?? 0) * quantity;
+      const shippingFee = Number(input.shippingFee ?? 0);
+      const total = subtotal + shippingFee;
+
+      const { data: orderData, error: orderError } = await client
+        .from('orders')
+        .insert({
+          business_id: input.businessId,
+          trip_id: input.tripId,
+          product_id: input.productId,
+          customer_profile_id: customerProfileId,
+          customer_name: input.customerName,
+          customer_phone: input.customerPhone ?? null,
+          delivery_address: input.deliveryAddress ?? null,
+          order_date: new Date().toISOString(),
+          subtotal,
+          shipping_fee: shippingFee,
+          total,
+          payment_status: 'pending',
+          order_status: 'pending',
+          request_status: 'PENDING_AVAILABILITY',
+          payment_option: input.paymentMethod ?? 'bank',
+          payment_mode: input.paymentMethod ?? 'bank',
+          availability_status: 'pending',
+        })
+        .select('*')
+        .single();
+
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      const { error: itemsError } = await client.from('order_items').insert({
+        business_id: input.businessId,
+        order_id: orderData.id,
+        product_variant_id: input.productVariantId,
+        quantity,
+        packed_quantity: 0,
+      });
+
+      if (itemsError) {
+        return null;
+      }
+
+      return {
+        ...mapOrderRow(orderData),
+        customerId: input.customerId ?? customerProfileId ?? null,
+      };
+    },
+    async getForCustomer(customerId: string, orderId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      const profileId = await getCurrentProfileId(client);
+      const queryByCustomerId = customerId ? client.from('orders').select('*').eq('customer_id', customerId).eq('id', orderId).maybeSingle() : Promise.resolve({ data: null, error: null });
+      const queryByProfileId = profileId ? client.from('orders').select('*').eq('customer_profile_id', profileId).eq('id', orderId).maybeSingle() : Promise.resolve({ data: null, error: null });
+
+      const [customerResult, profileResult] = await Promise.all([queryByCustomerId, queryByProfileId]);
+      const data = customerResult.data ?? profileResult.data;
+      if (customerResult.error || profileResult.error || !data) {
+        return null;
+      }
+
+      return mapOrderRow(data);
+    },
+    async listForCustomer(customerId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return [];
+      }
+
+      const profileId = await getCurrentProfileId(client);
+      const [customerResult, profileResult] = await Promise.all([
+        customerId ? client.from('orders').select('*').eq('customer_id', customerId) : Promise.resolve({ data: [], error: null }),
+        profileId ? client.from('orders').select('*').eq('customer_profile_id', profileId) : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (customerResult.error || profileResult.error) {
+        return [];
+      }
+
+      const rows = [...(customerResult.data ?? []), ...(profileResult.data ?? [])];
+      const seen = new Set<string>();
+      return rows.filter((row: any) => {
+        const key = row?.id;
+        if (!key || seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      }).map((row: any) => mapOrderRow(row));
+    },
+  };
+
+  payments: PaymentRepository = {
+    async create(input) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, input.businessId))) {
+        return null;
+      }
+
+      const orderQuery = await client
+        .from('orders')
+        .select('id, business_id, total, payment_status')
+        .eq('id', input.orderId)
+        .eq('business_id', input.businessId)
+        .maybeSingle();
+
+      if (orderQuery.error || !orderQuery.data) {
+        return null;
+      }
+
+      const expectedAmount = Number(input.amount ?? (orderQuery.data as any).total ?? 0);
+      if (Number((orderQuery.data as any).total ?? 0) > 0 && Math.abs(expectedAmount - Number((orderQuery.data as any).total)) > 0.01) {
+        return null;
+      }
+
+      const key = input.idempotencyKey ?? `${input.orderId}:${input.businessId}`;
+      const existing = await client.from('payments').select('*').eq('order_id', input.orderId).eq('business_id', input.businessId).maybeSingle();
+      if (!existing.error && existing.data) {
+        return mapPaymentRow(existing.data);
+      }
+
+      const { data, error } = await client.from('payments').insert({
+        business_id: input.businessId,
+        order_id: input.orderId,
+        payment_method: input.paymentMethod ?? 'bank',
+        amount: expectedAmount,
+        payment_status: 'pending',
+        verified: false,
+      }).select('*').single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return mapPaymentRow(data);
+    },
+    async getById(paymentId, businessId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data, error } = await client.from('payments').select('*').eq('id', paymentId).eq('business_id', businessId).maybeSingle();
+      if (error || !data) {
+        return null;
+      }
+
+      return mapPaymentRow(data);
+    },
+    async getByOrder(businessId, orderId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data, error } = await client.from('payments').select('*').eq('order_id', orderId).eq('business_id', businessId).maybeSingle();
+      if (error || !data) {
+        return null;
+      }
+
+      return mapPaymentRow(data);
+    },
+    async listForBusiness(businessId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data, error } = await client.from('payments').select('*').eq('business_id', businessId);
+      if (error || !data) {
+        return [];
+      }
+
+      return (data as any[]).map((row) => mapPaymentRow(row));
+    },
+    async transition(paymentId, businessId, nextStatus, overrides = {}) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const existing = await this.getById(paymentId, businessId);
+      if (!existing) {
+        return null;
+      }
+
+      const normalized = nextStatus.toLowerCase() as PaymentRepositoryStatus;
+      if (!['pending','authorized','paid','failed','cancelled','refunded'].includes(normalized)) {
+        throw new Error(`Invalid payment transition: ${existing.payment_status} -> ${normalized}`);
+      }
+
+      if (!['pending','authorized','paid','failed','cancelled','refunded'].includes(existing.payment_status ?? 'pending')) {
+        throw new Error(`Invalid payment transition: ${existing.payment_status} -> ${normalized}`);
+      }
+
+      const from = ((existing.payment_status ?? 'pending') as PaymentRepositoryStatus).toLowerCase() as PaymentRepositoryStatus;
+      const validList: Record<PaymentRepositoryStatus, PaymentRepositoryStatus[]> = {
+        pending: ['authorized', 'paid', 'failed', 'cancelled'],
+        authorized: ['paid', 'failed', 'cancelled', 'refunded'],
+        paid: ['refunded'],
+        failed: [],
+        cancelled: [],
+        refunded: [],
+      };
+
+      if (from === normalized) {
+        return existing;
+      }
+
+      if (!validList[from]?.includes(normalized)) {
+        throw new Error(`Invalid payment transition: ${from} -> ${normalized}`);
+      }
+
+      if (overrides.callbackEventId && existing.callback_event_id === overrides.callbackEventId) {
+        return existing;
+      }
+
+      const payload: Record<string, unknown> = {
+        payment_status: normalized,
+        verified: overrides.verified ?? ((normalized === 'paid') || existing.verified),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await client.from('payments').update(payload).eq('id', paymentId).eq('business_id', businessId).select('*').single();
+      if (error || !data) {
+        return null;
+      }
+
+      if (normalized === 'paid' || normalized === 'refunded') {
+        await this.reconcileFinanceForPayment(paymentId, businessId);
+      }
+
+      return mapPaymentRow(data);
+    },
+    async refund(paymentId, businessId, reason) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const payment = await this.getById(paymentId, businessId);
+      if (!payment) {
+        return null;
+      }
+
+      try {
+        return await this.transition(paymentId, businessId, 'refunded', { metadata: { refundReason: reason ?? 'Refund requested' } });
+      } catch {
+        return null;
+      }
+    },
+    async cancel(paymentId, businessId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      try {
+        return await this.transition(paymentId, businessId, 'cancelled');
+      } catch {
+        return null;
+      }
+    },
+    async reconcileFinanceForPayment(paymentId, businessId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const payment = await this.getById(paymentId, businessId);
+      if (!payment) {
+        return [];
+      }
+
+      if (payment.payment_status === 'paid') {
+        const category = 'Payment Received';
+        const { data: existingRows } = await client.from('finance_transactions').select('id').eq('business_id', businessId).eq('reference_id', paymentId).eq('category', category).limit(1);
+        if (!existingRows || existingRows.length > 0) {
+          return existingRows ?? [];
+        }
+
+        const { data, error } = await client.from('finance_transactions').insert({
+          business_id: businessId,
+          order_id: payment.order_id,
+          description: category,
+          amount: Number(payment.amount ?? 0),
+          type: 'income',
+          payment_method: payment.payment_method ?? 'bank',
+          category,
+          reference_id: paymentId,
+        }).select('*');
+
+        if (error || !data) {
+          return [];
+        }
+        return data as Record<string, unknown>[];
+      }
+
+      if (payment.payment_status === 'refunded') {
+        const category = 'Payment Refunded';
+        const { data: existingRows } = await client.from('finance_transactions').select('id').eq('business_id', businessId).eq('reference_id', paymentId).eq('category', category).limit(1);
+        if (!existingRows || existingRows.length > 0) {
+          return existingRows ?? [];
+        }
+
+        const { data, error } = await client.from('finance_transactions').insert({
+          business_id: businessId,
+          order_id: payment.order_id,
+          description: category,
+          amount: Number(payment.amount ?? 0),
+          type: 'expense',
+          payment_method: payment.payment_method ?? 'bank',
+          category,
+          reference_id: paymentId,
+        }).select('*');
+
+        if (error || !data) {
+          return [];
+        }
+        return data as Record<string, unknown>[];
+      }
+
+      return [];
+    },
+  };
 }
 
 export function getDataSource(mode: 'mock' | 'production' = 'production'): DataSource {
@@ -771,5 +1706,9 @@ export function getDataSource(mode: 'mock' | 'production' = 'production'): DataS
   }
 
   const client = getSupabaseClient();
-  return client ? new SupabaseDataSource() : new MockDataSource();
+  if (!client) {
+    throw new Error('Supabase is not configured for production.');
+  }
+
+  return new SupabaseDataSource();
 }

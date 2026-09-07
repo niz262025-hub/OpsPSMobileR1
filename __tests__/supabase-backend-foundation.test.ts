@@ -8,6 +8,7 @@ import {
   buildSupabaseEnvState,
 } from '../services/supabaseSchema';
 import { diagnoseSupabaseConnection } from '../services/supabaseClient';
+import { getDataSource } from '../services/repository';
 
 describe('backend foundation contracts', () => {
   beforeEach(() => {
@@ -119,5 +120,20 @@ describe('backend foundation contracts', () => {
       auth: 'verified',
       databaseRead: 'verified',
     });
+  });
+
+  it('fails closed in production when Supabase is not configured', () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      expect(() => getDataSource('production')).toThrow(/Supabase.*configured/i);
+    } finally {
+      if (previousNodeEnv === undefined) {
+        process.env.NODE_ENV = 'test';
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
   });
 });

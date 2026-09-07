@@ -230,6 +230,15 @@ export function AuthProvider({
           }
         }
 
+        if (process.env.NODE_ENV === 'production') {
+          clearActiveBusinessScope();
+          syncBrowserAuthState(null);
+          setAccounts([]);
+          setCurrentUser(null);
+          setReady(true);
+          return;
+        }
+
         const [
           storedAccounts,
           storedSession,
@@ -336,6 +345,10 @@ export function AuthProvider({
     account: AuthAccount
   ): Promise<boolean> => {
     const client = getSupabaseClient();
+    if (!client && process.env.NODE_ENV === 'production') {
+      return false;
+    }
+
     if (client) {
       const { data, error } = await client.auth.signUp({
         email: account.email,
@@ -413,6 +426,10 @@ export function AuthProvider({
     role: UserRole
   ): Promise<boolean> => {
     const client = getSupabaseClient();
+    if (!client && process.env.NODE_ENV === 'production') {
+      return false;
+    }
+
     if (client) {
       const { data, error } = await client.auth.signInWithPassword({
         email: email.trim(),
