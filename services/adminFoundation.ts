@@ -37,6 +37,25 @@ export type AdminDashboardSummary = {
   netProfit: number;
 };
 
+export type AdminBusinessRecord = {
+  status?: string | null;
+};
+
+export type AdminSubscriptionRecord = {
+  status?: string | null;
+  payment_status?: string | null;
+};
+
+export type AdminPaymentRecord = {
+  payment_status?: string | null;
+  amount?: number | string | null;
+};
+
+export type AdminFinanceRecord = {
+  type?: string | null;
+  amount?: number | string | null;
+};
+
 export function normalizeAdminRole(value?: string | null): AdminRole | null {
   const normalized = (value ?? '').trim().toLowerCase();
   if (normalized === 'admin') return 'admin';
@@ -61,6 +80,47 @@ export function getAdminDashboardSummary(
     pendingPayments: input.pendingPayments ?? 0,
     platformRevenue: input.platformRevenue ?? 0,
     netProfit: input.netProfit ?? 0,
+  };
+}
+
+export function buildAdminDashboardSummaryFromRecords(input: {
+  businesses?: AdminBusinessRecord[];
+  subscriptions?: AdminSubscriptionRecord[];
+  payments?: AdminPaymentRecord[];
+  financeTransactions?: AdminFinanceRecord[];
+} = {}): AdminDashboardSummary {
+  const businesses = input.businesses ?? [];
+  const subscriptions = input.subscriptions ?? [];
+  const payments = input.payments ?? [];
+  const financeTransactions = input.financeTransactions ?? [];
+
+  const activeSubscriptions = subscriptions.filter((row) => (row.status ?? '').toLowerCase() === 'active').length;
+  const pendingPayments = payments.filter((row) => {
+    const status = (row.payment_status ?? '').toLowerCase();
+    return status !== 'paid' && status !== 'refunded';
+  }).length;
+  const platformRevenue = payments.reduce((total, row) => {
+    const status = (row.payment_status ?? '').toLowerCase();
+    if (status === 'failed' || status === 'cancelled' || status === 'refunded') {
+      return total;
+    }
+    const amount = Number(row.amount ?? 0);
+    return Number.isFinite(amount) ? total + amount : total;
+  }, 0);
+  const operatingExpenses = financeTransactions.reduce((total, row) => {
+    if ((row.type ?? '').toLowerCase() !== 'expense') {
+      return total;
+    }
+    const amount = Number(row.amount ?? 0);
+    return Number.isFinite(amount) ? total + amount : total;
+  }, 0);
+
+  return {
+    totalBusinesses: businesses.length,
+    activeSubscriptions,
+    pendingPayments,
+    platformRevenue,
+    netProfit: platformRevenue - operatingExpenses,
   };
 }
 

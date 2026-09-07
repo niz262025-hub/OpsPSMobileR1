@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ADMIN_REQUIRED_ROUTE_KEYS,
+  buildAdminDashboardSummaryFromRecords,
   canAccessAdminRoute,
   getAdminDashboardSummary,
   isAdminRole,
@@ -54,5 +55,33 @@ describe('admin foundation', () => {
     expect(subscription.planName).toBe('OpsPS Founder');
     expect(subscription.status).toBe('active');
     expect(subscription.paymentStatus).toBe('paid');
+  });
+
+  it('aggregates real admin metrics from business, subscription, payment, and finance records', () => {
+    const summary = buildAdminDashboardSummaryFromRecords({
+      businesses: [{ status: 'active' }, { status: 'active' }, { status: 'paused' }],
+      subscriptions: [
+        { status: 'active', payment_status: 'paid' },
+        { status: 'active', payment_status: 'pending' },
+        { status: 'trial', payment_status: 'pending' },
+        { status: 'cancelled', payment_status: 'failed' },
+      ],
+      payments: [
+        { payment_status: 'paid', amount: 2500 },
+        { payment_status: 'pending', amount: 800 },
+        { payment_status: 'failed', amount: 400 },
+      ],
+      financeTransactions: [
+        { type: 'income', amount: 2500 },
+        { type: 'income', amount: 800 },
+        { type: 'expense', amount: 620 },
+      ],
+    });
+
+    expect(summary.totalBusinesses).toBe(3);
+    expect(summary.activeSubscriptions).toBe(2);
+    expect(summary.pendingPayments).toBe(2);
+    expect(summary.platformRevenue).toBe(3300);
+    expect(summary.netProfit).toBe(2680);
   });
 });

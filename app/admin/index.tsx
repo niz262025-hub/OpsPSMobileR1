@@ -1,21 +1,74 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { useAuth } from '../../context/AuthContext';
 import {
   ADMIN_REQUIRED_ROUTE_KEYS,
+  buildAdminDashboardSummaryFromRecords,
   getAdminDashboardSummary,
   isAdminRole,
 } from '../../services/adminFoundation';
+import { getSupabaseClient } from '../../services/supabaseClient';
 
 export default function AdminDashboardScreen() {
   const { currentUser, logout } = useAuth();
+  const [summary, setSummary] = useState(() => getAdminDashboardSummary());
+  const [liveDataAvailable, setLiveDataAvailable] = useState(false);
 
   const isAdmin = useMemo(
     () => isAdminRole(currentUser?.role),
     [currentUser?.role]
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadSummary() {
+      const client = getSupabaseClient();
+      if (!client) {
+        if (mounted) {
+          setSummary(getAdminDashboardSummary());
+          setLiveDataAvailable(false);
+        }
+        return;
+      }
+
+      try {
+        const [businessResult, subscriptionResult, paymentResult, financeResult] = await Promise.all([
+          client.from('businesses').select('status').limit(1000),
+          client.from('subscriptions').select('status,payment_status').limit(1000),
+          client.from('payments').select('payment_status,amount').limit(1000),
+          client.from('finance_transactions').select('type,amount').limit(1000),
+        ]);
+
+        if (!mounted) {
+          return;
+        }
+
+        const nextSummary = buildAdminDashboardSummaryFromRecords({
+          businesses: (businessResult.data ?? []) as Array<{ status?: string | null }>,
+          subscriptions: (subscriptionResult.data ?? []) as Array<{ status?: string | null; payment_status?: string | null }>,
+          payments: (paymentResult.data ?? []) as Array<{ payment_status?: string | null; amount?: number | string | null }>,
+          financeTransactions: (financeResult.data ?? []) as Array<{ type?: string | null; amount?: number | string | null }>,
+        });
+
+        setSummary(nextSummary);
+        setLiveDataAvailable(!businessResult.error && !subscriptionResult.error && !paymentResult.error && !financeResult.error);
+      } catch {
+        if (mounted) {
+          setSummary(getAdminDashboardSummary());
+          setLiveDataAvailable(false);
+        }
+      }
+    }
+
+    void loadSummary();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   if (!isAdmin) {
     return (
@@ -30,14 +83,6 @@ export default function AdminDashboardScreen() {
       </SafeAreaView>
     );
   }
-
-  const summary = getAdminDashboardSummary({
-    totalBusinesses: 24,
-    activeSubscriptions: 18,
-    pendingPayments: 6,
-    platformRevenue: 18420,
-    netProfit: 9210,
-  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -64,7 +109,7 @@ export default function AdminDashboardScreen() {
         {ADMIN_REQUIRED_ROUTE_KEYS.map((route) => (
           <View key={route} style={styles.moduleRow}>
             <Text style={styles.moduleName}>{route}</Text>
-            <Text style={styles.moduleStatus}>Ready for backend wiring</Text>
+            <Text style={styles.moduleStatus}>{liveDataAvailable ? 'Live data' : 'Awaiting live data'}</Text>
           </View>
         ))}
       </ScrollView>
