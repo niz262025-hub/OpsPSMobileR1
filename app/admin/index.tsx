@@ -5,11 +5,10 @@ import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import {
   ADMIN_REQUIRED_ROUTE_KEYS,
-  buildAdminDashboardSummaryFromRecords,
   getAdminDashboardSummary,
   isAdminRole,
+  loadAdminDashboardQueryResult,
 } from '../../services/adminFoundation';
-import { getSupabaseClient } from '../../services/supabaseClient';
 
 export default function AdminDashboardScreen() {
   const { currentUser, logout } = useAuth();
@@ -25,36 +24,45 @@ export default function AdminDashboardScreen() {
     let mounted = true;
 
     async function loadSummary() {
-      const client = getSupabaseClient();
-      if (!client) {
-        if (mounted) {
-          setSummary(getAdminDashboardSummary());
-          setLiveDataAvailable(false);
-        }
-        return;
-      }
-
       try {
-        const [businessResult, subscriptionResult, paymentResult, financeResult] = await Promise.all([
-          client.from('businesses').select('status').limit(1000),
-          client.from('subscriptions').select('status,payment_status').limit(1000),
-          client.from('payments').select('payment_status,amount').limit(1000),
-          client.from('finance_transactions').select('type,amount').limit(1000),
-        ]);
-
+        const data = await loadAdminDashboardQueryResult();
         if (!mounted) {
           return;
         }
 
-        const nextSummary = buildAdminDashboardSummaryFromRecords({
-          businesses: (businessResult.data ?? []) as Array<{ status?: string | null }>,
-          subscriptions: (subscriptionResult.data ?? []) as Array<{ status?: string | null; payment_status?: string | null }>,
-          payments: (paymentResult.data ?? []) as Array<{ payment_status?: string | null; amount?: number | string | null }>,
-          financeTransactions: (financeResult.data ?? []) as Array<{ type?: string | null; amount?: number | string | null }>,
+        const nextSummary = getAdminDashboardSummary({
+          totalBusinesses: data.businesses.length,
+          activeSubscriptions: data.subscriptions.filter((row) => (row.status ?? '').toLowerCase() === 'active').length,
+          pendingPayments: data.payments.filter((row) => {
+            const status = (row.payment_status ?? '').toLowerCase();
+            return status !== 'paid' && status !== 'refunded';
+          }).length,
+          platformRevenue: data.payments.reduce((total, row) => {
+            const status = (row.payment_status ?? '').toLowerCase();
+            if (status === 'failed' || status === 'cancelled' || status === 'refunded') {
+              return total;
+            }
+            const amount = Number(row.amount ?? 0);
+            return Number.isFinite(amount) ? total + amount : total;
+          }, 0),
+          netProfit: data.payments.reduce((total, row) => {
+            const status = (row.payment_status ?? '').toLowerCase();
+            if (status === 'failed' || status === 'cancelled' || status === 'refunded') {
+              return total;
+            }
+            const amount = Number(row.amount ?? 0);
+            return Number.isFinite(amount) ? total + amount : total;
+          }, 0) - data.financeTransactions.reduce((total, row) => {
+            if ((row.type ?? '').toLowerCase() !== 'expense') {
+              return total;
+            }
+            const amount = Number(row.amount ?? 0);
+            return Number.isFinite(amount) ? total + amount : total;
+          }, 0),
         });
 
         setSummary(nextSummary);
-        setLiveDataAvailable(!businessResult.error && !subscriptionResult.error && !paymentResult.error && !financeResult.error);
+        setLiveDataAvailable(data.businesses.length > 0 || data.subscriptions.length > 0 || data.payments.length > 0 || data.financeTransactions.length > 0);
       } catch {
         if (mounted) {
           setSummary(getAdminDashboardSummary());
