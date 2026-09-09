@@ -1,5 +1,6 @@
 export type AdminRole = 'admin' | 'support';
 export type AppRole = 'founder' | 'customer' | 'admin' | 'support';
+export type SellerVerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export const ADMIN_REQUIRED_ROUTE_KEYS = [
   'users',
@@ -39,6 +40,7 @@ export type AdminDashboardSummary = {
 
 export type AdminBusinessRecord = {
   status?: string | null;
+  seller_verification_status?: string | null;
 };
 
 export type AdminSubscriptionRecord = {
@@ -68,6 +70,7 @@ export type AdminBusinessListRecord = {
   id?: string | null;
   name?: string | null;
   status?: string | null;
+  seller_verification_status?: string | null;
   created_at?: string | null;
 };
 
@@ -108,6 +111,109 @@ export type AdminDashboardQueryResult = {
   payments: AdminPaymentListRecord[];
   financeTransactions: AdminFinanceListRecord[];
 };
+
+const sellerVerificationState = new Map<string, SellerVerificationStatus>();
+
+export function normalizeSellerVerificationStatus(value?: string | null): SellerVerificationStatus {
+  const normalized = (value ?? '').trim().toUpperCase();
+  if (normalized === 'APPROVED') return 'APPROVED';
+  if (normalized === 'REJECTED') return 'REJECTED';
+  return 'PENDING';
+}
+
+export function isSellerApproved(value?: string | null): boolean {
+  return normalizeSellerVerificationStatus(value) === 'APPROVED';
+}
+
+export function canSellerUseBusinessPrivileges(role?: string | null, verificationStatus?: string | null): boolean {
+  if (role !== 'founder') {
+    return true;
+  }
+
+  return isSellerApproved(verificationStatus);
+}
+
+export function getSellerVerificationStatusForBusiness(businessId: string): SellerVerificationStatus {
+  if (!businessId.trim()) {
+    return 'PENDING';
+  }
+
+  return sellerVerificationState.get(businessId) ?? 'PENDING';
+}
+
+export function approveSeller(input: {
+  businessId: string;
+  reviewerRole?: string | null;
+  reason?: string;
+}): { ok: boolean; businessId: string; status: SellerVerificationStatus; message: string } {
+  const businessId = (input.businessId ?? '').trim();
+  if (!businessId) {
+    return { ok: false, businessId: '', status: 'PENDING', message: 'Business ID is required.' };
+  }
+
+  if (!canAccessAdminRoute(input.reviewerRole)) {
+    return { ok: false, businessId, status: 'PENDING', message: 'Only authorized admins can approve sellers.' };
+  }
+
+  sellerVerificationState.set(businessId, 'APPROVED');
+  return { ok: true, businessId, status: 'APPROVED', message: 'Seller approved.' };
+}
+
+export function rejectSeller(input: {
+  businessId: string;
+  reviewerRole?: string | null;
+  reason?: string;
+}): { ok: boolean; businessId: string; status: SellerVerificationStatus; message: string } {
+  const businessId = (input.businessId ?? '').trim();
+  if (!businessId) {
+    return { ok: false, businessId: '', status: 'PENDING', message: 'Business ID is required.' };
+  }
+
+  if (!canAccessAdminRoute(input.reviewerRole)) {
+    return { ok: false, businessId, status: 'PENDING', message: 'Only authorized admins can reject sellers.' };
+  }
+
+  sellerVerificationState.set(businessId, 'REJECTED');
+  return { ok: true, businessId, status: 'REJECTED', message: 'Seller rejected.' };
+}
+
+export type SellerReviewRecord = {
+  businessId: string;
+  businessName: string;
+  founderName: string;
+  founderEmail: string;
+  phone?: string | null;
+  address?: string | null;
+  sellerVerificationStatus: SellerVerificationStatus;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export function listPendingSellers(input: {
+  businesses?: Array<{ id?: string | null; name?: string | null; seller_verification_status?: string | null; status?: string | null; created_at?: string | null; updated_at?: string | null }>;
+  profiles?: Array<{ business_id?: string | null; full_name?: string | null; email?: string | null; role?: string | null; phone?: string | null; address?: string | null }>;
+} = {}): SellerReviewRecord[] {
+  const businesses = input.businesses ?? [];
+  const profiles = input.profiles ?? [];
+
+  return businesses
+    .filter((business) => normalizeSellerVerificationStatus((business as { seller_verification_status?: string | null }).seller_verification_status ?? getSellerVerificationStatusForBusiness(String(business.id ?? ''))) === 'PENDING')
+    .map((business) => {
+      const founderProfile = profiles.find((profile) => profile.business_id === business.id && (profile.role ?? '').toLowerCase() === 'founder');
+      return {
+        businessId: String(business.id ?? ''),
+        businessName: String(business.name ?? 'Untitled business'),
+        founderName: founderProfile?.full_name ?? 'Founder',
+        founderEmail: founderProfile?.email ?? '',
+        phone: founderProfile?.phone ?? undefined,
+        address: founderProfile?.address ?? undefined,
+        sellerVerificationStatus: normalizeSellerVerificationStatus((business as { seller_verification_status?: string | null }).seller_verification_status ?? getSellerVerificationStatusForBusiness(String(business.id ?? ''))),
+        createdAt: business.created_at ?? null,
+        updatedAt: business.updated_at ?? null,
+      };
+    })
+    .filter((seller) => seller.businessId);
+}
 
 export function normalizeAdminRole(value?: string | null): AdminRole | null {
   const normalized = (value ?? '').trim().toLowerCase();
@@ -191,8 +297,8 @@ export async function loadAdminDashboardQueryResult(): Promise<AdminDashboardQue
   }
 
   const [businesses, users, subscriptions, payments, financeTransactions] = await Promise.all([
-    client.from('businesses').select('id,name,status,created_at').limit(1000),
-    client.from('profiles').select('id,full_name,email,role,business_id').limit(1000),
+    client.from('businesses').select('id,name,status,seller_verification_status,created_at').limit(1000),
+    client.from('profiles').select('id,full_name,email,role,business_id,phone,address').limit(1000),
     client.from('subscriptions').select('id,business_id,plan_name,status,payment_status,started_at,ends_at').limit(1000),
     client.from('payments').select('id,business_id,order_id,payment_method,payment_status,amount,created_at').limit(1000),
     client.from('finance_transactions').select('id,business_id,description,amount,type,category,created_at').limit(1000),

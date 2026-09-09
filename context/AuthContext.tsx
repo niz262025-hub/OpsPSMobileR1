@@ -10,6 +10,11 @@ import {
   clearActiveBusinessScope,
   setActiveBusinessScope,
 } from '../services/mockDatabase';
+import {
+  canSellerUseBusinessPrivileges,
+  normalizeSellerVerificationStatus,
+  type SellerVerificationStatus,
+} from '../services/adminFoundation';
 import { getSupabaseClient } from '../services/supabaseClient';
 
 export type UserRole = 'founder' | 'customer' | 'admin' | 'support';
@@ -23,6 +28,7 @@ export type AuthAccount = {
   phone?: string;
   address?: string;
   businessId?: string;
+  sellerVerificationStatus?: SellerVerificationStatus;
 };
 
 export type SupabaseSignupErrorCategory = 'duplicate' | 'rate_limit' | 'auth_error';
@@ -236,6 +242,7 @@ function normalizeAccount(
     phone: account.phone ?? '',
     address: account.address ?? '',
     businessId,
+    sellerVerificationStatus: normalizeSellerVerificationStatus(account.sellerVerificationStatus ?? 'PENDING'),
   };
 }
 
@@ -252,6 +259,13 @@ export function AuthProvider({
 
   const applyBusinessScopeForUser = (user: AuthAccount | null) => {
     if (user?.role === 'founder' && user.businessId) {
+      const sellerApproved = canSellerUseBusinessPrivileges(user.role, user.sellerVerificationStatus ?? 'PENDING');
+      if (!sellerApproved) {
+        clearActiveBusinessScope();
+        syncBrowserAuthState(null);
+        return;
+      }
+
       setActiveBusinessScope(user.businessId);
       syncBrowserAuthState(user);
       return;
@@ -296,6 +310,7 @@ export function AuthProvider({
       businessName: profileData?.business_id ? 'Supabase Business' : '',
       phone: profileData?.phone ?? '',
       address: profileData?.address ?? '',
+      sellerVerificationStatus: normalizeSellerVerificationStatus(profileData?.seller_verification_status ?? 'PENDING'),
     };
 
     setCurrentUser(normalizedUser);
@@ -474,7 +489,10 @@ export function AuthProvider({
         return classifySupabaseSignupError(profileError ?? { status: 0, message: 'Unable to create profile.' });
       }
 
-      const normalizedAccount = normalizeAccount(account);
+      const normalizedAccount = normalizeAccount({
+        ...account,
+        sellerVerificationStatus: 'PENDING',
+      });
       setCurrentUser(normalizedAccount);
       applyBusinessScopeForUser(normalizedAccount);
       syncBrowserAuthState(normalizedAccount);
@@ -486,7 +504,10 @@ export function AuthProvider({
     }
 
     const normalizedAccount =
-      normalizeAccount(account);
+      normalizeAccount({
+        ...account,
+        sellerVerificationStatus: account.role === 'founder' ? 'PENDING' : undefined,
+      });
 
     const emailExists = accounts.some(
       (entry) =>
@@ -567,6 +588,7 @@ export function AuthProvider({
         businessName: membershipData?.[0]?.business_id ? 'Supabase Business' : '',
         phone: profileData?.phone ?? '',
         address: profileData?.address ?? '',
+        sellerVerificationStatus: normalizeSellerVerificationStatus((profileData as { seller_verification_status?: string } | null | undefined)?.seller_verification_status ?? 'PENDING'),
       };
 
       setCurrentUser(normalizedAccount);

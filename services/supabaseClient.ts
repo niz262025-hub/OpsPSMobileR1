@@ -9,8 +9,10 @@ import {
 let client: SupabaseClient | null = null;
 let clientKey = '';
 
-export function getSupabaseClient(): SupabaseClient | null {
-  const env = buildSupabaseEnvState(getSupabasePublicConfig());
+export function createSupabaseClientFromConfig(
+  source: SupabasePublicConfigSource = getSupabasePublicConfig()
+): SupabaseClient | null {
+  const env = buildSupabaseEnvState(source);
 
   if (!env.configured) {
     client = null;
@@ -32,6 +34,10 @@ export function getSupabaseClient(): SupabaseClient | null {
   }
 
   return client;
+}
+
+export function getSupabaseClient(): SupabaseClient | null {
+  return createSupabaseClientFromConfig(getSupabasePublicConfig());
 }
 
 export function getSupabaseStatus() {

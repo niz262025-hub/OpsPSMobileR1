@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ADMIN_REQUIRED_ROUTE_KEYS,
+  approveSeller,
   buildAdminDashboardSummaryFromRecords,
   canAccessAdminRoute,
+  canSellerUseBusinessPrivileges,
   getAdminDashboardSummary,
   isAdminRole,
+  listPendingSellers,
   normalizeAdminRole,
+  normalizeSellerVerificationStatus,
+  rejectSeller,
   type AdminDashboardSummary,
   type AdminSubscriptionSnapshot,
 } from '../services/adminFoundation';
@@ -83,5 +88,46 @@ describe('admin foundation', () => {
     expect(summary.pendingPayments).toBe(2);
     expect(summary.platformRevenue).toBe(3300);
     expect(summary.netProfit).toBe(2680);
+  });
+
+  it('keeps founder seller verification defaulted to pending and blocks unapproved access', () => {
+    expect(normalizeSellerVerificationStatus(undefined)).toBe('PENDING');
+    expect(normalizeSellerVerificationStatus('rejected')).toBe('REJECTED');
+    expect(canSellerUseBusinessPrivileges('founder', 'PENDING')).toBe(false);
+    expect(canSellerUseBusinessPrivileges('founder', 'REJECTED')).toBe(false);
+    expect(canSellerUseBusinessPrivileges('founder', 'APPROVED')).toBe(true);
+    expect(canSellerUseBusinessPrivileges('customer', undefined)).toBe(true);
+  });
+
+  it('allows support/admin approval and rejection, but blocks non-admin review actions', () => {
+    const approved = approveSeller({ businessId: 'biz-approve', reviewerRole: 'admin' });
+    const rejected = rejectSeller({ businessId: 'biz-reject', reviewerRole: 'support' });
+    const failedApproval = approveSeller({ businessId: 'biz-fail', reviewerRole: 'founder' });
+    const failedRejection = rejectSeller({ businessId: 'biz-fail', reviewerRole: 'customer' });
+
+    expect(approved.ok).toBe(true);
+    expect(approved.status).toBe('APPROVED');
+    expect(rejected.ok).toBe(true);
+    expect(rejected.status).toBe('REJECTED');
+    expect(failedApproval.ok).toBe(false);
+    expect(failedRejection.ok).toBe(false);
+  });
+
+  it('lists only pending sellers and preserves founder/business scoping in the review queue', () => {
+    const queue = listPendingSellers({
+      businesses: [
+        { id: 'biz-1', name: 'Northwind',seller_verification_status: 'PENDING', created_at: '2025-01-01T00:00:00Z' },
+        { id: 'biz-2', name: 'Southwind', seller_verification_status: 'APPROVED', created_at: '2025-01-02T00:00:00Z' },
+        { id: 'biz-3', name: 'Westwind', created_at: '2025-01-03T00:00:00Z' },
+      ],
+      profiles: [
+        { business_id: 'biz-1', full_name: 'Alice', email: 'alice@example.com', role: 'founder', phone: '0123456789', address: 'Kuala Lumpur' },
+        { business_id: 'biz-3', full_name: 'Bob', email: 'bob@example.com', role: 'founder' },
+      ],
+    });
+
+    expect(queue.map((seller) => seller.businessId)).toEqual(['biz-1', 'biz-3']);
+    expect(queue[0]?.founderEmail).toBe('alice@example.com');
+    expect(queue[1]?.sellerVerificationStatus).toBe('PENDING');
   });
 });

@@ -5,14 +5,18 @@ import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import {
   ADMIN_REQUIRED_ROUTE_KEYS,
+  approveSeller,
   getAdminDashboardSummary,
   isAdminRole,
+  listPendingSellers,
   loadAdminDashboardQueryResult,
+  rejectSeller,
 } from '../../services/adminFoundation';
 
 export default function AdminDashboardScreen() {
   const { currentUser, logout } = useAuth();
   const [summary, setSummary] = useState(() => getAdminDashboardSummary());
+  const [pendingSellers, setPendingSellers] = useState(() => listPendingSellers());
   const [liveDataAvailable, setLiveDataAvailable] = useState(false);
 
   const isAdmin = useMemo(
@@ -62,6 +66,12 @@ export default function AdminDashboardScreen() {
         });
 
         setSummary(nextSummary);
+        setPendingSellers(
+          listPendingSellers({
+            businesses: data.businesses,
+            profiles: data.users,
+          })
+        );
         setLiveDataAvailable(data.businesses.length > 0 || data.subscriptions.length > 0 || data.payments.length > 0 || data.financeTransactions.length > 0);
       } catch {
         if (mounted) {
@@ -113,6 +123,47 @@ export default function AdminDashboardScreen() {
           <StatCard label="Net profit" value={`RM ${summary.netProfit.toLocaleString()}`} />
         </View>
 
+        <Text style={styles.sectionTitle}>Pending seller approvals</Text>
+        {pendingSellers.length === 0 ? (
+          <View style={styles.moduleRow}>
+            <Text style={styles.moduleName}>No pending sellers</Text>
+            <Text style={styles.moduleStatus}>Clear</Text>
+          </View>
+        ) : (
+          pendingSellers.map((seller) => (
+            <View key={seller.businessId} style={styles.sellerCard}>
+              <Text style={styles.moduleName}>{seller.businessName}</Text>
+              <Text style={styles.sellerMeta}>{seller.founderName} • {seller.founderEmail}</Text>
+              {seller.phone ? <Text style={styles.sellerMeta}>{seller.phone}</Text> : null}
+              {seller.address ? <Text style={styles.sellerMeta}>{seller.address}</Text> : null}
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={styles.approveButton}
+                  onPress={() => {
+                    const result = approveSeller({ businessId: seller.businessId, reviewerRole: currentUser?.role });
+                    if (result.ok) {
+                      setPendingSellers((current) => current.filter((entry) => entry.businessId !== seller.businessId));
+                    }
+                  }}
+                >
+                  <Text style={styles.approveText}>Approve</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.rejectButton}
+                  onPress={() => {
+                    const result = rejectSeller({ businessId: seller.businessId, reviewerRole: currentUser?.role });
+                    if (result.ok) {
+                      setPendingSellers((current) => current.filter((entry) => entry.businessId !== seller.businessId));
+                    }
+                  }}
+                >
+                  <Text style={styles.rejectText}>Reject</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))
+        )}
+
         <Text style={styles.sectionTitle}>Admin modules</Text>
         {ADMIN_REQUIRED_ROUTE_KEYS.map((route) => (
           <View key={route} style={styles.moduleRow}>
@@ -154,4 +205,11 @@ const styles = StyleSheet.create({
   moduleRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E8E3F1' },
   moduleName: { color: '#252039', fontWeight: '700', textTransform: 'capitalize' },
   moduleStatus: { color: '#5B2BD9', fontWeight: '700', fontSize: 12 },
+  sellerCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E8E3F1' },
+  sellerMeta: { color: '#77738D', fontWeight: '600', marginTop: 4 },
+  actionRow: { flexDirection: 'row', marginTop: 12, gap: 8 },
+  approveButton: { flex: 1, backgroundColor: '#16A34A', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  approveText: { color: '#FFFFFF', fontWeight: '800' },
+  rejectButton: { flex: 1, backgroundColor: '#B42318', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  rejectText: { color: '#FFFFFF', fontWeight: '800' },
 });
