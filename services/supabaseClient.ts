@@ -3,18 +3,24 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   buildSupabaseEnvState,
   getSupabasePublicConfig,
+  type SupabasePublicConfigSource,
 } from './supabaseSchema';
 
 let client: SupabaseClient | null = null;
+let clientKey = '';
 
 export function getSupabaseClient(): SupabaseClient | null {
   const env = buildSupabaseEnvState(getSupabasePublicConfig());
 
   if (!env.configured) {
+    client = null;
+    clientKey = '';
     return null;
   }
 
-  if (!client) {
+  const configKey = `${env.url}:${env.anonKey}`;
+
+  if (!client || clientKey !== configKey) {
     client = createClient(env.url, env.anonKey, {
       auth: {
         persistSession: false,
@@ -22,6 +28,7 @@ export function getSupabaseClient(): SupabaseClient | null {
         detectSessionInUrl: false,
       },
     });
+    clientKey = configKey;
   }
 
   return client;
@@ -39,9 +46,10 @@ export type SupabaseConnectionDiagnostics = {
 };
 
 export async function diagnoseSupabaseConnection(
-  configuredClient: SupabaseClient | null = getSupabaseClient()
+  configuredClient: SupabaseClient | null = getSupabaseClient(),
+  source: SupabasePublicConfigSource = getSupabasePublicConfig()
 ): Promise<SupabaseConnectionDiagnostics> {
-  const status = getSupabaseStatus();
+  const status = buildSupabaseEnvState(source);
   if (!status.configured || !configuredClient) {
     return {
       configured: false,

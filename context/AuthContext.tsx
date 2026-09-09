@@ -51,6 +51,14 @@ const ACCOUNTS_KEY = '@opsps_accounts';
 const SESSION_KEY = '@opsps_session';
 const ACTIVE_BUSINESS_KEY = '@opsps_active_business_id';
 
+function isProductionRuntime(): boolean {
+  if (typeof __DEV__ === 'boolean') {
+    return !__DEV__;
+  }
+
+  return process.env.NODE_ENV === 'production';
+}
+
 export function sanitizePersistedAccount(account: Partial<AuthAccount> | null | undefined) {
   if (!account) {
     return null;
@@ -313,7 +321,7 @@ export function AuthProvider({
           }
         }
 
-        if (process.env.NODE_ENV === 'production') {
+        if (isProductionRuntime()) {
           clearActiveBusinessScope();
           syncBrowserAuthState(null);
           setAccounts([]);
@@ -428,7 +436,7 @@ export function AuthProvider({
     account: AuthAccount
   ): Promise<AuthRegistrationResult> => {
     const client = getSupabaseClient();
-    if (!client && process.env.NODE_ENV === 'production') {
+    if (!client && isProductionRuntime()) {
       return {
         ok: false,
         kind: 'auth_error',
@@ -520,7 +528,7 @@ export function AuthProvider({
     role: UserRole
   ): Promise<boolean> => {
     const client = getSupabaseClient();
-    if (!client && process.env.NODE_ENV === 'production') {
+    if (!client && isProductionRuntime()) {
       return false;
     }
 

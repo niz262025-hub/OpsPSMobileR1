@@ -30,23 +30,33 @@ type SupabasePublicEnv = {
   SUPABASE_SERVICE_ROLE_KEY?: string;
 };
 
-type SupabasePublicConfigSource =
+export type SupabasePublicConfigSource =
   | (Record<string, string | undefined> & Partial<SupabasePublicEnv>)
   | { extra?: Record<string, string | undefined> };
 
 function readExpoPublicExtra(): Record<string, string | undefined> {
   try {
     const constantsModule = require('expo-constants');
-    const constantsWithConfig = constantsModule as {
+    const constantsWithConfig = (constantsModule?.default ?? constantsModule ?? {}) as {
       expoConfig?: { extra?: Record<string, string | undefined> };
       manifest?: { extra?: Record<string, string | undefined> };
       manifest2?: { extra?: Record<string, string | undefined> };
+      default?: {
+        expoConfig?: { extra?: Record<string, string | undefined> };
+        manifest?: { extra?: Record<string, string | undefined> };
+        manifest2?: { extra?: Record<string, string | undefined> };
+      };
     };
 
-    return constantsWithConfig.expoConfig?.extra ??
+    const expoExtra = constantsWithConfig.expoConfig?.extra ??
       constantsWithConfig.manifest?.extra ??
       constantsWithConfig.manifest2?.extra ??
+      constantsWithConfig.default?.expoConfig?.extra ??
+      constantsWithConfig.default?.manifest?.extra ??
+      constantsWithConfig.default?.manifest2?.extra ??
       {};
+
+    return expoExtra && typeof expoExtra === 'object' ? expoExtra : {};
   } catch {
     return {};
   }
@@ -68,7 +78,10 @@ export function getSupabasePublicConfig(
   source: SupabasePublicConfigSource = {}
 ): SupabasePublicEnv {
   const envSource = normalizeSupabaseConfigSource(source);
-  const processEnv = typeof process !== 'undefined' && process.env ? process.env as Record<string, string | undefined> : {};
+  const isBrowserRuntime = typeof window !== 'undefined';
+  const processEnv = !isBrowserRuntime && typeof process !== 'undefined' && process.env
+    ? process.env as Record<string, string | undefined>
+    : {};
   const expoExtra = readExpoPublicExtra();
   const merged: Record<string, string | undefined> = {
     ...processEnv,
@@ -107,7 +120,10 @@ export function buildSupabaseEnvState(
 ): SupabaseEnvState {
   const sourceConfig = normalizeSupabaseConfigSource(source);
   const resolvedConfig = getSupabasePublicConfig(source);
-  const processEnv = typeof process !== 'undefined' && process.env ? process.env as Partial<SupabasePublicEnv> : {};
+  const isBrowserRuntime = typeof window !== 'undefined';
+  const processEnv = !isBrowserRuntime && typeof process !== 'undefined' && process.env
+    ? process.env as Partial<SupabasePublicEnv>
+    : {};
 
   const url = (
     resolvedConfig.EXPO_PUBLIC_SUPABASE_URL ??
