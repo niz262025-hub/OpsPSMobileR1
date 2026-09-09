@@ -1,7 +1,11 @@
 export type PaymentStatus =
   | 'pending'
+  | 'pending_verification'
   | 'authorized'
+  | 'success'
   | 'paid'
+  | 'partial'
+  | 'pay_later'
   | 'failed'
   | 'cancelled'
   | 'refunded';
@@ -53,6 +57,7 @@ export type PaymentCreateInput = {
   provider?: PaymentProviderName;
   subscriptionId?: string;
   idempotencyKey?: string;
+  receiptUri?: string;
   metadata?: Record<string, string | number | boolean | undefined>;
 };
 
@@ -97,9 +102,13 @@ export type PaymentProviderAdapter = {
 };
 
 const VALID_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
-  pending: ['authorized', 'paid', 'failed', 'cancelled'],
+  pending: ['pending_verification', 'authorized', 'paid', 'failed', 'cancelled'],
+  pending_verification: ['paid', 'failed', 'cancelled'],
   authorized: ['paid', 'failed', 'cancelled', 'refunded'],
+  success: ['paid'],
   paid: ['refunded'],
+  partial: ['paid', 'failed', 'cancelled'],
+  pay_later: ['paid', 'failed', 'cancelled'],
   failed: [],
   cancelled: [],
   refunded: [],
@@ -147,8 +156,12 @@ export function normalizePaymentState(value?: string | null): PaymentStatus {
   const normalized = (value ?? '').trim().toLowerCase();
 
   if (normalized === 'pending') return 'pending';
+  if (normalized === 'pending_verification') return 'pending_verification';
   if (normalized === 'authorized') return 'authorized';
+  if (normalized === 'success') return 'success';
   if (normalized === 'paid') return 'paid';
+  if (normalized === 'partial') return 'partial';
+  if (normalized === 'pay_later') return 'pay_later';
   if (normalized === 'failed') return 'failed';
   if (normalized === 'cancelled') return 'cancelled';
   if (normalized === 'refunded') return 'refunded';
@@ -176,6 +189,8 @@ export function createPaymentRecord(input: PaymentCreateInput): PaymentRecord {
   const provider = input.provider ?? 'mock';
   const id = input.id ?? `pay_${Math.random().toString(36).slice(2, 10)}`;
 
+  const hasProof = typeof input.receiptUri === 'string' && input.receiptUri.trim().length > 0;
+
   return {
     id,
     orderId: input.orderId,
@@ -187,9 +202,12 @@ export function createPaymentRecord(input: PaymentCreateInput): PaymentRecord {
     provider,
     providerReference: `ref_${id}`,
     providerTransactionId: undefined,
-    status: 'pending',
+    status: hasProof ? 'pending_verification' : 'pending',
     idempotencyKey: input.idempotencyKey ?? `${input.orderId}:${id}`,
-    metadata: input.metadata ?? {},
+    metadata: {
+      ...(input.metadata ?? {}),
+      ...(hasProof ? { receiptUri: input.receiptUri } : {}),
+    },
     createdAt: now,
     updatedAt: now,
   };

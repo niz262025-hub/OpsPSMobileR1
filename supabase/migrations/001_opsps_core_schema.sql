@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS payments (
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
   payment_method TEXT NOT NULL,
-  payment_status TEXT NOT NULL DEFAULT 'pending',
+  payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'pending_verification', 'success', 'paid', 'failed', 'cancelled', 'refunded')),
   amount NUMERIC(10,2) NOT NULL DEFAULT 0,
   receipt_uri TEXT,
   verified BOOLEAN NOT NULL DEFAULT FALSE,

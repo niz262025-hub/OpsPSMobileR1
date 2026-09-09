@@ -466,6 +466,14 @@ CREATE POLICY IF NOT EXISTS "payments_member_select"
       WHERE bm.business_id = payments.business_id
         AND bm.user_id = auth.uid()
     )
+    OR EXISTS (
+      SELECT 1
+      FROM public.orders o
+      JOIN public.profiles p
+        ON p.id = o.customer_profile_id
+      WHERE o.id = payments.order_id
+        AND p.auth_user_id = auth.uid()
+    )
   );
 
 CREATE POLICY IF NOT EXISTS "payments_member_write"

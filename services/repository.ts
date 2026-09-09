@@ -156,7 +156,7 @@ export interface OrderRepository {
   listForCustomer(customerId: string): Promise<OrderRecord[]>;
 }
 
-export type PaymentRepositoryStatus = 'pending' | 'authorized' | 'paid' | 'failed' | 'cancelled' | 'refunded';
+export type PaymentRepositoryStatus = 'pending' | 'pending_verification' | 'authorized' | 'success' | 'paid' | 'partial' | 'pay_later' | 'failed' | 'cancelled' | 'refunded';
 
 export type PaymentRecordRow = {
   id: string;
@@ -174,6 +174,8 @@ export type PaymentRecordRow = {
   callback_event_id?: string;
   webhook_verified?: boolean;
   verified?: boolean;
+  receipt_uri?: string | null;
+  customer_id?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -191,6 +193,8 @@ export interface PaymentRepository {
     idempotencyKey?: string;
     callbackEventId?: string;
     webhookVerified?: boolean;
+    customerId?: string;
+    receiptUri?: string;
   }): Promise<PaymentRecordRow | null>;
   getById(paymentId: string, businessId: string): Promise<PaymentRecordRow | null>;
   getByOrder(businessId: string, orderId: string): Promise<PaymentRecordRow | null>;
@@ -201,6 +205,7 @@ export interface PaymentRepository {
     callbackEventId?: string;
     webhookVerified?: boolean;
     verified?: boolean;
+    receiptUri?: string;
     metadata?: Record<string, unknown>;
   }): Promise<PaymentRecordRow | null>;
   refund(paymentId: string, businessId: string, reason?: string): Promise<PaymentRecordRow | null>;
@@ -323,6 +328,8 @@ function mapPaymentRow(row: any): PaymentRecordRow {
     callback_event_id: row.callback_event_id ?? undefined,
     webhook_verified: Boolean(row.webhook_verified ?? false),
     verified: Boolean(row.verified ?? false),
+    receipt_uri: row.receipt_uri ?? row.receiptUri ?? null,
+    customer_id: row.customer_id ?? row.customerId ?? null,
     created_at: row.created_at ?? new Date().toISOString(),
     updated_at: row.updated_at ?? new Date().toISOString(),
   };
@@ -1474,7 +1481,7 @@ class SupabaseDataSource implements DataSource {
 
       const orderQuery = await client
         .from('orders')
-        .select('id, business_id, total, payment_status')
+        .select('id, business_id, total, payment_status, customer_id, customer_profile_id')
         .eq('id', input.orderId)
         .eq('business_id', input.businessId)
         .maybeSingle();
@@ -1483,23 +1490,29 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      const expectedAmount = Number(input.amount ?? (orderQuery.data as any).total ?? 0);
-      if (Number((orderQuery.data as any).total ?? 0) > 0 && Math.abs(expectedAmount - Number((orderQuery.data as any).total)) > 0.01) {
+      const orderData = orderQuery.data as any;
+      const expectedAmount = Number(input.amount ?? orderData.total ?? 0);
+      if (Number(orderData.total ?? 0) > 0 && Math.abs(expectedAmount - Number(orderData.total)) > 0.01) {
         return null;
       }
 
-      const key = input.idempotencyKey ?? `${input.orderId}:${input.businessId}`;
+      if (input.customerId && orderData.customer_id && orderData.customer_id !== input.customerId && orderData.customer_profile_id && orderData.customer_profile_id !== input.customerId) {
+        return null;
+      }
+
       const existing = await client.from('payments').select('*').eq('order_id', input.orderId).eq('business_id', input.businessId).maybeSingle();
       if (!existing.error && existing.data) {
         return mapPaymentRow(existing.data);
       }
 
+      const hasProof = typeof input.receiptUri === 'string' && input.receiptUri.trim().length > 0;
       const { data, error } = await client.from('payments').insert({
         business_id: input.businessId,
         order_id: input.orderId,
         payment_method: input.paymentMethod ?? 'bank',
         amount: expectedAmount,
-        payment_status: 'pending',
+        payment_status: hasProof ? 'pending_verification' : 'pending',
+        receipt_uri: input.receiptUri ?? null,
         verified: false,
       }).select('*').single();
 
@@ -1560,19 +1573,23 @@ class SupabaseDataSource implements DataSource {
       }
 
       const normalized = nextStatus.toLowerCase() as PaymentRepositoryStatus;
-      if (!['pending','authorized','paid','failed','cancelled','refunded'].includes(normalized)) {
+      if (!['pending', 'pending_verification', 'authorized', 'success', 'paid', 'partial', 'pay_later', 'failed', 'cancelled', 'refunded'].includes(normalized)) {
         throw new Error(`Invalid payment transition: ${existing.payment_status} -> ${normalized}`);
       }
 
-      if (!['pending','authorized','paid','failed','cancelled','refunded'].includes(existing.payment_status ?? 'pending')) {
+      if (!['pending', 'pending_verification', 'authorized', 'success', 'paid', 'partial', 'pay_later', 'failed', 'cancelled', 'refunded'].includes(existing.payment_status ?? 'pending')) {
         throw new Error(`Invalid payment transition: ${existing.payment_status} -> ${normalized}`);
       }
 
       const from = ((existing.payment_status ?? 'pending') as PaymentRepositoryStatus).toLowerCase() as PaymentRepositoryStatus;
       const validList: Record<PaymentRepositoryStatus, PaymentRepositoryStatus[]> = {
-        pending: ['authorized', 'paid', 'failed', 'cancelled'],
+        pending: ['pending_verification', 'authorized', 'paid', 'failed', 'cancelled'],
+        pending_verification: ['paid', 'failed', 'cancelled'],
         authorized: ['paid', 'failed', 'cancelled', 'refunded'],
+        success: ['paid'],
         paid: ['refunded'],
+        partial: ['paid', 'failed', 'cancelled'],
+        pay_later: ['paid', 'failed', 'cancelled'],
         failed: [],
         cancelled: [],
         refunded: [],
@@ -1592,9 +1609,14 @@ class SupabaseDataSource implements DataSource {
 
       const payload: Record<string, unknown> = {
         payment_status: normalized,
-        verified: overrides.verified ?? ((normalized === 'paid') || existing.verified),
+        verified: overrides.verified ?? ((normalized === 'paid' || normalized === 'success') || existing.verified),
+        verified_at: overrides.verified ? new Date().toISOString() : undefined,
         updated_at: new Date().toISOString(),
       };
+
+      if (overrides.receiptUri) {
+        payload.receipt_uri = overrides.receiptUri;
+      }
 
       const { data, error } = await client.from('payments').update(payload).eq('id', paymentId).eq('business_id', businessId).select('*').single();
       if (error || !data) {
@@ -1647,7 +1669,7 @@ class SupabaseDataSource implements DataSource {
         return [];
       }
 
-      if (payment.payment_status === 'paid') {
+      if (payment.payment_status === 'paid' || payment.payment_status === 'success') {
         const category = 'Payment Received';
         const { data: existingRows } = await client.from('finance_transactions').select('id').eq('business_id', businessId).eq('reference_id', paymentId).eq('category', category).limit(1);
         if (!existingRows || existingRows.length > 0) {
