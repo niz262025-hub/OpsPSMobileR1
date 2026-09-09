@@ -24,11 +24,64 @@ export const OPSPS_SERVER_ONLY_ENV_VARS = [
   'SUPABASE_SERVICE_ROLE_KEY',
 ] as const;
 
-type SupabasePublicEnv = Record<string, string | undefined> & {
+type SupabasePublicEnv = {
   EXPO_PUBLIC_SUPABASE_URL?: string;
   EXPO_PUBLIC_SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 };
+
+type SupabasePublicConfigSource =
+  | (Record<string, string | undefined> & Partial<SupabasePublicEnv>)
+  | { extra?: Record<string, string | undefined> };
+
+function readExpoPublicExtra(): Record<string, string | undefined> {
+  try {
+    const constantsModule = require('expo-constants');
+    const constantsWithConfig = constantsModule as {
+      expoConfig?: { extra?: Record<string, string | undefined> };
+      manifest?: { extra?: Record<string, string | undefined> };
+      manifest2?: { extra?: Record<string, string | undefined> };
+    };
+
+    return constantsWithConfig.expoConfig?.extra ??
+      constantsWithConfig.manifest?.extra ??
+      constantsWithConfig.manifest2?.extra ??
+      {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeSupabaseConfigSource(source: SupabasePublicConfigSource): Record<string, string | undefined> {
+  if (typeof source !== 'object' || source === null) {
+    return {};
+  }
+
+  if ('extra' in source && source.extra && typeof source.extra === 'object') {
+    return source.extra;
+  }
+
+  return source as Record<string, string | undefined>;
+}
+
+export function getSupabasePublicConfig(
+  source: SupabasePublicConfigSource = {}
+): SupabasePublicEnv {
+  const envSource = normalizeSupabaseConfigSource(source);
+  const processEnv = typeof process !== 'undefined' && process.env ? process.env as Record<string, string | undefined> : {};
+  const expoExtra = readExpoPublicExtra();
+  const merged: Record<string, string | undefined> = {
+    ...processEnv,
+    ...expoExtra,
+    ...envSource,
+  };
+
+  return {
+    EXPO_PUBLIC_SUPABASE_URL: merged.EXPO_PUBLIC_SUPABASE_URL ?? '',
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: merged.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    SUPABASE_SERVICE_ROLE_KEY: merged.SUPABASE_SERVICE_ROLE_KEY ?? '',
+  };
+}
 
 export type SupabaseEnvState = {
   configured: boolean;
@@ -50,24 +103,28 @@ function isSupabaseUrl(value: string): boolean {
 }
 
 export function buildSupabaseEnvState(
-  source: SupabasePublicEnv = typeof process !== 'undefined' && process.env ? process.env as SupabasePublicEnv : {}
+  source: SupabasePublicConfigSource = getSupabasePublicConfig()
 ): SupabaseEnvState {
-  const processEnv = typeof process !== 'undefined' && process.env ? process.env as SupabasePublicEnv : {};
+  const sourceConfig = normalizeSupabaseConfigSource(source);
+  const resolvedConfig = getSupabasePublicConfig(source);
+  const processEnv = typeof process !== 'undefined' && process.env ? process.env as Partial<SupabasePublicEnv> : {};
 
   const url = (
-    source.EXPO_PUBLIC_SUPABASE_URL ??
+    resolvedConfig.EXPO_PUBLIC_SUPABASE_URL ??
+    sourceConfig.EXPO_PUBLIC_SUPABASE_URL ??
     processEnv.EXPO_PUBLIC_SUPABASE_URL ??
     ''
   ).trim();
 
   const anonKey = (
-    source.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+    resolvedConfig.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+    sourceConfig.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
     processEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
     ''
   ).trim();
 
   const missing = OPSPS_REQUIRED_ENV_VARS.filter((name) => {
-    const value = source[name] ?? processEnv[name] ?? '';
+    const value = resolvedConfig[name] ?? sourceConfig[name] ?? processEnv[name] ?? '';
     return !value.trim();
   });
 
@@ -87,7 +144,7 @@ export function buildSupabaseEnvState(
     configured,
     url,
     anonKey,
-    hasServerOnlyServiceRoleKey: Boolean((source.SUPABASE_SERVICE_ROLE_KEY ?? processEnv.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()),
+    hasServerOnlyServiceRoleKey: Boolean((resolvedConfig.SUPABASE_SERVICE_ROLE_KEY ?? sourceConfig.SUPABASE_SERVICE_ROLE_KEY ?? processEnv.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()),
     missing,
     invalid,
     mode: configured ? 'configured' : 'mock',

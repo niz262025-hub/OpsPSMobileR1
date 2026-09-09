@@ -1,13 +1,14 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { buildSupabaseEnvState } from './supabaseSchema';
+import {
+  buildSupabaseEnvState,
+  getSupabasePublicConfig,
+} from './supabaseSchema';
 
 let client: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient | null {
-  const env = buildSupabaseEnvState(
-    typeof process !== 'undefined' && process.env ? process.env : {}
-  );
+  const env = buildSupabaseEnvState(getSupabasePublicConfig());
 
   if (!env.configured) {
     return null;
@@ -27,9 +28,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 }
 
 export function getSupabaseStatus() {
-  return buildSupabaseEnvState(
-    typeof process !== 'undefined' && process.env ? process.env : {}
-  );
+  return buildSupabaseEnvState(getSupabasePublicConfig());
 }
 
 export type SupabaseConnectionDiagnostics = {

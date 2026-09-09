@@ -10,6 +10,7 @@ import {
   OPSPS_REQUIRED_ENV_VARS,
   OPSPS_REQUIRED_TABLES,
   buildSupabaseEnvState,
+  getSupabasePublicConfig,
 } from '../services/supabaseSchema';
 import { diagnoseSupabaseConnection } from '../services/supabaseClient';
 import { getDataSource } from '../services/repository';
@@ -92,6 +93,22 @@ describe('backend foundation contracts', () => {
     expect(status.missing).toEqual([]);
     expect(status.invalid).toEqual([]);
     expect(status.hasServerOnlyServiceRoleKey).toBe(false);
+  });
+
+  it('reads public Supabase settings from Expo app config when browser process.env is empty', () => {
+    const config = getSupabasePublicConfig({
+      extra: {
+        EXPO_PUBLIC_SUPABASE_URL: 'https://expo-config.supabase.co',
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: 'expo-config-key-with-enough-length',
+      },
+    });
+
+    expect(config.EXPO_PUBLIC_SUPABASE_URL).toBe('https://expo-config.supabase.co');
+    expect(config.EXPO_PUBLIC_SUPABASE_ANON_KEY).toBe('expo-config-key-with-enough-length');
+
+    const status = buildSupabaseEnvState(config);
+    expect(status.configured).toBe(true);
+    expect(status.mode).toBe('configured');
   });
 
   it('rejects malformed public configuration without making a network call', async () => {
