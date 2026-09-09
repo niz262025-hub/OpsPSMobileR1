@@ -24,6 +24,12 @@ export const OPSPS_SERVER_ONLY_ENV_VARS = [
   'SUPABASE_SERVICE_ROLE_KEY',
 ] as const;
 
+type SupabasePublicEnv = Record<string, string | undefined> & {
+  EXPO_PUBLIC_SUPABASE_URL?: string;
+  EXPO_PUBLIC_SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+};
+
 export type SupabaseEnvState = {
   configured: boolean;
   url: string;
@@ -44,14 +50,27 @@ function isSupabaseUrl(value: string): boolean {
 }
 
 export function buildSupabaseEnvState(
-  source: Record<string, string | undefined> = typeof process !== 'undefined' && process.env ? process.env : {}
+  source: SupabasePublicEnv = typeof process !== 'undefined' && process.env ? process.env as SupabasePublicEnv : {}
 ): SupabaseEnvState {
-  const url = (source.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
-  const anonKey = (source.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+  const processEnv = typeof process !== 'undefined' && process.env ? process.env as SupabasePublicEnv : {};
+
+  const url = (
+    source.EXPO_PUBLIC_SUPABASE_URL ??
+    processEnv.EXPO_PUBLIC_SUPABASE_URL ??
+    ''
+  ).trim();
+
+  const anonKey = (
+    source.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+    processEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+    ''
+  ).trim();
+
   const missing = OPSPS_REQUIRED_ENV_VARS.filter((name) => {
-    const value = source[name] ?? '';
+    const value = source[name] ?? processEnv[name] ?? '';
     return !value.trim();
   });
+
   const invalid: string[] = [];
 
   if (url && !isSupabaseUrl(url)) {
@@ -68,7 +87,7 @@ export function buildSupabaseEnvState(
     configured,
     url,
     anonKey,
-    hasServerOnlyServiceRoleKey: Boolean((source.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()),
+    hasServerOnlyServiceRoleKey: Boolean((source.SUPABASE_SERVICE_ROLE_KEY ?? processEnv.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()),
     missing,
     invalid,
     mode: configured ? 'configured' : 'mock',
