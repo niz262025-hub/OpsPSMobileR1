@@ -3,6 +3,10 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  classifySupabaseSignupError,
+  type SupabaseSignupErrorCategory,
+} from '../context/AuthContext';
+import {
   OPSPS_REQUIRED_ENV_VARS,
   OPSPS_REQUIRED_TABLES,
   buildSupabaseEnvState,
@@ -120,6 +124,23 @@ describe('backend foundation contracts', () => {
       auth: 'verified',
       databaseRead: 'verified',
     });
+  });
+
+  it('classifies duplicate email errors separately from rate limit errors', () => {
+    const duplicate = classifySupabaseSignupError({ status: 400, message: 'User already registered' });
+    const rateLimit = classifySupabaseSignupError({ status: 429, error_code: 'over_email_send_rate_limit', msg: 'email rate limit exceeded' });
+
+    expect(duplicate.kind).toBe('duplicate');
+    expect(duplicate.message).toContain('already exists');
+    expect(rateLimit.kind).toBe('rate_limit');
+    expect(rateLimit.message).toContain('temporarily unavailable');
+  });
+
+  it('uses a generic safe message for other Supabase auth failures', () => {
+    const generic = classifySupabaseSignupError({ status: 500, message: 'Unexpected server error' });
+
+    expect(generic.kind).toBe('auth_error');
+    expect(generic.message).toContain('try again');
   });
 
   it('fails closed in production when Supabase is not configured', () => {

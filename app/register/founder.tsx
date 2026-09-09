@@ -12,7 +12,13 @@ export default function FounderRegistrationScreen() {
   const submit = async () => {
     if (Object.values(form).some((value) => !value.trim())) return setError('Please complete all Founder and business fields.');
     if (form.password !== form.confirmPassword) return setError('Passwords do not match.');
-    if (!await register({ ...form, role: 'founder' })) return setError('An account with this email already exists.');
+
+    const result = await register({ ...form, role: 'founder' });
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
     router.replace('/register/success?role=founder');
   };
   return (

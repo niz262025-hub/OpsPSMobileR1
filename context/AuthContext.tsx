@@ -25,10 +25,19 @@ export type AuthAccount = {
   businessId?: string;
 };
 
+export type SupabaseSignupErrorCategory = 'duplicate' | 'rate_limit' | 'auth_error';
+
+export type AuthRegistrationResult = {
+  ok: boolean;
+  kind?: SupabaseSignupErrorCategory;
+  message: string;
+  statusCode?: number;
+};
+
 type AuthContextValue = {
   accounts: AuthAccount[];
   ready: boolean;
-  register: (account: AuthAccount) => Promise<boolean>;
+  register: (account: AuthAccount) => Promise<AuthRegistrationResult>;
   login: (
     email: string,
     password: string,
@@ -92,6 +101,64 @@ function syncBrowserAccounts(accounts: AuthAccount[]) {
   } catch {
     // Ignore browser storage write failures in restricted contexts.
   }
+}
+
+export function classifySupabaseSignupError(
+  error: {
+    status?: number | string;
+    code?: string | number;
+    error_code?: string;
+    message?: string;
+    msg?: string;
+  } | null | undefined
+): AuthRegistrationResult {
+  const statusValue = error?.status ?? error?.code ?? 0;
+  const status = Number(statusValue) || 0;
+  const errorCode = String(error?.error_code ?? error?.code ?? '').toLowerCase();
+  const messageText = String(error?.message ?? error?.msg ?? '').toLowerCase();
+
+  if (
+    status === 429 ||
+    errorCode.includes('over_email_send_rate_limit') ||
+    messageText.includes('rate limit exceeded') ||
+    messageText.includes('email rate limit')
+  ) {
+    return {
+      ok: false,
+      kind: 'rate_limit',
+      message: 'Registration temporarily unavailable because email sending is temporarily rate-limited. Please try again later.',
+      statusCode: status || 429,
+    };
+  }
+
+  const duplicateSignals = [
+    'already registered',
+    'already exists',
+    'user already exists',
+    'email already in use',
+    'duplicate',
+    'user_already_exists',
+    'email_exists',
+  ];
+
+  if (
+    duplicateSignals.some((signal) => messageText.includes(signal) || errorCode.includes(signal)) ||
+    (status === 400 && messageText.includes('already'))
+  ) {
+    return {
+      ok: false,
+      kind: 'duplicate',
+      message: 'An account with this email already exists.',
+      statusCode: status || 400,
+    };
+  }
+
+  return {
+    ok: false,
+    kind: 'auth_error',
+    message: 'Registration failed. Please check your details and try again in a moment.',
+    statusCode: status || 0,
+  };
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(
@@ -359,10 +426,14 @@ export function AuthProvider({
    */
   const register = async (
     account: AuthAccount
-  ): Promise<boolean> => {
+  ): Promise<AuthRegistrationResult> => {
     const client = getSupabaseClient();
     if (!client && process.env.NODE_ENV === 'production') {
-      return false;
+      return {
+        ok: false,
+        kind: 'auth_error',
+        message: 'Registration is temporarily unavailable. Please try again later.',
+      };
     }
 
     if (client) {
@@ -378,7 +449,7 @@ export function AuthProvider({
       });
 
       if (error || !data.user) {
-        return false;
+        return classifySupabaseSignupError(error ?? { status: 0, message: 'Unable to create account.' });
       }
 
       const { error: profileError } = await client.from('profiles').upsert({
@@ -392,7 +463,7 @@ export function AuthProvider({
       }, { onConflict: 'auth_user_id' });
 
       if (profileError) {
-        return false;
+        return classifySupabaseSignupError(profileError ?? { status: 0, message: 'Unable to create profile.' });
       }
 
       const normalizedAccount = normalizeAccount(account);
@@ -403,7 +474,7 @@ export function AuthProvider({
         SESSION_KEY,
         JSON.stringify(sanitizePersistedAccount(normalizedAccount))
       );
-      return true;
+      return { ok: true, message: 'Registration successful.' };
     }
 
     const normalizedAccount =
@@ -417,7 +488,11 @@ export function AuthProvider({
     );
 
     if (emailExists) {
-      return false;
+      return {
+        ok: false,
+        kind: 'duplicate',
+        message: 'An account with this email already exists.',
+      };
     }
 
     const nextAccounts = [
@@ -433,7 +508,7 @@ export function AuthProvider({
       JSON.stringify(nextAccounts.map((account) => sanitizePersistedAccount(account)))
     );
 
-    return true;
+    return { ok: true, message: 'Registration successful.' };
   };
 
   /**

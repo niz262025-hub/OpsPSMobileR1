@@ -380,7 +380,7 @@ async function customerLogin(page) {
     let productLink = '';
     await logStep(page, '9: Product link generated', async () => {
       const linkText = await page.locator('body').innerText();
-      const match = linkText.match(new RegExp(`http:\/\\/localhost:${BASE_URL.match(/:(\d+)$/)?.[1] || '41787'}\\/product\\/[A-Za-z0-9-]+\\?businessId=[^\\s]+`));
+      const match = linkText.match(new RegExp(`http://localhost:${BASE_URL.match(/:(\d+)$/)?.[1] || '41787'}/product/[A-Za-z0-9-]+\\?businessId=[^\\s]+`));
       if (!match) {
         throw new Error('No generated product link found in page text.');
       }
