@@ -7,6 +7,7 @@ import {
   isValidShipmentTransition,
   reconcileFinanceForShipment,
 } from '../services/shipping';
+import * as dbModule from '../services/mockDatabase';
 
 const input = {
   orderId: 'order-1',
@@ -92,5 +93,173 @@ describe('shipping provider architecture', () => {
 
     expect(provider.name).toBe('mock');
     expect(shipment.orderId).toBe('order-1');
+  });
+
+  it('requires a paid order before packing and shipping can proceed', async () => {
+    const db = dbModule;
+    const sourceBusinessId = 'shipping-audit-paid-gating';
+    db.setActiveBusinessScope(sourceBusinessId);
+
+    const product = db.createProduct({
+      name: 'Shipping Audit Tee',
+      category: 'Clothing',
+      image: 'https://example.com/shipping-audit.png',
+      tripId: 'trip-1',
+      costPrice: 20,
+      sellingPrice: 45,
+      size: 'M',
+      stock: 10,
+      businessId: sourceBusinessId,
+    });
+
+    const order = db.submitCustomerOrder({
+      productId: product.id,
+      productVariantId: product.id,
+      quantity: 1,
+      customerName: 'Shipping Audit Customer',
+      customerPhone: '0123456781',
+      deliveryAddress: '9 Audit Avenue',
+      businessId: sourceBusinessId,
+    });
+
+    expect(db.startPacking(order!.id)).toBe(false);
+    expect(db.createOrderShipment(order!.id, {
+      courier: 'J&T Express',
+      recipientName: order!.customerName,
+      recipientPhone: order!.customerPhone ?? '',
+      deliveryAddress: order!.deliveryAddress ?? '',
+      postcode: '50000',
+      city: 'Kuala Lumpur',
+      parcelWeight: 1,
+      quantity: 1,
+      shippingCost: 10,
+    })).toBeNull();
+
+    db.completeCustomerPayment(order!.id, 'Bank Transfer');
+    expect(db.startPacking(order!.id)).toBe(true);
+
+    const shipped = db.submitEasyParcelShipment(order!.id, {
+      courier: 'J&T Express',
+      recipientName: order!.customerName,
+      recipientPhone: order!.customerPhone ?? '',
+      deliveryAddress: order!.deliveryAddress ?? '',
+      postcode: '50000',
+      city: 'Kuala Lumpur',
+      parcelWeight: 1,
+      quantity: 1,
+      shippingCost: 10,
+    });
+
+    expect(shipped).not.toBeNull();
+    expect(db.getOrder(order!.id, db.getMockDatabaseSnapshot(), sourceBusinessId)?.status).toBe('shipped');
+  });
+
+  it('keeps shipment creation idempotent for the same order within its business scope', async () => {
+    const db = dbModule;
+    const businessA = 'shipping-scope-a';
+    db.setActiveBusinessScope(businessA);
+
+    const product = db.createProduct({
+      name: 'Scope Guard Tee',
+      category: 'Clothing',
+      image: 'https://example.com/scope-guard.png',
+      tripId: 'trip-1',
+      costPrice: 18,
+      sellingPrice: 40,
+      size: 'L',
+      stock: 9,
+      businessId: businessA,
+    });
+
+    const order = db.submitCustomerOrder({
+      productId: product.id,
+      productVariantId: product.id,
+      quantity: 1,
+      customerName: 'Scope Guard Customer',
+      customerPhone: '0123456782',
+      deliveryAddress: '20 Guard Lane',
+      businessId: businessA,
+    });
+
+    db.completeCustomerPayment(order!.id, 'Bank Transfer');
+    db.startPacking(order!.id);
+
+    const first = db.createOrderShipment(order!.id, {
+      courier: 'J&T Express',
+      recipientName: order!.customerName,
+      recipientPhone: order!.customerPhone ?? '',
+      deliveryAddress: order!.deliveryAddress ?? '',
+      postcode: '50000',
+      city: 'Kuala Lumpur',
+      parcelWeight: 1,
+      quantity: 1,
+      shippingCost: 10,
+    });
+    const second = db.createOrderShipment(order!.id, {
+      courier: 'J&T Express',
+      recipientName: order!.customerName,
+      recipientPhone: order!.customerPhone ?? '',
+      deliveryAddress: order!.deliveryAddress ?? '',
+      postcode: '50000',
+      city: 'Kuala Lumpur',
+      parcelWeight: 1,
+      quantity: 1,
+      shippingCost: 10,
+    });
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(second?.trackingNumber).toBe(first?.trackingNumber);
+    expect(second?.shipmentId).toBe(first?.shipmentId);
+  });
+
+  it('accepts the shipped lifecycle step in the correct business scope', async () => {
+    const db = dbModule;
+
+    expect(isValidShipmentTransition('created', 'shipped')).toBe(true);
+
+    const businessId = 'shipping-scope-b-source';
+    db.setActiveBusinessScope(businessId);
+
+    const product = db.createProduct({
+      name: 'Shipping Scope Guard L',
+      category: 'Clothing',
+      image: 'https://example.com/shipping-scope-guard.png',
+      tripId: 'trip-1',
+      costPrice: 22,
+      sellingPrice: 55,
+      size: 'L',
+      stock: 8,
+      businessId,
+    });
+
+    const order = db.submitCustomerOrder({
+      productId: product.id,
+      productVariantId: product.id,
+      quantity: 1,
+      customerName: 'Correct Business Shipping',
+      customerPhone: '0123456788',
+      deliveryAddress: '21 Scope Avenue',
+      businessId,
+    });
+
+    db.completeCustomerPayment(order!.id, 'Bank Transfer');
+    db.startPacking(order!.id);
+
+    const shipment = db.createOrderShipment(order!.id, {
+      courier: 'J&T Express',
+      recipientName: order!.customerName,
+      recipientPhone: order!.customerPhone ?? '',
+      deliveryAddress: order!.deliveryAddress ?? '',
+      postcode: '50000',
+      city: 'Kuala Lumpur',
+      parcelWeight: 1,
+      quantity: 1,
+      shippingCost: 10,
+    });
+
+    expect(shipment).not.toBeNull();
+    expect(shipment?.status).toBe('created');
+    expect(db.getOrder(order!.id, db.getMockDatabaseSnapshot(), businessId)?.shipment?.trackingNumber).toMatch(/^MOCK-EP-/);
   });
 });

@@ -4,6 +4,7 @@ export type ShipmentStatus =
   | 'pending'
   | 'created'
   | 'picked_up'
+  | 'shipped'
   | 'in_transit'
   | 'out_for_delivery'
   | 'delivered'
@@ -102,8 +103,9 @@ export type ShipmentWebhookResult = {
 
 const VALID_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   pending: ['created', 'failed', 'cancelled'],
-  created: ['picked_up', 'in_transit', 'delivered', 'failed', 'cancelled'],
-  picked_up: ['in_transit', 'out_for_delivery', 'failed'],
+  created: ['picked_up', 'shipped', 'in_transit', 'delivered', 'failed', 'cancelled'],
+  picked_up: ['shipped', 'in_transit', 'out_for_delivery', 'failed'],
+  shipped: ['in_transit', 'out_for_delivery', 'delivered', 'failed'],
   in_transit: ['out_for_delivery', 'delivered', 'failed'],
   out_for_delivery: ['delivered', 'failed'],
   delivered: [],
@@ -126,6 +128,7 @@ function normalizeStatus(value: string | ShipmentStatus): ShipmentStatus {
   if (normalized === 'pending') return 'pending';
   if (normalized === 'created' || normalized === 'booked') return 'created';
   if (normalized === 'picked_up' || normalized === 'pickedup') return 'picked_up';
+  if (normalized === 'shipped') return 'shipped';
   if (normalized === 'in_transit' || normalized === 'transit') return 'in_transit';
   if (normalized === 'out_for_delivery' || normalized === 'outfordelivery') return 'out_for_delivery';
   if (normalized === 'delivered') return 'delivered';

@@ -414,6 +414,15 @@ function ensureOrderBusinessScope(orderId: string, fallbackBusinessId?: string |
   return null;
 }
 
+function isOrderInBusinessScope(order: { businessId?: string | null } | null | undefined, businessId?: string | null) {
+  const targetBusinessId = (businessId ?? activeBusinessId ?? '').trim();
+  const orderBusinessId = (order?.businessId ?? '').trim();
+  if (!targetBusinessId || !orderBusinessId) {
+    return true;
+  }
+  return orderBusinessId === targetBusinessId;
+}
+
 function ensureBusinessScopeForMutation(businessId?: string | null) {
   const targetBusinessId = (businessId ?? resolveCurrentBusinessId() ?? '').trim();
   if (!targetBusinessId) {
@@ -1964,6 +1973,14 @@ export function startPacking(orderId: string) {
   if (targetBusinessId) {
     ensureBusinessScopeForMutation(targetBusinessId);
   }
+  if (!isOrderInBusinessScope(order, targetBusinessId)) {
+    return false;
+  }
+
+  const paymentApproved = order.paymentStatus === 'success' || order.paymentStatus === 'paid' || order.status === 'payment_received' || order.requestStatus === 'PAYMENT_RECEIVED';
+  if (!paymentApproved || order.status === 'packing' || order.status === 'shipped' || order.status === 'delivered') {
+    return false;
+  }
 
   state.orders = state.orders.map((entry) => entry.id === orderId ? {
     ...entry,
@@ -1989,6 +2006,14 @@ export function markOrderPacked(orderId: string) {
   const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
   if (targetBusinessId) {
     ensureBusinessScopeForMutation(targetBusinessId);
+  }
+  if (!isOrderInBusinessScope(order, targetBusinessId)) {
+    return false;
+  }
+
+  const paymentApproved = order.paymentStatus === 'success' || order.paymentStatus === 'paid' || order.status === 'payment_received' || order.requestStatus === 'PAYMENT_RECEIVED';
+  if (!paymentApproved || order.status !== 'packing') {
+    return false;
   }
 
   const items = state.orderItems.filter((item) => item.orderId === orderId);
@@ -2020,9 +2045,24 @@ export function createOrderShipment(orderId: string, input: {
   parcelType?: string;
   shippingCost?: number;
 }) {
-  const order = state.orders.find((entry) => entry.id === orderId);
+  const order = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
   if (!order) {
     return null;
+  }
+
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
+  const paymentApproved = order.paymentStatus === 'success' || order.paymentStatus === 'paid' || order.status === 'payment_received' || order.requestStatus === 'PAYMENT_RECEIVED';
+  if (!paymentApproved || (order.status !== 'packing' && order.status !== 'ready')) {
+    return null;
+  }
+
+  if (order.shipment && ['created', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(order.shipment.status)) {
+    return order.shipment;
   }
 
   const courier = input.courier || order.shipment?.courier || state.shippingSettings.defaultCourier || 'J&T';
@@ -2056,7 +2096,10 @@ export function createOrderShipment(orderId: string, input: {
     status: entry.status === 'delivered' ? 'delivered' : 'packing',
     requestStatus: 'PACKING',
   } : entry);
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return shipment;
 }
 
@@ -2073,9 +2116,24 @@ export function submitEasyParcelShipment(orderId: string, input: {
   parcelType?: string;
   shippingCost?: number;
 }) {
-  const order = state.orders.find((entry) => entry.id === orderId);
+  const order = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
   if (!order) {
     return null;
+  }
+
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+
+  const paymentApproved = order.paymentStatus === 'success' || order.paymentStatus === 'paid' || order.status === 'payment_received' || order.requestStatus === 'PAYMENT_RECEIVED';
+  if (!paymentApproved || (order.status !== 'packing' && order.status !== 'ready')) {
+    return null;
+  }
+
+  if (order.shipment && ['shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(order.shipment.status)) {
+    return order.shipment;
   }
 
   const courier = input.courier || order.shipment?.courier || state.shippingSettings.defaultCourier || 'J&T';
@@ -2106,7 +2164,10 @@ export function submitEasyParcelShipment(orderId: string, input: {
     status: 'shipped',
     requestStatus: 'SHIPPED',
   } : entry);
-  emit();
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return state.orders.find((entry) => entry.id === orderId)?.shipment ?? null;
 }
 
@@ -2137,32 +2198,55 @@ export function createMockShipment(orderId: string, courier: string) {
 }
 
 export function markOrderShipped(orderId: string, courier: string) {
-  state.orders = state.orders.map((order) => order.id === orderId ? {
-    ...order,
+  const order = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
+  if (!order) {
+    return false;
+  }
+
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+  if (!isOrderInBusinessScope(order, targetBusinessId)) {
+    return false;
+  }
+
+  const paymentApproved = order.paymentStatus === 'success' || order.paymentStatus === 'paid' || order.status === 'payment_received' || order.requestStatus === 'PAYMENT_RECEIVED';
+  if (!paymentApproved || !order.shipment || order.status === 'delivered') {
+    return false;
+  }
+
+  state.orders = state.orders.map((entry) => entry.id === orderId ? {
+    ...entry,
     shippedAt: new Date().toISOString(),
     shipment: {
-      ...order.shipment,
-      orderId: order.id,
+      ...entry.shipment,
+      orderId: entry.id,
       courier,
-      shipmentId: order.shipment?.shipmentId ?? `mock-shipment-${order.id}`,
-      trackingNumber: order.shipment?.trackingNumber ?? createId('MOCK'),
+      shipmentId: entry.shipment?.shipmentId ?? `mock-shipment-${entry.id}`,
+      trackingNumber: entry.shipment?.trackingNumber ?? createId('MOCK'),
       status: 'shipped',
       shippingStatus: 'shipped',
-      recipientName: order.shipment?.recipientName ?? order.customerName,
-      recipientPhone: order.shipment?.recipientPhone ?? order.customerPhone ?? '',
-      deliveryAddress: order.shipment?.deliveryAddress ?? order.deliveryAddress ?? '',
-      createdAt: order.shipment?.createdAt ?? new Date().toISOString(),
+      recipientName: entry.shipment?.recipientName ?? entry.customerName,
+      recipientPhone: entry.shipment?.recipientPhone ?? entry.customerPhone ?? '',
+      deliveryAddress: entry.shipment?.deliveryAddress ?? entry.deliveryAddress ?? '',
+      createdAt: entry.shipment?.createdAt ?? new Date().toISOString(),
     },
     status: 'shipped',
     requestStatus: 'SHIPPED',
-  } : order);
-  emit();
+  } : entry);
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return true;
 }
 
 export function syncShipmentStatus(orderId: string): CourierStatus | null {
-  const order = state.orders.find((entry) => entry.id === orderId);
-  if (!order?.shipment) return null;
+  const order = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
+  if (!order?.shipment || order.status === 'delivered') return null;
   const progression: CourierStatus[] = ['created', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'];
   const currentIndex = progression.indexOf(order.shipment.status);
   const nextStatus = progression[Math.min(currentIndex + 1, progression.length - 1)];
@@ -2172,14 +2256,36 @@ export function syncShipmentStatus(orderId: string): CourierStatus | null {
 }
 
 export function markOrderDeliveredFromCourier(orderId: string) {
-  state.orders = state.orders.map((order) => order.id === orderId ? {
-    ...order,
+  const order = state.orders.find((entry) => entry.id === orderId)
+    ?? [...businessSnapshots.values()].flatMap((entry) => entry.orders).find((entry) => entry.id === orderId);
+  if (!order) {
+    return false;
+  }
+
+  const targetBusinessId = resolveOrderBusinessId(orderId, activeBusinessId) ?? activeBusinessId ?? '';
+  if (targetBusinessId) {
+    ensureBusinessScopeForMutation(targetBusinessId);
+  }
+  if (!isOrderInBusinessScope(order, targetBusinessId)) {
+    return false;
+  }
+
+  const paymentApproved = order.paymentStatus === 'success' || order.paymentStatus === 'paid' || order.status === 'payment_received' || order.requestStatus === 'PAYMENT_RECEIVED';
+  if (!paymentApproved || order.status !== 'shipped') {
+    return false;
+  }
+
+  state.orders = state.orders.map((entry) => entry.id === orderId ? {
+    ...entry,
     deliveredAt: new Date().toISOString(),
-    shipment: order.shipment ? { ...order.shipment, status: 'delivered' } : undefined,
+    shipment: entry.shipment ? { ...entry.shipment, status: 'delivered' } : undefined,
     status: 'delivered',
     requestStatus: 'DELIVERED',
-  } : order);
-  emit();
+  } : entry);
+  if (targetBusinessId) {
+    markBusinessMutation(targetBusinessId);
+  }
+  emit(targetBusinessId || null);
   return true;
 }
 
