@@ -99,6 +99,90 @@ describe('backend foundation contracts', () => {
     expect(combinedSql.includes("CHECK (seller_verification_status IN ('PENDING', 'APPROVED', 'REJECTED'))")).toBe(true);
   });
 
+  it('requires delete authorization for every business-scoped table and blocks cross-business tenant escape', () => {
+    const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
+    const migrationFiles = [
+      '001_opsps_core_schema.sql',
+      '002_opsps_auth_membership_rls.sql',
+      '003_opsps_auth_membership_rls.sql',
+      '009_opsps_founder_bootstrap_clean_fix_v2.sql',
+      '011_opsps_payment_update_rls_strict.sql',
+      '012_opsps_seller_verification.sql',
+      '013_opsps_delete_rls_hardening.sql',
+    ];
+    const combinedSql = migrationFiles
+      .map((fileName) => join(migrationsDir, fileName))
+      .filter((filePath) => existsSync(filePath))
+      .map((filePath) => readFileSync(filePath, 'utf8'))
+      .join('\n');
+
+    for (const policyName of [
+      'businesses_member_delete',
+      'profiles_member_delete',
+      'memberships_member_delete',
+      'trips_member_delete',
+      'products_member_delete',
+      'product_variants_member_delete',
+      'orders_member_delete',
+      'order_items_member_delete',
+      'payments_member_delete',
+      'shipments_member_delete',
+      'inventory_member_delete',
+      'finance_member_delete',
+      'subscriptions_member_delete',
+      'admin_users_member_delete',
+    ]) {
+      expect(combinedSql.includes(policyName)).toBe(true);
+    }
+
+    expect(combinedSql.includes("bm.role = 'founder'") || combinedSql.includes("bm.role IN ('founder', 'admin')")).toBe(true);
+    expect(combinedSql.includes('bm.business_id = orders.business_id')).toBe(true);
+    expect(combinedSql.includes('bm.business_id = payments.business_id')).toBe(true);
+    expect(combinedSql.includes('bm.business_id = finance_transactions.business_id')).toBe(true);
+    expect(combinedSql.includes('bm.business_id = shipments.business_id')).toBe(true);
+  });
+
+  it('locks self-escalation and cross-business tenant drift out of update policies', () => {
+    const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
+    const migrationFiles = [
+      '003_opsps_auth_membership_rls.sql',
+      '009_opsps_founder_bootstrap_clean_fix_v2.sql',
+      '011_opsps_payment_update_rls_strict.sql',
+      '014_opsps_update_rls_and_grants_hardening.sql',
+    ];
+    const combinedSql = migrationFiles
+      .map((fileName) => join(migrationsDir, fileName))
+      .filter((filePath) => existsSync(filePath))
+      .map((filePath) => readFileSync(filePath, 'utf8'))
+      .join('\n');
+
+    expect(combinedSql.includes("role IN ('customer', 'support')")).toBe(true);
+    expect(combinedSql.includes('SELECT existing.business_id')).toBe(true);
+    expect(combinedSql.includes('FROM public.orders existing')).toBe(true);
+    expect(combinedSql.includes('AND product_id = (')).toBe(true);
+    expect(combinedSql.includes('AND trip_id = (')).toBe(true);
+    expect(combinedSql.includes('FROM public.product_variants existing')).toBe(true);
+    expect(combinedSql.includes('public.user_is_business_founder(business_id, auth.uid())')).toBe(true);
+  });
+
+  it('removes unnecessary client privileges while preserving authenticated access', () => {
+    const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
+    const migrationFiles = ['014_opsps_update_rls_and_grants_hardening.sql'];
+    const combinedSql = migrationFiles
+      .map((fileName) => join(migrationsDir, fileName))
+      .filter((filePath) => existsSync(filePath))
+      .map((filePath) => readFileSync(filePath, 'utf8'))
+      .join('\n');
+
+    expect(combinedSql.includes('REVOKE TRUNCATE, TRIGGER, REFERENCES ON ALL TABLES IN SCHEMA public FROM anon, authenticated')).toBe(true);
+    expect(combinedSql.includes('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLES FROM anon, authenticated')).toBe(true);
+    expect(combinedSql.includes('GRANT SELECT ON TABLE public.products TO anon')).toBe(true);
+    expect(combinedSql.includes('GRANT SELECT ON TABLE public.product_variants TO anon')).toBe(true);
+    expect(combinedSql.includes('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.orders TO authenticated')).toBe(true);
+    expect(combinedSql.includes('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.business_memberships TO authenticated')).toBe(true);
+    expect(combinedSql.includes('REVOKE ALL ON TABLE public.orders FROM service_role')).toBe(false);
+  });
+
   it('switches to configured when the required Supabase variables are supplied', () => {
     process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'anon-key-with-enough-length';
