@@ -24,7 +24,11 @@ CREATE POLICY "memberships_update_self_or_founder"
     AND (
       (
         user_id = auth.uid()
-        AND role IN ('customer', 'support')
+        AND role = (
+          SELECT existing.role
+          FROM public.business_memberships existing
+          WHERE existing.id = business_memberships.id
+        )
       )
       OR (
         public.user_is_business_admin(business_id, auth.uid())
@@ -61,12 +65,16 @@ CREATE POLICY "profiles_update_self_or_business_leader"
     AND (
       (
         auth.uid() = auth_user_id
-        AND role IN ('customer', 'support')
+        AND role = (
+          SELECT existing.role
+          FROM public.profiles existing
+          WHERE existing.id = profiles.id
+        )
       )
       OR (
         public.user_is_business_admin(business_id, auth.uid())
         AND (
-          role IN ('customer', 'support', 'admin')
+          role IN ('customer', 'admin')
           OR (
             role = 'founder'
             AND public.user_is_business_founder(business_id, auth.uid())
@@ -270,8 +278,6 @@ REVOKE TRUNCATE, TRIGGER, REFERENCES ON ALL TABLES IN SCHEMA public FROM anon, a
 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO anon;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
 
 GRANT SELECT ON TABLE public.products TO anon;
 GRANT SELECT ON TABLE public.product_variants TO anon;

@@ -156,7 +156,8 @@ describe('backend foundation contracts', () => {
       .map((filePath) => readFileSync(filePath, 'utf8'))
       .join('\n');
 
-    expect(combinedSql.includes("role IN ('customer', 'support')")).toBe(true);
+    expect(combinedSql.includes("role = (\n          SELECT existing.role")).toBe(true);
+    expect(combinedSql.includes("role IN ('customer', 'support', 'admin')")).toBe(true);
     expect(combinedSql.includes('SELECT existing.business_id')).toBe(true);
     expect(combinedSql.includes('FROM public.orders existing')).toBe(true);
     expect(combinedSql.includes('AND product_id = (')).toBe(true);
@@ -165,7 +166,7 @@ describe('backend foundation contracts', () => {
     expect(combinedSql.includes('public.user_is_business_founder(business_id, auth.uid())')).toBe(true);
   });
 
-  it('removes unnecessary client privileges while preserving authenticated access', () => {
+  it('keeps default anon/authenticated table privileges empty while preserving explicit grant access', () => {
     const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
     const migrationFiles = ['014_opsps_update_rls_and_grants_hardening.sql'];
     const combinedSql = migrationFiles
@@ -174,12 +175,14 @@ describe('backend foundation contracts', () => {
       .map((filePath) => readFileSync(filePath, 'utf8'))
       .join('\n');
 
+    expect(combinedSql.includes('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO anon')).toBe(false);
+    expect(combinedSql.includes('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated')).toBe(false);
     expect(combinedSql.includes('REVOKE TRUNCATE, TRIGGER, REFERENCES ON ALL TABLES IN SCHEMA public FROM anon, authenticated')).toBe(true);
-    expect(combinedSql.includes('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLES FROM anon, authenticated')).toBe(true);
     expect(combinedSql.includes('GRANT SELECT ON TABLE public.products TO anon')).toBe(true);
     expect(combinedSql.includes('GRANT SELECT ON TABLE public.product_variants TO anon')).toBe(true);
     expect(combinedSql.includes('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.orders TO authenticated')).toBe(true);
     expect(combinedSql.includes('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.business_memberships TO authenticated')).toBe(true);
+    expect(combinedSql.includes('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.business_memberships TO service_role')).toBe(false);
     expect(combinedSql.includes('REVOKE ALL ON TABLE public.orders FROM service_role')).toBe(false);
   });
 
