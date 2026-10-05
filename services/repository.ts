@@ -8,6 +8,7 @@ import {
   getTripProducts,
   getTripOrders,
   getTripProfit,
+  type Order,
   type Product,
   type ProductCategory,
   type TripRecord,
@@ -189,6 +190,9 @@ export interface OrderRepository {
   checkStockAvailability(businessId: string, orderId: string): Promise<StockCheckResult | null>;
   listBuyListForBusiness(businessId: string): Promise<BuyListItemRecord[]>;
   markBuyListItemBought(businessId: string, itemId: string): Promise<BuyListItemRecord | null>;
+  startPacking(businessId: string, orderId: string): Promise<OrderRecord | null>;
+  setItemPacked(businessId: string, orderId: string, orderItemId: string, packed: boolean): Promise<OrderItemRecord | null>;
+  markOrderPacked(businessId: string, orderId: string): Promise<OrderRecord | null>;
   create(input: {
     businessId: string;
     tripId: string;
@@ -716,6 +720,93 @@ class MockDataSource implements DataSource {
         itemName: product?.name ?? 'Product',
         quantity: Math.max(1, Number(item.quantity ?? 0)),
         purchased: true,
+      };
+    },
+    async startPacking(businessId: string, orderId: string) {
+      const snapshot = getMockDatabaseSnapshot();
+      const order = snapshot.orders.find((entry) => entry.id === orderId && entry.businessId === businessId);
+      if (!order) {
+        return null;
+      }
+      const updated: Order = { ...order, status: 'packing', requestStatus: 'PACKING', packedAt: new Date().toISOString() };
+      snapshot.orders = snapshot.orders.map((entry) => entry.id === orderId ? updated : entry);
+      return {
+        id: updated.id,
+        businessId: updated.businessId,
+        tripId: updated.tripId,
+        productId: updated.productId,
+        customerProfileId: updated.customerId ?? null,
+        customerId: updated.customerId,
+        customerName: updated.customerName,
+        customerPhone: updated.customerPhone ?? null,
+        deliveryAddress: updated.deliveryAddress ?? null,
+        orderDate: updated.orderDate,
+        subtotal: Number(updated.total ?? 0),
+        shippingFee: Number(updated.shippingFee ?? 0),
+        total: Number(updated.total ?? 0),
+        paymentMethod: updated.paymentMethod,
+        paymentStatus: updated.paymentStatus,
+        orderStatus: updated.status,
+        requestStatus: updated.requestStatus,
+        paymentOption: updated.paymentOption,
+        paymentMode: updated.paymentMode,
+        availabilityStatus: updated.availabilityStatus,
+        paymentRequestedAt: updated.paymentRequestedAt,
+        paymentVerifiedAt: updated.paymentVerifiedAt,
+      };
+    },
+    async setItemPacked(businessId: string, orderId: string, orderItemId: string, packed: boolean) {
+      const snapshot = getMockDatabaseSnapshot();
+      const order = snapshot.orders.find((entry) => entry.id === orderId && entry.businessId === businessId);
+      const item = snapshot.orderItems.find((entry) => entry.id === orderItemId && entry.orderId === orderId);
+      if (!order || !item) {
+        return null;
+      }
+      item.packedQuantity = packed ? item.quantity : 0;
+      return {
+        id: item.id,
+        businessId: order.businessId,
+        orderId: item.orderId,
+        productVariantId: item.productVariantId,
+        quantity: Number(item.quantity ?? 0),
+        packedQuantity: Number(item.packedQuantity ?? 0),
+      };
+    },
+    async markOrderPacked(businessId: string, orderId: string) {
+      const snapshot = getMockDatabaseSnapshot();
+      const order = snapshot.orders.find((entry) => entry.id === orderId && entry.businessId === businessId);
+      if (!order) {
+        return null;
+      }
+      const items = snapshot.orderItems.filter((entry) => entry.orderId === orderId);
+      if (!items.length || items.some((item) => (item.packedQuantity ?? 0) < item.quantity)) {
+        return null;
+      }
+      const updated: Order = { ...order, status: 'packing', requestStatus: 'PACKING', packedAt: new Date().toISOString() };
+      snapshot.orders = snapshot.orders.map((entry) => entry.id === orderId ? updated : entry);
+      return {
+        id: updated.id,
+        businessId: updated.businessId,
+        tripId: updated.tripId,
+        productId: updated.productId,
+        customerProfileId: updated.customerId ?? null,
+        customerId: updated.customerId,
+        customerName: updated.customerName,
+        customerPhone: updated.customerPhone ?? null,
+        deliveryAddress: updated.deliveryAddress ?? null,
+        orderDate: updated.orderDate,
+        subtotal: Number(updated.total ?? 0),
+        shippingFee: Number(updated.shippingFee ?? 0),
+        total: Number(updated.total ?? 0),
+        paymentMethod: updated.paymentMethod,
+        paymentStatus: updated.paymentStatus,
+        orderStatus: updated.status,
+        requestStatus: updated.requestStatus,
+        paymentOption: updated.paymentOption,
+        paymentMode: updated.paymentMode,
+        availabilityStatus: updated.availabilityStatus,
+        paymentRequestedAt: updated.paymentRequestedAt,
+        paymentVerifiedAt: updated.paymentVerifiedAt,
       };
     },
     async create(input) {
@@ -1885,6 +1976,146 @@ class SupabaseDataSource implements DataSource {
         quantity: Math.max(1, Number(item.quantity ?? 0)),
         purchased: true,
       };
+    },
+    async startPacking(businessId: string, orderId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data: orderData, error: orderError } = await client
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      const { data: updated, error: updateError } = await client
+        .from('orders')
+        .update({
+          order_status: 'packing',
+          request_status: 'PACKING',
+        })
+        .eq('id', orderId)
+        .eq('business_id', businessId)
+        .select('*')
+        .single();
+
+      if (updateError || !updated) {
+        return null;
+      }
+
+      return mapOrderRow(updated as any);
+    },
+    async setItemPacked(businessId: string, orderId: string, orderItemId: string, packed: boolean) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data: orderData, error: orderError } = await client
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      const { data: itemData, error: itemError } = await client
+        .from('order_items')
+        .select('*')
+        .eq('id', orderItemId)
+        .eq('order_id', orderId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (itemError || !itemData) {
+        return null;
+      }
+
+      const nextQuantity = packed ? Number((itemData as any).quantity ?? 0) : 0;
+      const { data: updated, error: updateError } = await client
+        .from('order_items')
+        .update({ packed_quantity: nextQuantity })
+        .eq('id', orderItemId)
+        .eq('order_id', orderId)
+        .eq('business_id', businessId)
+        .select('*')
+        .single();
+
+      if (updateError || !updated) {
+        return null;
+      }
+
+      return mapOrderItemRow(updated as any);
+    },
+    async markOrderPacked(businessId: string, orderId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data: orderData, error: orderError } = await client
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      const { data: items, error: itemsError } = await client
+        .from('order_items')
+        .select('*')
+        .eq('order_id', orderId)
+        .eq('business_id', businessId);
+
+      if (itemsError || !items || items.length === 0) {
+        return null;
+      }
+
+      const allPacked = (items as any[]).every((item) => Number(item.packed_quantity ?? 0) >= Number(item.quantity ?? 0));
+      if (!allPacked) {
+        return null;
+      }
+
+      const { data: updated, error: updateError } = await client
+        .from('orders')
+        .update({
+          order_status: 'packing',
+          request_status: 'PACKING',
+        })
+        .eq('id', orderId)
+        .eq('business_id', businessId)
+        .select('*')
+        .single();
+
+      if (updateError || !updated) {
+        return null;
+      }
+
+      return mapOrderRow(updated as any);
     },
     async create(input) {
       const client = getSupabaseClient();
