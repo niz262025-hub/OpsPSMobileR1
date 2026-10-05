@@ -159,6 +159,18 @@ export interface OrderItemRecord {
   packedQuantity: number;
 }
 
+export interface BuyListItemRecord {
+  id: string;
+  businessId: string;
+  tripId?: string;
+  orderId: string;
+  productId?: string;
+  productVariantId: string;
+  itemName: string;
+  quantity: number;
+  purchased: boolean;
+}
+
 export type StockCheckResult = {
   orderId: string;
   businessId: string;
@@ -175,6 +187,7 @@ export interface OrderRepository {
   getForBusiness(businessId: string, orderId: string): Promise<OrderRecord | null>;
   listItemsForOrder(orderId: string, businessId: string): Promise<OrderItemRecord[]>;
   checkStockAvailability(businessId: string, orderId: string): Promise<StockCheckResult | null>;
+  listBuyListForBusiness(businessId: string): Promise<BuyListItemRecord[]>;
   create(input: {
     businessId: string;
     tripId: string;
@@ -640,6 +653,37 @@ class MockDataSource implements DataSource {
         requestStatus: available ? 'AVAILABLE' : 'OUT_OF_STOCK',
         availabilityStatus: available ? 'confirmed' : 'not_available',
       };
+    },
+    async listBuyListForBusiness(businessId: string) {
+      const snapshot = getMockDatabaseSnapshot();
+      const entries = new Map<string, BuyListItemRecord>();
+
+      for (const order of snapshot.orders.filter((entry) => entry.businessId === businessId)) {
+        for (const item of snapshot.orderItems.filter((entry) => entry.orderId === order.id)) {
+          const variant = getProductVariant(item.productVariantId, snapshot, businessId);
+          const product = variant ? getProduct(variant.productId, snapshot, businessId) : undefined;
+          if (!variant || !product || Number(variant.stock ?? 0) >= Number(item.quantity ?? 0)) {
+            continue;
+          }
+
+          const key = `${order.id}:${variant.id}`;
+          const current = entries.get(key);
+          const nextQuantity = Math.max(1, Number(item.quantity ?? 0));
+          entries.set(key, {
+            id: key,
+            businessId,
+            tripId: order.tripId,
+            orderId: order.id,
+            productId: product.id,
+            productVariantId: variant.id,
+            itemName: product.name,
+            quantity: current ? current.quantity + nextQuantity : nextQuantity,
+            purchased: false,
+          });
+        }
+      }
+
+      return [...entries.values()];
     },
     async create(input) {
       const product = getProduct(input.productId, getMockDatabaseSnapshot(), input.businessId);
@@ -1662,6 +1706,69 @@ class SupabaseDataSource implements DataSource {
         requestStatus: available ? 'AVAILABLE' : 'OUT_OF_STOCK',
         availabilityStatus: available ? 'confirmed' : 'not_available',
       };
+    },
+    async listBuyListForBusiness(businessId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return [];
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data: orders, error: ordersError } = await client.from('orders').select('*').eq('business_id', businessId);
+      if (ordersError || !orders) {
+        return [];
+      }
+
+      const buyList = new Map<string, BuyListItemRecord>();
+
+      for (const order of orders as any[]) {
+        const { data: items, error: itemsError } = await client.from('order_items').select('*').eq('order_id', order.id).eq('business_id', businessId);
+        if (itemsError || !items) {
+          continue;
+        }
+
+        for (const item of items as any[]) {
+          const { data: variantData, error: variantError } = await client
+            .from('product_variants')
+            .select('*')
+            .eq('id', item.product_variant_id)
+            .eq('business_id', businessId)
+            .maybeSingle();
+
+          if (variantError || !variantData) {
+            continue;
+          }
+
+          const variant = variantData as any;
+          const shortage = Number(variant.stock ?? 0) < Number(item.quantity ?? 0);
+          if (!shortage) {
+            continue;
+          }
+
+          const { data: productData } = await client.from('products').select('*').eq('id', variant.product_id).eq('business_id', businessId).maybeSingle();
+          const product = (productData as any) ?? null;
+          const key = `${order.id}:${variant.id}`;
+          const nextQuantity = Math.max(1, Number(item.quantity ?? 0));
+          const existing = buyList.get(key);
+
+          buyList.set(key, {
+            id: key,
+            businessId,
+            tripId: order.trip_id ?? undefined,
+            orderId: order.id,
+            productId: product?.id ?? variant.product_id,
+            productVariantId: variant.id,
+            itemName: product?.name ?? 'Product',
+            quantity: existing ? existing.quantity + nextQuantity : nextQuantity,
+            purchased: false,
+          });
+        }
+      }
+
+      return [...buyList.values()];
     },
     async create(input) {
       const client = getSupabaseClient();

@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ArrowLeft, CheckCircle2, Package, ShoppingBag } from 'lucide-react-native';
-import { useMockDatabase, markBuyListItemBought, createBuyListItem, updateBuyListItem, deleteBuyListItem, getTripProducts, getTripOrders, getTripBuyListItems, getProductVariant, getProduct, closeTrip, addTripExpense, getTripExpenses, addTripCostOfGoods, getTripCostOfGoods, getTripProfit, type TripExpenseType } from '../../../services/mockDatabase';
+import { ArrowLeft, Package, ShoppingBag } from 'lucide-react-native';
+import { useMockDatabase, addTripExpense, getTripProducts, getTripOrders, getTripExpenses, addTripCostOfGoods, getTripCostOfGoods, getTripProfit, type TripExpenseType } from '../../../services/mockDatabase';
 import { useAuth } from '../../../context/AuthContext';
 import { getDataSource } from '../../../services/repository';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../../theme';
@@ -60,9 +60,7 @@ export default function TripDetailScreen() {
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [trip, setTrip] = useState<{ id: string; businessId?: string; name: string; destination: string; tripDate: string; notes: string; status: 'planning' | 'open' | 'closed'; createdAt: string } | null>(null);
-  const [buyItemName, setBuyItemName] = useState('');
-  const [buyItemQuantity, setBuyItemQuantity] = useState('1');
-  const [editingBuyItem, setEditingBuyItem] = useState<string | null>(null);
+  const [buyListItems, setBuyListItems] = useState<Array<{ id: string; businessId: string; tripId?: string; orderId: string; productId?: string; productVariantId: string; itemName: string; quantity: number; purchased: boolean }>>([]);
   const [expenseAmount, setExpenseAmount] = useState('0');
   const [expenseType, setExpenseType] = useState<TripExpenseType>('Transport');
   const [expenseDescription, setExpenseDescription] = useState('');
@@ -108,8 +106,37 @@ export default function TripDetailScreen() {
 
   const tripProducts = useMemo(() => (trip ? getTripProducts(trip.id, db) : []), [trip, db]);
   const tripOrders = useMemo(() => (trip ? getTripOrders(trip.id, db) : []), [trip, db]);
-  const buyListItems = useMemo(() => getTripBuyListItems(trip?.id ?? '', db), [trip, db]);
   const tripExpenses = useMemo(() => getTripExpenses(trip?.id ?? '', db), [trip, db]);
+
+  React.useEffect(() => {
+    let active = true;
+
+    const loadBuyList = async () => {
+      if (!businessId || !trip?.id) {
+        if (active) {
+          setBuyListItems([]);
+        }
+        return;
+      }
+
+      try {
+        const repo = getDataSource('production');
+        const nextItems = await repo.orders.listBuyListForBusiness(businessId);
+        if (active) {
+          setBuyListItems(nextItems.filter((item) => !trip?.id || item.tripId === trip.id));
+        }
+      } catch {
+        if (active) {
+          setBuyListItems([]);
+        }
+      }
+    };
+
+    void loadBuyList();
+    return () => {
+      active = false;
+    };
+  }, [businessId, trip?.id]);
   const tripCostOfGoods = useMemo(() => getTripCostOfGoods(trip?.id ?? '', db), [trip, db]);
   const tripProfit = useMemo(() => (trip ? getTripProfit(trip.id, db) : { salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 }), [trip, db]);
 
@@ -588,36 +615,22 @@ export default function TripDetailScreen() {
         {activeTab === 'buylist' && (
           <View>
             <Text style={styles.sectionLabel}>Buy List</Text>
-            <View style={styles.addBuyListRow}>
-                  <TextInput style={styles.buyInput} value={buyItemName} onChangeText={setBuyItemName} placeholder="Item name" placeholderTextColor={THEME.text.light} />
-                  <TextInput style={styles.quantityInput} value={buyItemQuantity} onChangeText={setBuyItemQuantity} keyboardType="numeric" placeholder="Qty" placeholderTextColor={THEME.text.light} />
-                  <TouchableOpacity style={styles.addBuyButton} onPress={() => { if (buyItemName.trim()) { createBuyListItem({ tripId: trip.id, itemName: buyItemName, quantity: Number(buyItemQuantity) || 1 }); setBuyItemName(''); setBuyItemQuantity('1'); } }}><Text style={styles.addBuyText}>+ Add Item</Text></TouchableOpacity>
-            </View>
             {buyListItems.length === 0 ? (
               <Text style={styles.emptyText}>Buy list is clear</Text>
             ) : (
               <View>
-                {buyListItems.map((item) => {
-                  const variant = item.productVariantId ? getProductVariant(item.productVariantId, db) : undefined;
-                  const product = variant ? getProduct(variant.productId, db) : undefined;
-                  return (
-                    <View key={item.id} style={styles.card}>
-                      <Text style={styles.cardTitle}>{item.itemName ?? product?.name ?? 'Item'}</Text>
-                      <View style={styles.buyListRow}>
-                        <View>
-                          <Text style={styles.buyListLabel}>{variant?.size ? `Size ${variant.size}` : item.purchased ? 'Bought' : 'To Buy'}</Text>
-                          <Text style={styles.buyListDetail}>Needed: {item.quantity}</Text>
-                        </View>
-                        <View style={styles.buyActions}>
-                          {!item.purchased && <TouchableOpacity style={styles.markBoughtBtn} onPress={() => { const success = markBuyListItemBought(item.id); if (success) Alert.alert('Success', 'Buy list item marked as bought.'); }}><CheckCircle2 size={16} color={THEME.status.success} strokeWidth={2} /><Text style={styles.markBoughtText}>Mark Bought</Text></TouchableOpacity>}
-                          <TouchableOpacity onPress={() => { setEditingBuyItem(item.id); setBuyItemName(item.itemName ?? product?.name ?? ''); setBuyItemQuantity(String(item.quantity)); }}><Text style={styles.editBuyText}>Edit</Text></TouchableOpacity>
-                          <TouchableOpacity onPress={() => deleteBuyListItem(item.id)}><Text style={styles.deleteBuyText}>Delete</Text></TouchableOpacity>
-                        </View>
+                {buyListItems.map((item) => (
+                  <View key={item.id} style={styles.card}>
+                    <Text style={styles.cardTitle}>{item.itemName || 'Item'}</Text>
+                    <View style={styles.buyListRow}>
+                      <View>
+                        <Text style={styles.buyListLabel}>To Buy</Text>
+                        <Text style={styles.buyListDetail}>Needed: {item.quantity}</Text>
+                        <Text style={styles.buyListDetail}>Order: {item.orderId}</Text>
                       </View>
-                      {editingBuyItem === item.id && <View style={styles.editRow}><TextInput style={styles.buyInput} value={buyItemName} onChangeText={setBuyItemName} /><TextInput style={styles.quantityInput} value={buyItemQuantity} onChangeText={setBuyItemQuantity} keyboardType="numeric" /><TouchableOpacity style={styles.addBuyButton} onPress={() => { updateBuyListItem(item.id, { itemName: buyItemName, quantity: Number(buyItemQuantity) || 1 }); setEditingBuyItem(null); }}><Text style={styles.addBuyText}>Save</Text></TouchableOpacity></View>}
                     </View>
-                  );
-                })}
+                  </View>
+                ))}
               </View>
             )}
           </View>

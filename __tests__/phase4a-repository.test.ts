@@ -546,4 +546,197 @@ describe('phase 4a production repository', () => {
       availabilityStatus: 'not_available',
     });
   });
+
+  it('generates buy list entries only for insufficient-stock orders in the active business', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Ready to sell',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 2,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [{
+        id: 'order-buy-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        product_id: 'product-1',
+        customer_profile_id: 'profile-1',
+        customer_name: 'Alex',
+        customer_phone: '0123456789',
+        delivery_address: 'Kuala Lumpur',
+        order_date: '2026-09-10T08:00:00.000Z',
+        subtotal: 50,
+        shipping_fee: 0,
+        total: 50,
+        payment_status: 'pending',
+        order_status: 'pending',
+        request_status: 'PENDING_AVAILABILITY',
+        payment_option: 'bank',
+        payment_mode: 'bank',
+        availability_status: 'pending',
+      }],
+      orderItems: [{
+        id: 'order-item-3',
+        business_id: 'biz-1',
+        order_id: 'order-buy-1',
+        product_variant_id: 'variant-1',
+        quantity: 5,
+        packed_quantity: 0,
+      }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const buyList = await repo.orders.listBuyListForBusiness('biz-1');
+
+    expect(buyList).toHaveLength(1);
+    expect(buyList[0]).toMatchObject({
+      orderId: 'order-buy-1',
+      productVariantId: 'variant-1',
+      quantity: 5,
+      itemName: 'OpsPS Tee',
+      purchased: false,
+    });
+  });
+
+  it('does not include sufficient-stock orders in the buy list', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Ready to sell',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 10,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [{
+        id: 'order-buy-2',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        product_id: 'product-1',
+        customer_profile_id: 'profile-2',
+        customer_name: 'Bala',
+        customer_phone: '0123456788',
+        delivery_address: 'Johor',
+        order_date: '2026-09-11T08:00:00.000Z',
+        subtotal: 30,
+        shipping_fee: 0,
+        total: 30,
+        payment_status: 'pending',
+        order_status: 'pending',
+        request_status: 'PENDING_AVAILABILITY',
+        payment_option: 'bank',
+        payment_mode: 'bank',
+        availability_status: 'pending',
+      }],
+      orderItems: [{
+        id: 'order-item-4',
+        business_id: 'biz-1',
+        order_id: 'order-buy-2',
+        product_variant_id: 'variant-1',
+        quantity: 1,
+        packed_quantity: 0,
+      }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const buyList = await repo.orders.listBuyListForBusiness('biz-1');
+
+    expect(buyList).toEqual([]);
+  });
+
+  it('keeps buy list data isolated to the authenticated business', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      memberships: [{ business_id: 'biz-1', user_id: 'user-1', role: 'founder' }],
+      product: {
+        id: 'product-2',
+        business_id: 'biz-2',
+        trip_id: 'trip-2',
+        name: 'Competing Product',
+        category: 'Clothing',
+        description: 'Other business',
+        image_url: 'https://example.com/other.png',
+        cost_price: 9,
+        selling_price: 18,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-2',
+        business_id: 'biz-2',
+        product_id: 'product-2',
+        size: 'L',
+        stock: 1,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [{
+        id: 'order-biz-2',
+        business_id: 'biz-2',
+        trip_id: 'trip-2',
+        product_id: 'product-2',
+        customer_profile_id: 'profile-9',
+        customer_name: 'Guest',
+        customer_phone: '0123456787',
+        delivery_address: 'Penang',
+        order_date: '2026-09-10T08:00:00.000Z',
+        subtotal: 18,
+        shipping_fee: 0,
+        total: 18,
+        payment_status: 'pending',
+        order_status: 'pending',
+        request_status: 'PENDING_AVAILABILITY',
+        payment_option: 'bank',
+        payment_mode: 'bank',
+        availability_status: 'pending',
+      }],
+      orderItems: [{
+        id: 'order-item-5',
+        business_id: 'biz-2',
+        order_id: 'order-biz-2',
+        product_variant_id: 'variant-2',
+        quantity: 3,
+        packed_quantity: 0,
+      }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const buyList = await repo.orders.listBuyListForBusiness('biz-1');
+    expect(buyList).toEqual([]);
+  });
 });
