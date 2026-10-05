@@ -441,6 +441,194 @@ describe('phase 4a production repository', () => {
     expect(published[0].businessId).toBe('biz-1');
   });
 
+  it('allows anonymous access to a published product through the public product link', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      userId: '' as any,
+      memberships: [],
+      product: {
+        id: 'product-link-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Public Product',
+        category: 'Clothing',
+        description: 'Visible to the public',
+        image_url: 'https://example.com/public.png',
+        cost_price: 20,
+        selling_price: 45,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-link-1',
+        business_id: 'biz-1',
+        product_id: 'product-link-1',
+        size: 'L',
+        stock: 4,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    const product = await repo.products.getProduct('product-link-1', 'biz-1');
+
+    expect(product).not.toBeNull();
+    expect(product?.name).toBe('Public Product');
+    expect(product?.businessId).toBe('biz-1');
+  });
+
+  it('rejects anonymous access to unpublished products while preserving business scoping', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      userId: '' as any,
+      memberships: [],
+      product: {
+        id: 'product-private-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Private Product',
+        category: 'Clothing',
+        description: 'Hidden from the public',
+        image_url: 'https://example.com/private.png',
+        cost_price: 10,
+        selling_price: 30,
+        status: 'ready',
+        is_published: false,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-private-1',
+        business_id: 'biz-1',
+        product_id: 'product-private-1',
+        size: 'S',
+        stock: 2,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    await expect(repo.products.getProduct('product-private-1', 'biz-1')).resolves.toBeNull();
+    await expect(repo.products.listPublishedForBusiness('biz-1')).resolves.toEqual([]);
+  });
+
+  it('allows an authenticated business member to access a product in the same business', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      memberships: [{ business_id: 'biz-1', user_id: 'user-1', role: 'admin' }],
+      product: {
+        id: 'product-member-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Member Product',
+        category: 'Clothing',
+        description: 'Visible to members',
+        image_url: 'https://example.com/member.png',
+        cost_price: 12,
+        selling_price: 35,
+        status: 'ready',
+        is_published: false,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-member-1',
+        business_id: 'biz-1',
+        product_id: 'product-member-1',
+        size: 'XL',
+        stock: 8,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    const product = await repo.products.getProduct('product-member-1', 'biz-1');
+
+    expect(product).not.toBeNull();
+    expect(product?.name).toBe('Member Product');
+  });
+
+  it('rejects cross-business product access for anonymous product links', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      userId: '' as any,
+      memberships: [],
+      product: {
+        id: 'product-biz-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Biz 1 Product',
+        category: 'Clothing',
+        description: 'Owned by biz-1',
+        image_url: 'https://example.com/biz1.png',
+        cost_price: 18,
+        selling_price: 42,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-biz-1',
+        business_id: 'biz-1',
+        product_id: 'product-biz-1',
+        size: 'M',
+        stock: 3,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    await expect(repo.products.getProduct('product-biz-1', 'biz-2')).resolves.toBeNull();
+    await expect(repo.products.listPublishedForBusiness('biz-2')).resolves.toEqual([]);
+  });
+
   it('deletes a product variant for an authorized founder', async () => {
     vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
       trip: {

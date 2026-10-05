@@ -1838,10 +1838,6 @@ class SupabaseDataSource implements DataSource {
         return [];
       }
 
-      if (!(await hasMembership(client, businessId))) {
-        return [];
-      }
-
       const { data: productRows, error: productsError } = await client
         .from('products')
         .select('*')
@@ -1986,10 +1982,6 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      if (!(await hasMembership(client, businessId))) {
-        return null;
-      }
-
       const { data: productData, error: productError } = await client
         .from('products')
         .select('*')
@@ -1998,6 +1990,11 @@ class SupabaseDataSource implements DataSource {
         .maybeSingle();
 
       if (productError || !productData) {
+        return null;
+      }
+
+      const isMember = await hasMembership(client, businessId);
+      if (!productData.is_published && !isMember) {
         return null;
       }
 
