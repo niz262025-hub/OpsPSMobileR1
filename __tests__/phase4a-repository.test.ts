@@ -1374,4 +1374,207 @@ describe('phase 4a production repository', () => {
       shippingCost: 9,
     })).resolves.toBeNull();
   });
+
+  it('allows anonymous customer ordering for a published product with available stock', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      userId: '' as any,
+      memberships: [],
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-public-order',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Public Product',
+        category: 'Clothing',
+        description: 'Public order allowed',
+        image_url: 'https://example.com/public.png',
+        cost_price: 18,
+        selling_price: 28,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-public-order',
+        business_id: 'biz-1',
+        product_id: 'product-public-order',
+        size: 'L',
+        stock: 7,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [],
+      orderItems: [],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const created = await repo.orders.create({
+      businessId: 'biz-1',
+      tripId: 'trip-1',
+      productId: 'product-public-order',
+      productVariantId: 'variant-public-order',
+      customerName: 'Public Buyer',
+      customerPhone: '0123456789',
+      deliveryAddress: 'Kuala Lumpur',
+      quantity: 2,
+      paymentMethod: 'bank',
+      shippingFee: 5,
+    });
+
+    expect(created).not.toBeNull();
+    expect(created?.customerName).toBe('Public Buyer');
+    expect(created?.total).toBe(61);
+  });
+
+  it('rejects anonymous public orders when stock is insufficient or quantity is invalid', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      userId: '' as any,
+      memberships: [],
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-public-order-2',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Public Product',
+        category: 'Clothing',
+        description: 'Need stock validation',
+        image_url: 'https://example.com/public-2.png',
+        cost_price: 18,
+        selling_price: 28,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-public-order-2',
+        business_id: 'biz-1',
+        product_id: 'product-public-order-2',
+        size: 'M',
+        stock: 2,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+
+    await expect(repo.orders.create({
+      businessId: 'biz-1',
+      tripId: 'trip-1',
+      productId: 'product-public-order-2',
+      productVariantId: 'variant-public-order-2',
+      customerName: 'Public Buyer',
+      customerPhone: '0123456789',
+      deliveryAddress: 'Johor Bahru',
+      quantity: 3,
+      paymentMethod: 'bank',
+    })).resolves.toBeNull();
+
+    await expect(repo.orders.create({
+      businessId: 'biz-1',
+      tripId: 'trip-1',
+      productId: 'product-public-order-2',
+      productVariantId: 'variant-public-order-2',
+      customerName: 'Public Buyer',
+      customerPhone: '0123456789',
+      deliveryAddress: 'Johor Bahru',
+      quantity: 0,
+      paymentMethod: 'bank',
+    })).resolves.toBeNull();
+  });
+
+  it('rejects public orders for wrong business, product, variant, or trip ownership', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      userId: '' as any,
+      memberships: [],
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-public-order-3',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Public Product',
+        category: 'Clothing',
+        description: 'Business-scoped order validation',
+        image_url: 'https://example.com/public-3.png',
+        cost_price: 18,
+        selling_price: 28,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-public-order-3',
+        business_id: 'biz-1',
+        product_id: 'product-public-order-3',
+        size: 'S',
+        stock: 10,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    await expect(repo.orders.create({
+      businessId: 'biz-2',
+      tripId: 'trip-1',
+      productId: 'product-public-order-3',
+      productVariantId: 'variant-public-order-3',
+      customerName: 'Public Buyer',
+      quantity: 1,
+      paymentMethod: 'bank',
+    })).resolves.toBeNull();
+
+    await expect(repo.orders.create({
+      businessId: 'biz-1',
+      tripId: 'trip-1',
+      productId: 'product-public-order-3',
+      productVariantId: 'variant-other',
+      customerName: 'Public Buyer',
+      quantity: 1,
+      paymentMethod: 'bank',
+    })).resolves.toBeNull();
+
+    await expect(repo.orders.create({
+      businessId: 'biz-1',
+      tripId: 'trip-2',
+      productId: 'product-public-order-3',
+      productVariantId: 'variant-public-order-3',
+      customerName: 'Public Buyer',
+      quantity: 1,
+      paymentMethod: 'bank',
+    })).resolves.toBeNull();
+  });
 });

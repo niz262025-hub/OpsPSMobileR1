@@ -2012,8 +2012,18 @@ class SupabaseDataSource implements DataSource {
         return [];
       }
 
-      if (!(await hasMembership(client, businessId))) {
-        return [];
+      const isMember = await hasMembership(client, businessId);
+      if (!isMember) {
+        const { data: productData, error: productError } = await client
+          .from('products')
+          .select('id, business_id, is_published')
+          .eq('id', productId)
+          .eq('business_id', businessId)
+          .maybeSingle();
+
+        if (productError || !productData || !productData.is_published) {
+          return [];
+        }
       }
 
       const { data, error } = await client
@@ -2093,8 +2103,29 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      if (!(await hasMembership(client, businessId))) {
-        return null;
+      const isMember = await hasMembership(client, businessId);
+      if (!isMember) {
+        const { data: variantData, error: variantError } = await client
+          .from('product_variants')
+          .select('id, business_id, product_id')
+          .eq('id', productVariantId)
+          .eq('business_id', businessId)
+          .maybeSingle();
+
+        if (variantError || !variantData) {
+          return null;
+        }
+
+        const { data: productData, error: productError } = await client
+          .from('products')
+          .select('id, business_id, is_published')
+          .eq('id', variantData.product_id)
+          .eq('business_id', businessId)
+          .maybeSingle();
+
+        if (productError || !productData || !productData.is_published) {
+          return null;
+        }
       }
 
       const { data, error } = await client
@@ -2551,6 +2582,16 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
+      const cleanedName = String(input.customerName ?? '').trim();
+      if (!cleanedName) {
+        return null;
+      }
+
+      const quantity = Number(input.quantity ?? 1);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return null;
+      }
+
       const { data: productData, error: productError } = await client.from('products').select('*').eq('id', input.productId).maybeSingle();
       if (productError || !productData) {
         return null;
@@ -2562,6 +2603,18 @@ class SupabaseDataSource implements DataSource {
       }
 
       if (input.tripId && product.trip_id && product.trip_id !== input.tripId) {
+        return null;
+      }
+
+      if (input.tripId && !product.trip_id) {
+        const tripMatches = await verifyTripBelongsToBusiness(client, input.businessId, input.tripId);
+        if (!tripMatches) {
+          return null;
+        }
+      }
+
+      const currentUserIsMember = !!(await getUserIdFromAuth(client)) && await hasMembership(client, input.businessId);
+      if (!product.is_published && !currentUserIsMember) {
         return null;
       }
 
@@ -2577,24 +2630,20 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      const isFounder = await hasMembership(client, input.businessId);
-      if (!isFounder && !product.is_published) {
+      const variant = variantData as any;
+      const availableStock = Number(variant.stock ?? 0);
+      if (availableStock < quantity) {
         return null;
       }
 
       const customerProfileId = await ensureCustomerProfile(client, {
         businessId: input.businessId,
-        customerName: input.customerName,
+        customerName: cleanedName,
         customerPhone: input.customerPhone,
         deliveryAddress: input.deliveryAddress,
         customerId: input.customerId,
       });
 
-      if (!customerProfileId && !isFounder) {
-        return null;
-      }
-
-      const quantity = Math.max(1, Number(input.quantity ?? 1));
       const subtotal = Number(product.selling_price ?? 0) * quantity;
       const shippingFee = Number(input.shippingFee ?? 0);
       const total = subtotal + shippingFee;
@@ -2603,10 +2652,10 @@ class SupabaseDataSource implements DataSource {
         .from('orders')
         .insert({
           business_id: input.businessId,
-          trip_id: input.tripId,
+          trip_id: input.tripId || null,
           product_id: input.productId,
-          customer_profile_id: customerProfileId,
-          customer_name: input.customerName,
+          customer_profile_id: input.customerProfileId ?? customerProfileId ?? null,
+          customer_name: cleanedName,
           customer_phone: input.customerPhone ?? null,
           delivery_address: input.deliveryAddress ?? null,
           order_date: new Date().toISOString(),
@@ -2641,7 +2690,7 @@ class SupabaseDataSource implements DataSource {
 
       return {
         ...mapOrderRow(orderData),
-        customerId: input.customerId ?? customerProfileId ?? null,
+        customerId: input.customerId ?? input.customerProfileId ?? customerProfileId ?? null,
       };
     },
     async getForCustomer(customerId: string, orderId: string) {
