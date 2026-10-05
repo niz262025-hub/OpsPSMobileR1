@@ -66,6 +66,7 @@ export default function RootLayout() {
           <Stack.Screen name="trip" />
           <Stack.Screen name="shipping" />
           <Stack.Screen name="login" />
+          <Stack.Screen name="register" />
           <Stack.Screen name="forgot-password" />
           <Stack.Screen name="order" />
           <Stack.Screen name="settings" />
