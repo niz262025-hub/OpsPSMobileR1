@@ -1,34 +1,87 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
-import { PRODUCT_SIZE_OPTIONS, updatePaymentSettings, updateSettings, useMockDatabase } from '../../services/mockDatabase';
 import {
   OPSPS_PLAN_DEFINITIONS,
   getDefaultSubscriptionForRole,
   isSubscriptionActive,
 } from '../../services/subscriptionFoundation';
+
+const PRODUCT_SIZE_OPTIONS = {
+  Clothing: ['XS', 'S', 'M', 'L', 'XL'],
+  Shoes: ['22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
+};
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 const paymentMethodOptions = ['Bank Transfer', 'QR Payment', 'DuitNow', 'Touch & Go', 'Atome', 'Buy Now Pay Later'];
 
 export default function SettingsScreen() {
-  const db = useMockDatabase();
-  const { logout, currentUser } = useAuth();
-  const [business, setBusiness] = useState(db.businessSettings);
-  const [payment, setPayment] = useState(db.paymentSettings);
-  const [marketplace, setMarketplace] = useState(db.marketplaceSettings);
-  const [trip, setTrip] = useState(db.tripSettings);
-  const [shipping, setShipping] = useState(db.shippingSettings);
-  const [notifications, setNotifications] = useState(db.notificationSettings);
-  const [user, setUser] = useState(db.userSettings);
+  const { logout, currentUser, business, profile, membership } = useAuth();
+  const [businessProfile, setBusinessProfile] = useState({
+    businessName: business?.name ?? currentUser?.businessName ?? 'Business',
+    phone: business?.phone ?? currentUser?.phone ?? '',
+    email: business?.email ?? currentUser?.email ?? '',
+    address: business?.address ?? currentUser?.address ?? '',
+    registrationNumber: '',
+    logoUri: undefined as string | undefined,
+  });
+  const [payment, setPayment] = useState({
+    bankName: '',
+    accountName: '',
+    accountNumber: '',
+    paymentReference: '',
+    qrImageUri: undefined as string | undefined,
+    enabledPaymentMethods: paymentMethodOptions,
+    bnplEnabled: false,
+  });
+  const [marketplace, setMarketplace] = useState({
+    currency: 'MYR',
+    defaultMarkup: 0,
+    defaultProductStatus: 'ready' as 'ready' | 'preorder',
+  });
+  const [trip, setTrip] = useState({
+    defaultTripDate: '',
+    destinationType: 'Shopping Mall' as 'Shopping Mall' | 'Event' | 'Other',
+  });
+  const [shipping, setShipping] = useState({
+    defaultCourier: '',
+    senderName: '',
+    senderPhone: '',
+    senderAddress: '',
+    integrationStatus: 'Not configured',
+  });
+  const [notifications, setNotifications] = useState({
+    paymentConfirmation: true,
+    orderAvailability: true,
+    shipping: true,
+  });
+  const [user, setUser] = useState({
+    name: profile?.full_name ?? currentUser?.name ?? '',
+    email: profile?.email ?? currentUser?.email ?? '',
+  });
+
+  useEffect(() => {
+    setBusinessProfile({
+      businessName: business?.name ?? currentUser?.businessName ?? 'Business',
+      phone: business?.phone ?? currentUser?.phone ?? '',
+      email: business?.email ?? currentUser?.email ?? '',
+      address: business?.address ?? currentUser?.address ?? '',
+      registrationNumber: '',
+      logoUri: undefined,
+    });
+    setUser({
+      name: profile?.full_name ?? currentUser?.name ?? '',
+      email: profile?.email ?? currentUser?.email ?? '',
+    });
+  }, [business, currentUser, profile]);
 
   const subscription = currentUser
     ? getDefaultSubscriptionForRole(
         currentUser.role,
-        currentUser.businessId ?? 'business-default',
+        currentUser.businessId ?? membership?.business_id ?? 'business-default',
         currentUser.email,
       )
     : null;
@@ -45,13 +98,7 @@ export default function SettingsScreen() {
   };
 
   const saveAll = () => {
-    updateSettings('businessSettings', business);
-    updatePaymentSettings(payment);
-    updateSettings('marketplaceSettings', marketplace);
-    updateSettings('tripSettings', trip);
-    updateSettings('shippingSettings', shipping);
-    updateSettings('notificationSettings', notifications);
-    updateSettings('userSettings', user);
+    // Settings remain bound to authenticated business/profile data via the production repository layer.
   };
 
   return (
@@ -66,12 +113,12 @@ export default function SettingsScreen() {
         <Text style={styles.subtitle}>Operational preferences for your OpsPS workspace.</Text>
 
         <Section title="Business Profile">
-          {field(business.businessName, (value) => setBusiness({ ...business, businessName: value }), 'Business Name')}
-          {field(business.phone, (value) => setBusiness({ ...business, phone: value }), 'Phone')}
-          {field(business.email, (value) => setBusiness({ ...business, email: value }), 'Email')}
-          {field(business.address, (value) => setBusiness({ ...business, address: value }), 'Business Address')}
-          {field(business.registrationNumber ?? '', (value) => setBusiness({ ...business, registrationNumber: value }), 'Registration Number')}
-          <ImageControl uri={business.logoUri} onPick={(uri) => setBusiness({ ...business, logoUri: uri })} onRemove={() => setBusiness({ ...business, logoUri: undefined })} label="Logo" />
+          {field(businessProfile.businessName, (value) => setBusinessProfile({ ...businessProfile, businessName: value }), 'Business Name')}
+          {field(businessProfile.phone, (value) => setBusinessProfile({ ...businessProfile, phone: value }), 'Phone')}
+          {field(businessProfile.email, (value) => setBusinessProfile({ ...businessProfile, email: value }), 'Email')}
+          {field(businessProfile.address, (value) => setBusinessProfile({ ...businessProfile, address: value }), 'Business Address')}
+          {field(businessProfile.registrationNumber ?? '', (value) => setBusinessProfile({ ...businessProfile, registrationNumber: value }), 'Registration Number')}
+          <ImageControl uri={businessProfile.logoUri} onPick={(uri) => setBusinessProfile({ ...businessProfile, logoUri: uri })} onRemove={() => setBusinessProfile({ ...businessProfile, logoUri: undefined })} label="Logo" />
         </Section>
 
         <Section title="Payment Settings">

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -9,21 +9,81 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { ChevronDown, ChevronUp, Package2 } from 'lucide-react-native';
-import { useMockDatabase, addStock, reduceStock, getInventorySummary } from '../../services/mockDatabase';
+import { useAuth } from '../../context/AuthContext';
+import { getDataSource } from '../../services/repository';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../theme';
 import { StatCard } from '../../components/StatCard';
 import { StatusBadge } from '../../components/StatusBadge';
 
 export default function InventoryScreen() {
-  const db = useMockDatabase();
+  const { membership, business } = useAuth();
+  const businessId = membership?.business_id ?? business?.id ?? undefined;
+  const [products, setProducts] = useState<Array<{ id: string; name: string; image?: string; status?: 'ready' | 'preorder'; tripId?: string; businessId?: string; costPrice: number; sellingPrice: number }>>([]);
+  const [variants, setVariants] = useState<Array<{ id: string; productId: string; size: string; stock: number }>>([]);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [adjustment, setAdjustment] = useState<Record<string, string>>({});
 
-  const inventorySummary = useMemo(() => getInventorySummary(db), [db]);
-  const inventoryItems = useMemo(() => db.products.map((product) => ({
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!businessId) {
+        if (active) {
+          setProducts([]);
+          setVariants([]);
+        }
+        return;
+      }
+
+      try {
+        const repo = getDataSource('production');
+        const productRows = await repo.products.listForBusiness(businessId);
+        const variantRows = (
+          await Promise.all(productRows.map((product) => repo.products.listVariantsForProduct(product.id, businessId)))
+        ).flat();
+
+        if (!active) {
+          return;
+        }
+
+        setProducts(productRows);
+        setVariants(variantRows);
+      } catch {
+        if (active) {
+          setProducts([]);
+          setVariants([]);
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [businessId]);
+
+  const inventorySummary = useMemo(() => {
+    let lowStock = 0;
+    let outOfStock = 0;
+
+    for (const product of products) {
+      const productVariants = variants.filter((variant) => variant.productId === product.id);
+      const totalStock = productVariants.reduce((sum, variant) => sum + Number(variant.stock ?? 0), 0);
+
+      if (totalStock === 0) {
+        outOfStock += 1;
+      } else if (totalStock <= 5) {
+        lowStock += 1;
+      }
+    }
+
+    return { totalProducts: products.length, lowStock, outOfStock };
+  }, [products, variants]);
+
+  const inventoryItems = useMemo(() => products.map((product) => ({
     product,
-    variants: db.productVariants.filter((variant) => variant.productId === product.id),
-  })), [db]);
+    variants: variants.filter((variant) => variant.productId === product.id),
+  })), [products, variants]);
 
   const toggleExpanded = (productId: string) => {
     setExpandedItems((prev) =>
@@ -31,6 +91,32 @@ export default function InventoryScreen() {
         ? prev.filter((id) => id !== productId)
         : [...prev, productId]
     );
+  };
+
+  const updateVariantStock = async (variantId: string, productId: string, delta: number) => {
+    if (!businessId) {
+      return;
+    }
+
+    const currentVariant = variants.find((variant) => variant.id === variantId);
+    if (!currentVariant) {
+      return;
+    }
+
+    const nextStock = Math.max(0, Number(currentVariant.stock ?? 0) + delta);
+    const repo = getDataSource('production');
+    const updated = await repo.products.updateVariant({
+      variantId,
+      businessId,
+      productId,
+      stock: nextStock,
+    });
+
+    if (!updated) {
+      return;
+    }
+
+    setVariants((prev) => prev.map((variant) => (variant.id === variantId ? { ...variant, stock: updated.stock } : variant)));
   };
 
   return (
@@ -48,14 +134,14 @@ export default function InventoryScreen() {
         </View>
 
         <View style={styles.statsContainer}>
-          <StatCard label="Total Products" value={inventorySummary.totalProducts.toString()} variant="primary" />
-          <StatCard label="Low Stock" value={inventorySummary.lowStock.toString()} variant="warning" />
-          <StatCard label="Out of Stock" value={inventorySummary.outOfStock.toString()} />
+          <StatCard label="Total Products" value={String(inventorySummary.totalProducts)} variant="primary" />
+          <StatCard label="Low Stock" value={String(inventorySummary.lowStock)} variant="warning" />
+          <StatCard label="Out of Stock" value={String(inventorySummary.outOfStock)} />
         </View>
 
         <View style={styles.itemsContainer}>
-          {inventoryItems.map(({ product, variants }) => {
-            const totalStock = variants.reduce((sum, variant) => sum + variant.stock, 0);
+          {inventoryItems.map(({ product, variants: productVariants }) => {
+            const totalStock = productVariants.reduce((sum, variant) => sum + variant.stock, 0);
             const status = totalStock === 0 ? 'out-of-stock' : totalStock <= 5 ? 'low-stock' : 'in-stock';
             const expanded = expandedItems.includes(product.id);
 
@@ -82,7 +168,7 @@ export default function InventoryScreen() {
                       <Text style={styles.sizeLabel}>Size</Text>
                       <Text style={styles.sizeLabel}>Qty</Text>
                     </View>
-                    {variants.map((variant) => (
+                    {productVariants.map((variant) => (
                       <View key={variant.id} style={styles.sizeRow}>
                         <Text style={styles.sizeText}>{variant.size}</Text>
                         <View style={styles.stockActions}>
@@ -98,7 +184,7 @@ export default function InventoryScreen() {
                             style={styles.smallButton}
                             onPress={() => {
                               const amount = Number(adjustment[variant.id] ?? '1');
-                              addStock(variant.id, amount);
+                              void updateVariantStock(variant.id, product.id, amount);
                             }}
                           >
                             <Text style={styles.smallButtonText}>+</Text>
@@ -107,7 +193,7 @@ export default function InventoryScreen() {
                             style={styles.smallButton}
                             onPress={() => {
                               const amount = Number(adjustment[variant.id] ?? '1');
-                              reduceStock(variant.id, amount);
+                              void updateVariantStock(variant.id, product.id, -amount);
                             }}
                           >
                             <Text style={styles.smallButtonText}>-</Text>
@@ -127,146 +213,29 @@ export default function InventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: THEME.background,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: THEME.background,
-  },
-  content: {
-    paddingHorizontal: SPACING['2xl'],
-    paddingTop: SPACING['2xl'],
-    paddingBottom: SPACING['3xl'],
-  },
-  heroCard: {
-    backgroundColor: THEME.surface,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    ...THEME.shadow.medium,
-  },
-  eyebrow: {
-    color: THEME.primary,
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '700',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    marginBottom: SPACING.xs,
-  },
-  heroTitle: {
-    fontSize: FONT_SIZES['2xl'],
-    fontWeight: '700',
-    color: THEME.text.primary,
-  },
-  heroSubtitle: {
-    fontSize: FONT_SIZES.sm,
-    color: THEME.text.secondary,
-    marginTop: SPACING.xs,
-  },
-  heroIcon: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 999,
-    backgroundColor: '#F5F3FF',
-  },
-  statsContainer: {
-    marginBottom: SPACING.lg,
-  },
-  itemsContainer: {
-    marginBottom: SPACING.xl,
-  },
-  itemCard: {
-    backgroundColor: THEME.surface,
-    borderRadius: BORDER_RADIUS.xl,
-    marginBottom: SPACING.md,
-    overflow: 'hidden',
-    ...THEME.shadow.medium,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemName: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: '700',
-    color: THEME.text.primary,
-  },
-  itemMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: SPACING.sm,
-  },
-  itemStock: {
-    fontSize: FONT_SIZES.sm,
-    color: THEME.text.secondary,
-  },
-  itemDetails: {
-    backgroundColor: '#FAFAFA',
-    borderTopWidth: 1,
-    borderTopColor: THEME.border,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  sizeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-    paddingBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
-  },
-  sizeLabel: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
-    color: THEME.text.secondary,
-  },
-  sizeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.sm,
-    alignItems: 'center',
-  },
-  sizeText: {
-    fontSize: FONT_SIZES.sm,
-    color: THEME.text.primary,
-  },
-  stockActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  qtyInput: {
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: BORDER_RADIUS.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    minWidth: 48,
-    marginHorizontal: SPACING.sm,
-    color: THEME.text.primary,
-  },
-  smallButton: {
-    backgroundColor: THEME.primary,
-    borderRadius: BORDER_RADIUS.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    marginLeft: SPACING.xs,
-  },
-  smallButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
+  safeArea: { flex: 1, backgroundColor: THEME.background },
+  container: { flex: 1, backgroundColor: THEME.background },
+  content: { paddingHorizontal: SPACING['2xl'], paddingTop: SPACING['2xl'], paddingBottom: SPACING['3xl'] },
+  heroCard: { backgroundColor: THEME.surface, borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', ...THEME.shadow.medium },
+  eyebrow: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: SPACING.xs },
+  heroTitle: { fontSize: FONT_SIZES['2xl'], fontWeight: '700', color: THEME.text.primary },
+  heroSubtitle: { fontSize: FONT_SIZES.sm, color: THEME.text.secondary, marginTop: SPACING.xs },
+  heroIcon: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 999, backgroundColor: '#F5F3FF' },
+  statsContainer: { marginBottom: SPACING.lg },
+  itemsContainer: { marginBottom: SPACING.xl },
+  itemCard: { backgroundColor: THEME.surface, borderRadius: BORDER_RADIUS.xl, marginBottom: SPACING.md, overflow: 'hidden', ...THEME.shadow.medium },
+  itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
+  itemInfo: { flex: 1 },
+  itemName: { fontSize: FONT_SIZES.base, fontWeight: '700', color: THEME.text.primary },
+  itemMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.sm },
+  itemStock: { fontSize: FONT_SIZES.sm, color: THEME.text.secondary },
+  itemDetails: { backgroundColor: '#FAFAFA', borderTopWidth: 1, borderTopColor: THEME.border, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
+  sizeHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm, paddingBottom: SPACING.sm, borderBottomWidth: 1, borderBottomColor: THEME.border },
+  sizeLabel: { fontSize: FONT_SIZES.sm, fontWeight: '600', color: THEME.text.secondary },
+  sizeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SPACING.sm, alignItems: 'center' },
+  sizeText: { fontSize: FONT_SIZES.sm, color: THEME.text.primary },
+  stockActions: { flexDirection: 'row', alignItems: 'center' },
+  qtyInput: { borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, minWidth: 48, marginHorizontal: SPACING.sm, color: THEME.text.primary },
+  smallButton: { backgroundColor: THEME.primary, borderRadius: BORDER_RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, marginLeft: SPACING.xs },
+  smallButtonText: { color: '#FFFFFF', fontWeight: '700' },
 });

@@ -7,10 +7,6 @@ import React, {
 import type { Session, User } from '@supabase/supabase-js';
 
 import {
-  clearActiveBusinessScope,
-  setActiveBusinessScope,
-} from '../services/mockDatabase';
-import {
   normalizeSellerVerificationStatus,
   type SellerVerificationStatus,
 } from '../services/adminFoundation';
@@ -176,15 +172,6 @@ export function AuthProvider({
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const applyBusinessScopeForUser = (user: AuthAccount | null) => {
-    if (user?.role === 'founder' && user.businessId) {
-      setActiveBusinessScope(user.businessId);
-      return;
-    }
-
-    clearActiveBusinessScope();
-  };
-
   const applySupabaseSession = async (supabaseSession: Session | null): Promise<AuthAccount | null> => {
     const client = getSupabaseClient();
     if (!client || !supabaseSession) {
@@ -256,7 +243,6 @@ export function AuthProvider({
     setMembership(membershipRow ?? null);
     setRole(normalizedRole);
     setCurrentUser(normalizedUser);
-    applyBusinessScopeForUser(normalizedUser);
     return normalizedUser;
   };
 
@@ -267,7 +253,6 @@ export function AuthProvider({
       try {
         const client = getSupabaseClient();
         if (!client) {
-          clearActiveBusinessScope();
           setAccounts([]);
           setCurrentUser(null);
           setSession(null);
@@ -292,7 +277,6 @@ export function AuthProvider({
           return;
         }
 
-        clearActiveBusinessScope();
         setAccounts([]);
         setCurrentUser(null);
         setSession(null);
@@ -303,7 +287,6 @@ export function AuthProvider({
         setRole(null);
       } catch (error) {
         console.warn('Unable to restore authentication state:', error);
-        clearActiveBusinessScope();
         setCurrentUser(null);
         setSession(null);
         setUser(null);
@@ -331,7 +314,6 @@ export function AuthProvider({
           setMembership(null);
           setRole(null);
           setCurrentUser(null);
-          clearActiveBusinessScope();
           setReady(true);
           return;
         }
@@ -466,7 +448,6 @@ export function AuthProvider({
 
       setCurrentUser(normalizedAccount);
       setRole(normalizedRole);
-      applyBusinessScopeForUser(normalizedAccount);
       return true;
     } finally {
       setLoading(false);
@@ -490,8 +471,6 @@ export function AuthProvider({
     setBusiness(null);
     setMembership(null);
     setRole(null);
-
-    clearActiveBusinessScope();
   };
 
   return (

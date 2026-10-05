@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Image,
@@ -14,13 +14,13 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, Package, ShoppingBag } from 'lucide-react-native';
-import { useMockDatabase, addTripExpense, getTripProducts, getTripOrders, getTripExpenses, addTripCostOfGoods, getTripCostOfGoods, getTripProfit, type TripExpenseType } from '../../../services/mockDatabase';
 import { useAuth } from '../../../context/AuthContext';
 import { getDataSource } from '../../../services/repository';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../../theme';
 import { StatusBadge } from '../../../components/StatusBadge';
 
 type TabType = 'products' | 'orders' | 'buylist' | 'expenses';
+type TripExpenseType = 'Transport' | 'Hotel' | 'Parking' | 'Toll' | 'Other';
 
 function getTripStatusBadge(status: 'planning' | 'open' | 'closed') {
   const label = status === 'planning' ? 'Planning' : status === 'open' ? 'Open' : 'Closed';
@@ -56,10 +56,13 @@ function createTripExpenseDraft(): TripExpenseDraft {
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
   const { membership, business } = useAuth();
-  const db = useMockDatabase();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [trip, setTrip] = useState<{ id: string; businessId?: string; name: string; destination: string; tripDate: string; notes: string; status: 'planning' | 'open' | 'closed'; createdAt: string } | null>(null);
+  const [tripProducts, setTripProducts] = useState<Array<{ id: string; name: string; image: string; status: string; costPrice: number; sellingPrice: number; variants: Array<{ id: string; size: string; stock: number }> }>>([]);
+  const [tripOrders, setTripOrders] = useState<Array<{ id: string; customerName: string; tripId?: string; orderStatus?: string; status?: string; total?: number; orderDate?: string; items: Array<{ productVariantId: string; quantity: number; productName?: string; size?: string }> }>>([]);
+  const [tripExpenses, setTripExpenses] = useState<Array<{ id: string; description: string; amount: number; category?: string | null; payment_method?: string | null; created_at?: string; }>>([]);
+  const [tripProfit, setTripProfit] = useState({ salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 });
   const [buyListItems, setBuyListItems] = useState<Array<{ id: string; businessId: string; tripId?: string; orderId: string; productId?: string; productVariantId: string; itemName: string; quantity: number; purchased: boolean }>>([]);
   const [expenseAmount, setExpenseAmount] = useState('0');
   const [expenseType, setExpenseType] = useState<TripExpenseType>('Transport');
@@ -74,13 +77,17 @@ export default function TripDetailScreen() {
     { id: `cogs-${Date.now()}`, productName: '', quantity: '1', unitCost: '0', notes: '' },
   ]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let active = true;
 
     const load = async () => {
       if (!id || !businessId) {
         if (active) {
           setTrip(null);
+          setTripProducts([]);
+          setTripOrders([]);
+          setTripExpenses([]);
+          setTripProfit({ salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 });
         }
         return;
       }
@@ -88,12 +95,78 @@ export default function TripDetailScreen() {
       try {
         const repo = getDataSource('production');
         const nextTrip = await repo.trips.getForBusiness(businessId, String(id));
-        if (active) {
-          setTrip(nextTrip ?? null);
+        if (!active) {
+          return;
         }
+
+        setTrip(nextTrip ?? null);
+        if (!nextTrip) {
+          setTripProducts([]);
+          setTripOrders([]);
+          setTripExpenses([]);
+          setTripProfit({ salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 });
+          return;
+        }
+
+        const [productRows, orderRows, financeRows] = await Promise.all([
+          repo.products.listForBusiness(businessId),
+          repo.orders.listForBusiness(businessId),
+          repo.finance.listForBusiness(businessId),
+        ]);
+
+        const nextProducts = await Promise.all(
+          productRows.filter((product) => product.tripId === nextTrip.id).map(async (product) => ({
+            ...product,
+            variants: await repo.products.listVariantsForProduct(product.id, businessId),
+          }))
+        );
+
+        const nextOrders = await Promise.all(
+          orderRows.filter((order) => order.tripId === nextTrip.id).map(async (order) => {
+            const items = await repo.orders.listItemsForOrder(order.id, businessId);
+            const nextItems = await Promise.all(items.map(async (item) => {
+              const variant = await repo.products.getProductVariant(item.productVariantId, businessId);
+              const product = variant ? await repo.products.getProduct(variant.productId, businessId) : null;
+              return {
+                productVariantId: item.productVariantId,
+                quantity: item.quantity,
+                productName: product?.name ?? 'Product',
+                size: variant?.size ?? 'Standard',
+              };
+            }));
+
+            return {
+              id: order.id,
+              customerName: order.customerName,
+              tripId: order.tripId,
+              status: order.orderStatus,
+              orderStatus: order.orderStatus,
+              total: Number(order.total ?? 0),
+              orderDate: order.orderDate,
+              items: nextItems,
+            };
+          })
+        );
+
+        setTripProducts(nextProducts);
+        setTripOrders(nextOrders);
+        setTripExpenses(financeRows.filter((entry) => entry.trip_id === nextTrip.id && entry.type === 'expense').map((entry) => ({
+          id: entry.id,
+          description: entry.description,
+          amount: Number(entry.amount ?? 0),
+          category: entry.category,
+          payment_method: entry.payment_method,
+          created_at: entry.created_at,
+        })));
+        const nextProfit = await repo.finance.getTripSummary(businessId, nextTrip.id);
+        setTripProfit(nextProfit);
       } catch {
         if (active) {
           setTrip(null);
+          setTripProducts([]);
+          setTripOrders([]);
+          setTripExpenses([]);
+          setTripProfit({ salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 });
         }
       }
     };
@@ -104,11 +177,7 @@ export default function TripDetailScreen() {
     };
   }, [businessId, id]);
 
-  const tripProducts = useMemo(() => (trip ? getTripProducts(trip.id, db) : []), [trip, db]);
-  const tripOrders = useMemo(() => (trip ? getTripOrders(trip.id, db) : []), [trip, db]);
-  const tripExpenses = useMemo(() => getTripExpenses(trip?.id ?? '', db), [trip, db]);
-
-  React.useEffect(() => {
+  useEffect(() => {
     let active = true;
 
     const loadBuyList = async () => {
@@ -137,8 +206,6 @@ export default function TripDetailScreen() {
       active = false;
     };
   }, [businessId, trip?.id]);
-  const tripCostOfGoods = useMemo(() => getTripCostOfGoods(trip?.id ?? '', db), [trip, db]);
-  const tripProfit = useMemo(() => (trip ? getTripProfit(trip.id, db) : { salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 }), [trip, db]);
 
   const handleCloseTrip = () => {
     if (!trip) return;
@@ -174,43 +241,48 @@ export default function TripDetailScreen() {
       return;
     }
 
+    const repo = getDataSource('production');
     let failed = false;
 
-    validExpenseDrafts.forEach((draft) => {
-      const saved = addTripExpense({
+    for (const draft of validExpenseDrafts) {
+      const created = await repo.finance.create({
+        businessId,
         tripId: trip.id,
-        amount: Number(draft.amount),
-        paymentType: draft.type,
         description: draft.description.trim() || draft.type,
-        date: draft.date,
-        receiptUri: draft.receipt || undefined,
+        amount: Number(draft.amount),
+        type: 'expense',
+        paymentMethod: draft.type,
+        category: 'Trip Expense',
+        referenceId: `trip-expense:${draft.id}`,
       });
 
-      if (!saved) {
+      if (!created) {
         failed = true;
       }
-    });
+    }
 
-    validCogsDrafts.forEach((draft) => {
-      const saved = addTripCostOfGoods({
+    for (const draft of validCogsDrafts) {
+      const created = await repo.finance.create({
+        businessId,
         tripId: trip.id,
-        productName: draft.productName,
-        quantity: Number(draft.quantity),
-        unitCost: Number(draft.unitCost),
-        notes: draft.notes,
+        description: draft.productName.trim() || 'COGS item',
+        amount: Number(draft.quantity) * Number(draft.unitCost),
+        type: 'expense',
+        paymentMethod: 'COGS',
+        category: 'Cost of Goods',
+        referenceId: `trip-cogs:${draft.id}`,
       });
 
-      if (!saved) {
+      if (!created) {
         failed = true;
       }
-    });
+    }
 
     if (failed) {
       setCloseFlowError('One or more final items could not be saved.');
       return;
     }
 
-    const repo = getDataSource('production');
     const closed = await repo.trips.closeTrip(trip.id, businessId);
     if (!closed) {
       setCloseFlowError('This trip could not be closed in Supabase.');
@@ -256,8 +328,8 @@ export default function TripDetailScreen() {
     }
   };
 
-  const saveExpense = () => {
-    if (!trip) return;
+  const saveExpense = async () => {
+    if (!trip || !businessId) return;
 
     const parsedAmount = Number(expenseAmount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
@@ -270,13 +342,16 @@ export default function TripDetailScreen() {
       return;
     }
 
-    const saved = addTripExpense({
+    const repo = getDataSource('production');
+    const saved = await repo.finance.create({
+      businessId,
       tripId: trip.id,
+      description: expenseDescription.trim(),
       amount: parsedAmount,
-      paymentType: expenseType,
-      description: expenseDescription,
-      date: expenseDate,
-      receiptUri: expenseReceipt || undefined,
+      type: 'expense',
+      paymentMethod: expenseType,
+      category: 'Trip Expense',
+      referenceId: `trip-expense:${Date.now()}`,
     });
 
     if (!saved) {
@@ -284,6 +359,8 @@ export default function TripDetailScreen() {
       return;
     }
 
+    const nextFinance = await repo.finance.listForBusiness(businessId);
+    setTripExpenses(nextFinance.filter((entry) => entry.trip_id === trip.id && entry.type === 'expense'));
     setExpenseAmount('0');
     setExpenseType('Transport');
     setExpenseDescription('');
@@ -518,9 +595,8 @@ export default function TripDetailScreen() {
                 <TouchableOpacity style={styles.uploadButton} onPress={() => router.push({ pathname: '/(tabs)/marketplace', params: { tripId: trip.id } })}>
                   <Text style={styles.uploadButtonText}>+ Upload Product</Text>
                 </TouchableOpacity>
-                {tripProducts.map((product: { id: string; name: string; image: string; status: string; costPrice: number; sellingPrice: number }) => {
-                const variants = db.productVariants.filter((variant: { productId: string }) => variant.productId === product.id);
-                const totalQuantity = variants.reduce((sum, variant) => sum + variant.stock, 0);
+                {tripProducts.map((product) => {
+                const totalQuantity = product.variants.reduce((sum, variant) => sum + Number(variant.stock ?? 0), 0);
                 return (
                   <View key={product.id} style={styles.card}>
                     <Image source={{ uri: product.image }} style={styles.productImage} resizeMode="contain" />
@@ -550,7 +626,7 @@ export default function TripDetailScreen() {
                     </View>
 
                     <View style={styles.sizeGrid}>
-                      {variants.map((variant: { id: string; size: string; stock: number }) => (
+                      {product.variants.map((variant) => (
                         <View key={variant.id} style={styles.sizeItem}>
                           <Text style={styles.sizeLabel}>{variant.size}</Text>
                           <Text style={styles.sizeQty}>{variant.stock}</Text>
@@ -570,44 +646,37 @@ export default function TripDetailScreen() {
             {tripOrders.length === 0 ? (
               <Text style={styles.emptyText}>No orders yet</Text>
             ) : (
-              tripOrders.map((order) => {
-                const orderItems = db.orderItems.filter((item: { orderId: string }) => item.orderId === order.id);
-                return (
-                  <View key={order.id} style={styles.card}>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.cardTitleWrap}>
-                        <Text style={styles.cardTitle}>{order.id}</Text>
-                        <Text style={styles.orderCustomer}>{order.customerName}</Text>
-                      </View>
-                      <StatusBadge status={order.status} />
+              tripOrders.map((order) => (
+                <View key={order.id} style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardTitleWrap}>
+                      <Text style={styles.cardTitle}>{order.id}</Text>
+                      <Text style={styles.orderCustomer}>{order.customerName}</Text>
                     </View>
-
-                    <View style={styles.orderItems}>
-                      {orderItems.map((item: { productVariantId: string; quantity: number }, idx: number) => {
-                        const variant = db.productVariants.find((candidate: { id: string }) => candidate.id === item.productVariantId);
-                        const product = variant ? db.products.find((candidate: { id: string }) => candidate.id === variant.productId) : undefined;
-                        return (
-                          <View key={idx} style={styles.orderItem}>
-                            <Text style={styles.itemName}>{product?.name ?? 'Product'}</Text>
-                            <Text style={styles.itemDetail}>{variant?.size} × {item.quantity}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-
-                    <View style={styles.orderFooter}>
-                      <Text style={styles.orderTotal}>Total RM{order.total.toLocaleString()}</Text>
-                      {order.status === 'ready' && (
-                        <TouchableOpacity style={styles.shippingBtn} onPress={() => router.push({ pathname: '/shipping/generate', params: { orderId: order.id, businessId: businessId ?? '' } })}>
-                          <Package size={16} color="#FFFFFF" strokeWidth={2} />
-                          <Text style={styles.shippingBtnText}>Ship Now</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <TouchableOpacity style={styles.smallAction} onPress={() => router.push(`/order/${order.id}`)}><Text style={styles.smallActionText}>View Order</Text></TouchableOpacity>
+                    <StatusBadge status={(order.status ?? 'pending') as any} />
                   </View>
-                );
-              })
+
+                  <View style={styles.orderItems}>
+                    {order.items.map((item, idx) => (
+                      <View key={`${item.productVariantId}-${idx}`} style={styles.orderItem}>
+                        <Text style={styles.itemName}>{item.productName ?? 'Product'}</Text>
+                        <Text style={styles.itemDetail}>{item.size ?? 'Standard'} × {item.quantity}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={styles.orderFooter}>
+                    <Text style={styles.orderTotal}>Total RM{Number(order.total ?? 0).toFixed(2)}</Text>
+                    {(order.status ?? '').toLowerCase() === 'ready' && (
+                      <TouchableOpacity style={styles.shippingBtn} onPress={() => router.push({ pathname: '/shipping/generate', params: { orderId: order.id, businessId: businessId ?? '' } })}>
+                        <Package size={16} color="#FFFFFF" strokeWidth={2} />
+                        <Text style={styles.shippingBtnText}>Ship Now</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <TouchableOpacity style={styles.smallAction} onPress={() => router.push(`/order/${order.id}`)}><Text style={styles.smallActionText}>View Order</Text></TouchableOpacity>
+                </View>
+              ))
             )}
           </View>
         )}
@@ -706,22 +775,19 @@ export default function TripDetailScreen() {
                 <View key={expense.id} style={styles.card}>
                   <View style={styles.expenseRow}>
                     <View style={styles.expenseInfo}>
-                      <Text style={styles.cardTitle}>{expense.paymentType}</Text>
+                      <Text style={styles.cardTitle}>{expense.payment_method ?? expense.category ?? 'Expense'}</Text>
                       <Text style={styles.itemDetail}>{expense.description || 'Trip expense'}</Text>
                     </View>
-                    <Text style={styles.amountText}>RM{expense.amount.toFixed(2)}</Text>
+                    <Text style={styles.amountText}>RM{Number(expense.amount ?? 0).toFixed(2)}</Text>
                   </View>
                   <View style={styles.metaGrid}>
                     <Text style={styles.metaLabel}>Date</Text>
-                    <Text style={styles.metaValue}>{formatDate(expense.date)}</Text>
+                    <Text style={styles.metaValue}>{formatDate(expense.created_at ?? new Date().toISOString())}</Text>
                   </View>
                   <View style={styles.metaGrid}>
-                    <Text style={styles.metaLabel}>Receipt</Text>
-                    <Text style={styles.metaValue}>{expense.receiptUri ? 'Attached' : 'None'}</Text>
+                    <Text style={styles.metaLabel}>Category</Text>
+                    <Text style={styles.metaValue}>{expense.category ?? 'Expense'}</Text>
                   </View>
-                  {!!expense.receiptUri && (
-                    <Image source={{ uri: expense.receiptUri }} style={styles.receiptPreview} resizeMode="cover" />
-                  )}
                 </View>
               ))
             )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 
@@ -6,10 +6,10 @@ import { SectionHeader } from '../../components/SectionHeader';
 import { StatCard } from '../../components/StatCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useAuth } from '../../context/AuthContext';
-import { getDashboardCounts, useMockDatabase } from '../../services/mockDatabase';
+import { getDataSource, type OrderRecord } from '../../services/repository';
 
-function getDashboardOrderStatusLabel(order: { requestStatus?: string; status?: string }) {
-  const canonical = order.requestStatus ?? order.status ?? 'PENDING_AVAILABILITY';
+function getDashboardOrderStatusLabel(order: { requestStatus?: string; orderStatus?: string; status?: string }) {
+  const canonical = order.requestStatus ?? order.orderStatus ?? order.status ?? 'PENDING_AVAILABILITY';
 
   const map: Record<string, string> = {
     PENDING_AVAILABILITY: 'Pending to Buy',
@@ -39,8 +39,8 @@ function getDashboardOrderStatusLabel(order: { requestStatus?: string; status?: 
   return map[canonical] ?? 'Pending to Pay';
 }
 
-function getDashboardBadgeStatus(order: { requestStatus?: string; status?: string }) {
-  const canonical = order.requestStatus ?? order.status ?? 'PENDING_AVAILABILITY';
+function getDashboardBadgeStatus(order: { requestStatus?: string; orderStatus?: string; status?: string }) {
+  const canonical = order.requestStatus ?? order.orderStatus ?? order.status ?? 'PENDING_AVAILABILITY';
 
   const map: Record<string, 'pending' | 'payment_received' | 'packing' | 'shipped' | 'delivered'> = {
     PENDING_AVAILABILITY: 'pending',
@@ -91,22 +91,111 @@ function formatOrderDate(order: { orderDate?: string; createdAt?: string }) {
 
 export default function Dashboard() {
   const { width } = useWindowDimensions();
-  const db = useMockDatabase();
-  const { currentUser } = useAuth();
+  const { currentUser, membership, business } = useAuth();
+  const businessId = membership?.business_id ?? business?.id ?? undefined;
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [trips, setTrips] = useState<Array<{ id: string; name: string; destination: string; tripDate: string; status: 'planning' | 'open' | 'closed' }>>([]);
+  const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const desktop = width >= 900;
   const dashboardWidth = Math.min(Math.max(width - 48, 0), 1240);
   const tableWidth = Math.max(dashboardWidth, 926);
-  const counts = getDashboardCounts(db);
-  const pendingOrders = db.orders.filter((order) => order.status !== 'delivered').map((order) => ({
-    id: order.id,
-    customer: order.customerName,
-    trip: db.trips.find((trip) => trip.id === order.tripId)?.name ?? 'Trip',
-    items: String(db.orderItems.filter((item) => item.orderId === order.id).reduce((total, item) => total + item.quantity, 0)),
-    amount: `RM${order.total.toFixed(2)}`,
-    statusLabel: getDashboardOrderStatusLabel(order),
-    badgeStatus: getDashboardBadgeStatus(order),
-    orderDate: formatOrderDate(order),
-  }));
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!businessId) {
+        if (active) {
+          setOrders([]);
+          setTrips([]);
+          setItemCounts({});
+        }
+        return;
+      }
+
+      try {
+        const repo = getDataSource('production');
+        const [tripRows, orderRows] = await Promise.all([
+          repo.trips.listForBusiness(businessId),
+          repo.orders.listForBusiness(businessId),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        const nextItemCounts: Record<string, number> = {};
+        for (const order of orderRows) {
+          const orderItems = await repo.orders.listItemsForOrder(order.id, businessId);
+          nextItemCounts[order.id] = orderItems.reduce((total, item) => total + Number(item.quantity ?? 0), 0);
+        }
+
+        setTrips(tripRows);
+        setOrders(orderRows);
+        setItemCounts(nextItemCounts);
+      } catch {
+        if (active) {
+          setOrders([]);
+          setTrips([]);
+          setItemCounts({});
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [businessId]);
+
+  const counts = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    let salesToday = 0;
+    let salesThisMonth = 0;
+    let openTrips = 0;
+    let pendingOrders = 0;
+
+    for (const trip of trips) {
+      if (trip.status !== 'closed') {
+        openTrips += 1;
+      }
+    }
+
+    for (const order of orders) {
+      const orderDate = new Date(order.orderDate);
+      const total = Number(order.total ?? 0);
+      if (orderDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+        salesToday += total;
+      }
+      if (orderDate >= monthStart) {
+        salesThisMonth += total;
+      }
+
+      const status = (order.orderStatus ?? order.paymentStatus ?? order.requestStatus ?? '').toLowerCase();
+      if (status !== 'delivered' && status !== 'paid') {
+        pendingOrders += 1;
+      }
+    }
+
+    return { salesToday, salesThisMonth, openTrips, pendingOrders };
+  }, [orders, trips]);
+
+  const pendingOrders = useMemo(() => orders
+    .filter((order) => {
+      const status = (order.orderStatus ?? order.paymentStatus ?? order.requestStatus ?? '').toLowerCase();
+      return status !== 'delivered' && status !== 'paid';
+    })
+    .map((order) => ({
+      id: order.id,
+      customer: order.customerName,
+      trip: trips.find((trip) => trip.id === order.tripId)?.name ?? 'Trip',
+      items: String(itemCounts[order.id] ?? 0),
+      amount: `RM${Number(order.total ?? 0).toFixed(2)}`,
+      statusLabel: getDashboardOrderStatusLabel(order),
+      badgeStatus: getDashboardBadgeStatus(order),
+      orderDate: formatOrderDate(order),
+    })), [itemCounts, orders, trips]);
   const formatCurrency = (value: number) => `RM${value.toFixed(2)}`;
 
   return (
