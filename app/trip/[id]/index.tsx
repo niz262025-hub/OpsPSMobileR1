@@ -598,7 +598,7 @@ export default function TripDetailScreen() {
                     <View style={styles.orderFooter}>
                       <Text style={styles.orderTotal}>Total RM{order.total.toLocaleString()}</Text>
                       {order.status === 'ready' && (
-                        <TouchableOpacity style={styles.shippingBtn} onPress={() => router.push('/shipping/generate')}>
+                        <TouchableOpacity style={styles.shippingBtn} onPress={() => router.push({ pathname: '/shipping/generate', params: { orderId: order.id, businessId: businessId ?? '' } })}>
                           <Package size={16} color="#FFFFFF" strokeWidth={2} />
                           <Text style={styles.shippingBtnText}>Ship Now</Text>
                         </TouchableOpacity>

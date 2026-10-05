@@ -268,12 +268,55 @@ export interface PaymentRepository {
   reconcileFinanceForPayment(paymentId: string, businessId: string): Promise<Array<Record<string, unknown>>>;
 }
 
+export interface ShipmentRecord {
+  id: string;
+  businessId: string;
+  orderId: string;
+  courier: string;
+  trackingNumber?: string | null;
+  shipmentId?: string | null;
+  status: string;
+  recipientName?: string | null;
+  recipientPhone?: string | null;
+  deliveryAddress?: string | null;
+  postcode?: string | null;
+  city?: string | null;
+  state?: string | null;
+  parcelWeight?: number | null;
+  quantity?: number | null;
+  parcelType?: string | null;
+  shippingCost?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ShippingRepository {
+  create(input: {
+    businessId: string;
+    orderId: string;
+    courier: string;
+    recipientName?: string;
+    recipientPhone?: string;
+    deliveryAddress?: string;
+    postcode?: string;
+    city?: string;
+    state?: string;
+    parcelWeight?: number;
+    quantity?: number;
+    parcelType?: string;
+    shippingCost?: number;
+  }): Promise<ShipmentRecord | null>;
+  getForOrder(businessId: string, orderId: string): Promise<ShipmentRecord | null>;
+  listForBusiness(businessId: string): Promise<ShipmentRecord[]>;
+}
+
 export interface DataSource {
   auth: AuthRepository;
   business: BusinessRepository;
   trips: TripRepository;
   products: ProductRepository;
   orders: OrderRepository;
+  shipments: ShippingRepository;
   payments: PaymentRepository;
 }
 
@@ -387,6 +430,30 @@ function mapPaymentRow(row: any): PaymentRecordRow {
     customer_id: row.customer_id ?? row.customerId ?? null,
     created_at: row.created_at ?? new Date().toISOString(),
     updated_at: row.updated_at ?? new Date().toISOString(),
+  };
+}
+
+function mapShipmentRow(row: any): ShipmentRecord {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    orderId: row.order_id,
+    courier: row.courier ?? 'J&T',
+    trackingNumber: row.tracking_number ?? row.trackingNumber ?? null,
+    shipmentId: row.shipment_id ?? row.shipmentId ?? null,
+    status: row.status ?? 'created',
+    recipientName: row.recipient_name ?? row.recipientName ?? null,
+    recipientPhone: row.recipient_phone ?? row.recipientPhone ?? null,
+    deliveryAddress: row.delivery_address ?? row.deliveryAddress ?? null,
+    postcode: row.postcode ?? null,
+    city: row.city ?? null,
+    state: row.state ?? null,
+    parcelWeight: row.parcel_weight !== undefined ? Number(row.parcel_weight ?? 0) : null,
+    quantity: row.quantity !== undefined ? Number(row.quantity ?? 0) : null,
+    parcelType: row.parcel_type ?? row.parcelType ?? null,
+    shippingCost: row.shipping_cost !== undefined ? Number(row.shipping_cost ?? 0) : null,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
   };
 }
 
@@ -909,6 +976,122 @@ class MockDataSource implements DataSource {
     },
   };
 
+  shipments: ShippingRepository = {
+    async create(input) {
+      const snapshot = getMockDatabaseSnapshot();
+      const order = snapshot.orders.find((entry) => entry.id === input.orderId && entry.businessId === input.businessId);
+      if (!order || !['packing', 'ready', 'shipped'].includes(order.status)) {
+        return null;
+      }
+      const paymentApproved = order.paymentStatus === 'success' || order.paymentStatus === 'paid' || order.status === 'payment_received' || order.requestStatus === 'PAYMENT_RECEIVED';
+      if (!paymentApproved) {
+        return null;
+      }
+
+      const trackingNumber = `OPSPS-${Date.now().toString(36).toUpperCase()}`;
+      const shipment = {
+        id: `shipment-mock-${Date.now()}`,
+        businessId: input.businessId,
+        orderId: input.orderId,
+        courier: input.courier ?? 'J&T',
+        trackingNumber,
+        shipmentId: `shipment-${Date.now()}`,
+        status: 'created',
+        recipientName: input.recipientName ?? order.customerName,
+        recipientPhone: input.recipientPhone ?? order.customerPhone ?? null,
+        deliveryAddress: input.deliveryAddress ?? order.deliveryAddress ?? null,
+        postcode: input.postcode ?? null,
+        city: input.city ?? null,
+        state: input.state ?? null,
+        parcelWeight: input.parcelWeight ?? null,
+        quantity: input.quantity ?? 1,
+        parcelType: input.parcelType ?? 'Parcel',
+        shippingCost: input.shippingCost ?? 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } satisfies ShipmentRecord;
+
+      snapshot.orders = snapshot.orders.map((entry) => entry.id === input.orderId ? {
+        ...entry,
+        status: 'shipped',
+        requestStatus: 'SHIPPED',
+        shipment: {
+          orderId: entry.id,
+          courier: shipment.courier,
+          trackingNumber: shipment.trackingNumber,
+          shipmentId: shipment.shipmentId,
+          status: 'created',
+          shippingStatus: 'created',
+          recipientName: shipment.recipientName ?? entry.customerName,
+          recipientPhone: shipment.recipientPhone ?? entry.customerPhone ?? '',
+          deliveryAddress: shipment.deliveryAddress ?? entry.deliveryAddress ?? '',
+          postcode: shipment.postcode ?? '',
+          city: shipment.city ?? '',
+          state: shipment.state ?? '',
+          parcelWeight: shipment.parcelWeight ?? 0,
+          quantity: Number(shipment.quantity ?? 1),
+          parcelType: shipment.parcelType ?? 'Parcel',
+          shippingCost: Number(shipment.shippingCost ?? 0),
+          createdAt: shipment.createdAt ?? new Date().toISOString(),
+        },
+      } : entry);
+
+      return shipment;
+    },
+    async getForOrder(businessId: string, orderId: string) {
+      const snapshot = getMockDatabaseSnapshot();
+      const order = snapshot.orders.find((entry) => entry.id === orderId && entry.businessId === businessId);
+      if (!order?.shipment) {
+        return null;
+      }
+      return {
+        id: `${order.id}-shipment`,
+        businessId,
+        orderId: order.id,
+        courier: order.shipment.courier,
+        trackingNumber: order.shipment.trackingNumber,
+        shipmentId: order.shipment.shipmentId,
+        status: order.shipment.status,
+        recipientName: order.shipment.recipientName ?? null,
+        recipientPhone: order.shipment.recipientPhone ?? null,
+        deliveryAddress: order.shipment.deliveryAddress ?? null,
+        postcode: order.shipment.postcode ?? null,
+        city: order.shipment.city ?? null,
+        state: order.shipment.state ?? null,
+        parcelWeight: order.shipment.parcelWeight ?? null,
+        quantity: order.shipment.quantity ?? null,
+        parcelType: order.shipment.parcelType ?? null,
+        shippingCost: order.shipment.shippingCost ?? null,
+        createdAt: order.shipment.createdAt,
+        updatedAt: order.shipment.createdAt,
+      };
+    },
+    async listForBusiness(businessId: string) {
+      const snapshot = getMockDatabaseSnapshot();
+      return snapshot.orders.filter((order) => order.businessId === businessId && order.shipment).map((order) => ({
+        id: `${order.id}-shipment`,
+        businessId,
+        orderId: order.id,
+        courier: order.shipment!.courier,
+        trackingNumber: order.shipment!.trackingNumber,
+        shipmentId: order.shipment!.shipmentId,
+        status: order.shipment!.status,
+        recipientName: order.shipment!.recipientName ?? null,
+        recipientPhone: order.shipment!.recipientPhone ?? null,
+        deliveryAddress: order.shipment!.deliveryAddress ?? null,
+        postcode: order.shipment!.postcode ?? null,
+        city: order.shipment!.city ?? null,
+        state: order.shipment!.state ?? null,
+        parcelWeight: order.shipment!.parcelWeight ?? null,
+        quantity: order.shipment!.quantity ?? null,
+        parcelType: order.shipment!.parcelType ?? null,
+        shippingCost: order.shipment!.shippingCost ?? null,
+        createdAt: order.shipment!.createdAt,
+        updatedAt: order.shipment!.createdAt,
+      }));
+    },
+  };
+
   payments: PaymentRepository = {
     async create(input) {
       return {
@@ -1018,6 +1201,31 @@ async function getUserIdFromAuth(client: ReturnType<typeof getSupabaseClient>): 
   }
 
   return data.user.id ?? null;
+}
+
+async function hasBusinessAdminAccess(client: ReturnType<typeof getSupabaseClient>, businessId: string): Promise<boolean> {
+  if (!client) {
+    return false;
+  }
+
+  const userId = await getUserIdFromAuth(client);
+  if (!userId || !businessId) {
+    return false;
+  }
+
+  const { data, error } = await client
+    .from('business_memberships')
+    .select('business_id, role')
+    .eq('user_id', userId)
+    .eq('business_id', businessId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return false;
+  }
+
+  const role = String((data as { role?: string }).role ?? '').toLowerCase();
+  return role === 'founder' || role === 'admin';
 }
 
 async function hasMembership(client: ReturnType<typeof getSupabaseClient>, businessId: string): Promise<boolean> {
@@ -2282,6 +2490,127 @@ class SupabaseDataSource implements DataSource {
         seen.add(key);
         return true;
       }).map((row: any) => mapOrderRow(row));
+    },
+  };
+
+  shipments: ShippingRepository = {
+    async create(input) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, input.businessId))) {
+        return null;
+      }
+
+      const { data: orderData, error: orderError } = await client
+        .from('orders')
+        .select('id, business_id, payment_status, order_status, request_status')
+        .eq('id', input.orderId)
+        .eq('business_id', input.businessId)
+        .maybeSingle();
+
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      const paymentStatus = String((orderData as any).payment_status ?? '').toLowerCase();
+      const orderStatus = String((orderData as any).order_status ?? '').toLowerCase();
+      const requestStatus = String((orderData as any).request_status ?? '').toUpperCase();
+      const paymentApproved = ['success', 'paid', 'payment_received'].includes(paymentStatus) || requestStatus === 'PAYMENT_RECEIVED';
+      const isShipmentEligible = ['packing', 'ready', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(orderStatus);
+      if (!paymentApproved || !isShipmentEligible) {
+        return null;
+      }
+
+      const { data: existingShipment, error: existingError } = await client
+        .from('shipments')
+        .select('*')
+        .eq('order_id', input.orderId)
+        .eq('business_id', input.businessId)
+        .maybeSingle();
+
+      if (!existingError && existingShipment) {
+        return mapShipmentRow(existingShipment as any);
+      }
+
+      const shipmentPayload = {
+        business_id: input.businessId,
+        order_id: input.orderId,
+        courier: input.courier || 'J&T',
+        tracking_number: null,
+        shipment_id: null,
+        status: 'created',
+        recipient_name: input.recipientName ?? null,
+        recipient_phone: input.recipientPhone ?? null,
+        delivery_address: input.deliveryAddress ?? null,
+        postcode: input.postcode ?? null,
+        city: input.city ?? null,
+        state: input.state ?? null,
+        parcel_weight: input.parcelWeight ?? null,
+        quantity: input.quantity ?? 1,
+        parcel_type: input.parcelType ?? 'Parcel',
+        shipping_cost: input.shippingCost ?? 0,
+      };
+
+      const { data, error } = await client
+        .from('shipments')
+        .insert(shipmentPayload)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      await client
+        .from('orders')
+        .update({
+          order_status: 'shipped',
+          request_status: 'SHIPPED',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', input.orderId)
+        .eq('business_id', input.businessId);
+
+      return mapShipmentRow(data as any);
+    },
+    async getForOrder(businessId: string, orderId: string) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data, error } = await client
+        .from('shipments')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('order_id', orderId)
+        .maybeSingle();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return mapShipmentRow(data as any);
+    },
+    async listForBusiness(businessId: string) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data, error } = await client
+        .from('shipments')
+        .select('*')
+        .eq('business_id', businessId);
+
+      if (error || !data) {
+        return [];
+      }
+
+      return (data as any[]).map((row) => mapShipmentRow(row));
     },
   };
 

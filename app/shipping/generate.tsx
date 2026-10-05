@@ -7,13 +7,20 @@ import {
   TouchableOpacity,
   TextInput,
   SafeAreaView,
+  Alert,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Send, PackageCheck } from 'lucide-react-native';
+import { useAuth } from '../../context/AuthContext';
+import { getDataSource } from '../../services/repository';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../theme';
 import { StatusBadge } from '../../components/StatusBadge';
 
 export default function ShippingGenerateScreen() {
+  const params = useLocalSearchParams<{ orderId?: string; businessId?: string }>();
+  const { membership, business } = useAuth();
+  const resolvedBusinessId = String(params.businessId ?? membership?.business_id ?? business?.id ?? '');
+  const orderId = String(params.orderId ?? '');
   const [recipient, setRecipient] = useState('');
   const [weight, setWeight] = useState('');
   const [length, setLength] = useState('');
@@ -24,20 +31,51 @@ export default function ShippingGenerateScreen() {
 
   const couriers = ['J&T Express', 'Pos Laju', 'Skynet', 'Lazada Logistics', 'GD Express'];
 
-  const handleGenerateLabel = () => {
+  const handleGenerateLabel = async () => {
     if (!recipient || !weight || !courier) {
       alert('Please fill in all required fields');
       return;
     }
 
-    const trackingNum = `MOCK-EP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const awbNum = `MOCK-AWB-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    if (!orderId || !resolvedBusinessId) {
+      Alert.alert('Shipping unavailable', 'Select an order before creating a shipping label.');
+      return;
+    }
 
-    setShippingLabel({
-      trackingNumber: trackingNum,
-      awbNumber: awbNum,
-      status: 'Generated',
-    });
+    try {
+      const created = await getDataSource('production').shipments.create({
+        businessId: resolvedBusinessId,
+        orderId,
+        courier,
+        recipientName: recipient,
+        recipientPhone: 'N/A',
+        deliveryAddress: 'Shipping label created from order details',
+        postcode: '',
+        city: '',
+        state: '',
+        parcelWeight: Number(weight) || 0,
+        quantity: 1,
+        parcelType: 'Parcel',
+        shippingCost: 0,
+      });
+
+      if (!created) {
+        Alert.alert('Unable to create shipping record', 'Confirm the order is paid and belongs to the active business.');
+        return;
+      }
+
+      const trackingNum = created.trackingNumber ?? created.shipmentId ?? `OPSPS-${created.id.slice(0, 8).toUpperCase()}`;
+      const awbNum = created.shipmentId ?? created.id.slice(0, 12).toUpperCase();
+
+      setShippingLabel({
+        trackingNumber: trackingNum,
+        awbNumber: awbNum,
+        status: created.status,
+      });
+    } catch (error) {
+      console.error('Shipping creation failed', error);
+      Alert.alert('Shipping unavailable', 'The order could not be submitted to Supabase.');
+    }
   };
 
   return (
@@ -95,7 +133,7 @@ export default function ShippingGenerateScreen() {
           <View>
             <View style={styles.successCard}>
               <StatusBadge status="shipped" label="Label generated" />
-              <Text style={styles.successText}>Development mock shipment created. No live courier booking was made.</Text>
+              <Text style={styles.successText}>Shipping record created in Supabase. Courier booking is still handled outside this app flow.</Text>
             </View>
 
             <View style={styles.labelDetails}>
