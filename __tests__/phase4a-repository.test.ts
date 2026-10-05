@@ -160,6 +160,37 @@ function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
           maybeSingle: async () => ({ data: updateRows(), error: null }),
         };
       },
+      delete() {
+        const deleteRows = () => {
+          const matches = filterRows(rows, filters);
+          const deleted = matches.map((row) => ({ ...row }));
+          for (let index = rows.length - 1; index >= 0; index -= 1) {
+            const row = rows[index];
+            if (matches.some((match) => match.id === row.id)) {
+              rows.splice(index, 1);
+            }
+          }
+          return deleted;
+        };
+
+        return {
+          eq(field: string, value: unknown) {
+            filters.push([field, value]);
+            return this;
+          },
+          select() {
+            return {
+              single: async () => ({ data: deleteRows()[0] ?? null, error: null }),
+              maybeSingle: async () => ({ data: deleteRows()[0] ?? null, error: null }),
+            };
+          },
+          single: async () => ({ data: deleteRows()[0] ?? null, error: null }),
+          maybeSingle: async () => ({ data: deleteRows()[0] ?? null, error: null }),
+          then(resolve: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown) {
+            return Promise.resolve({ data: deleteRows(), error: null }).then(resolve);
+          },
+        };
+      },
     };
 
     return builder;
@@ -408,6 +439,192 @@ describe('phase 4a production repository', () => {
     expect(published).toHaveLength(1);
     expect(published[0].name).toBe('Published Item');
     expect(published[0].businessId).toBe('biz-1');
+  });
+
+  it('deletes a product variant for an authorized founder', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Signature tee',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: false,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 12,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    const deleted = await repo.products.deleteVariant('variant-1', 'biz-1', 'product-1');
+
+    expect(deleted).toMatchObject({ id: 'variant-1', productId: 'product-1', size: 'M', stock: 12 });
+    expect(await repo.products.listVariantsForProduct('product-1', 'biz-1')).toEqual([]);
+  });
+
+  it('rejects deleting a variant from the wrong business', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      memberships: [{ business_id: 'biz-1', user_id: 'user-1', role: 'founder' }],
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Signature tee',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: false,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 12,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    await expect(repo.products.deleteVariant('variant-1', 'biz-2', 'product-1')).resolves.toBeNull();
+  });
+
+  it('rejects deleting a variant without founder/admin authorization', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      memberships: [{ business_id: 'biz-1', user_id: 'user-1', role: 'support' }],
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Signature tee',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: false,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 12,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    await expect(repo.products.deleteVariant('variant-1', 'biz-1', 'product-1')).resolves.toBeNull();
+  });
+
+  it('rejects deleting a variant that does not belong to the supplied product', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Signature tee',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: false,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 12,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    await expect(repo.products.deleteVariant('variant-1', 'biz-1', 'product-2')).resolves.toBeNull();
+  });
+
+  it('handles deleting a missing variant safely', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      memberships: [{ business_id: 'biz-1', user_id: 'user-1', role: 'founder' }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    await expect(repo.products.deleteVariant('missing-variant', 'biz-1', 'product-1')).resolves.toBeNull();
   });
 
   it('checks order stock availability against the correct business variant and quantity', async () => {

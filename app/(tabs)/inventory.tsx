@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   View,
   ScrollView,
   StyleSheet,
@@ -119,6 +120,35 @@ export default function InventoryScreen() {
     setVariants((prev) => prev.map((variant) => (variant.id === variantId ? { ...variant, stock: updated.stock } : variant)));
   };
 
+  const deleteVariant = async (variantId: string, productId: string) => {
+    if (!businessId) {
+      return;
+    }
+
+    Alert.alert(
+      'Delete variant?',
+      'This will remove the selected size variant from this business. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const repo = getDataSource('production');
+            const removed = await repo.products.deleteVariant(variantId, businessId, productId);
+            if (!removed) {
+              Alert.alert('Delete failed', 'The variant could not be deleted. Check that you have permission and that it belongs to this business.');
+              return;
+            }
+
+            setVariants((prev) => prev.filter((variant) => variant.id !== variantId));
+            setExpandedItems((prev) => prev.filter((id) => id !== productId));
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -198,6 +228,14 @@ export default function InventoryScreen() {
                           >
                             <Text style={styles.smallButtonText}>-</Text>
                           </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.smallButton, styles.deleteButton]}
+                            onPress={() => {
+                              void deleteVariant(variant.id, product.id);
+                            }}
+                          >
+                            <Text style={styles.smallButtonText}>Delete</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     ))}
@@ -237,5 +275,6 @@ const styles = StyleSheet.create({
   stockActions: { flexDirection: 'row', alignItems: 'center' },
   qtyInput: { borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, minWidth: 48, marginHorizontal: SPACING.sm, color: THEME.text.primary },
   smallButton: { backgroundColor: THEME.primary, borderRadius: BORDER_RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, marginLeft: SPACING.xs },
+  deleteButton: { backgroundColor: THEME.status.error, paddingHorizontal: SPACING.sm, minWidth: 64 },
   smallButtonText: { color: '#FFFFFF', fontWeight: '700' },
 });

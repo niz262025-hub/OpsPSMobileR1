@@ -125,6 +125,7 @@ export interface ProductRepository {
     size?: string;
     stock?: number;
   }): Promise<{ id: string; productId: string; size: string; stock: number } | null>;
+  deleteVariant(variantId: string, businessId: string, productId?: string): Promise<{ id: string; productId: string; size: string; stock: number } | null>;
   getProductVariant(productVariantId: string, businessId: string): Promise<{ id: string; productId: string; size: string; stock: number } | null>;
 }
 
@@ -663,6 +664,20 @@ class MockDataSource implements DataSource {
       };
       snapshot.productVariants = snapshot.productVariants.map((entry) => entry.id === variant.id ? updated : entry);
       return updated;
+    },
+    async deleteVariant(variantId, businessId, productId) {
+      const snapshot = getMockDatabaseSnapshot();
+      const variant = snapshot.productVariants.find((entry) => entry.id === variantId && entry.businessId === businessId && (!productId || entry.productId === productId));
+      if (!variant) {
+        return null;
+      }
+      snapshot.productVariants = snapshot.productVariants.filter((entry) => entry.id !== variantId || entry.businessId !== businessId || (productId ? entry.productId !== productId : false));
+      return {
+        id: variant.id,
+        productId: variant.productId,
+        size: variant.size,
+        stock: variant.stock,
+      };
     },
     async getProductVariant(productVariantId, businessId) {
       const variant = getProductVariant(productVariantId, getMockDatabaseSnapshot(), businessId);
@@ -2037,6 +2052,43 @@ class SupabaseDataSource implements DataSource {
       }
 
       return mapProductVariantRow(data);
+    },
+    async deleteVariant(variantId, businessId, productId) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasBusinessAdminAccess(client, businessId))) {
+        return null;
+      }
+
+      const { data: existingVariant, error: lookupError } = await client
+        .from('product_variants')
+        .select('*')
+        .eq('id', variantId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (lookupError || !existingVariant) {
+        return null;
+      }
+
+      if (productId && existingVariant.product_id !== productId) {
+        return null;
+      }
+
+      let deleteQuery = client.from('product_variants').delete().eq('id', variantId).eq('business_id', businessId);
+      if (productId) {
+        deleteQuery = deleteQuery.eq('product_id', productId);
+      }
+
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) {
+        return null;
+      }
+
+      return mapProductVariantRow(existingVariant);
     },
     async getProductVariant(productVariantId, businessId) {
       const client = getSupabaseClient();
