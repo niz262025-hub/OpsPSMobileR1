@@ -20,6 +20,12 @@ export const OPSPS_REQUIRED_ENV_VARS = [
   'EXPO_PUBLIC_SUPABASE_ANON_KEY',
 ] as const;
 
+export const OPSPS_AUTH_REDIRECT_ENV_VARS = [
+  'EXPO_PUBLIC_SUPABASE_AUTH_REDIRECT_URL',
+  'EXPO_PUBLIC_SITE_URL',
+  'EXPO_PUBLIC_APP_SCHEME',
+] as const;
+
 export const OPSPS_SERVER_ONLY_ENV_VARS = [
   'SUPABASE_SERVICE_ROLE_KEY',
 ] as const;
@@ -27,6 +33,9 @@ export const OPSPS_SERVER_ONLY_ENV_VARS = [
 type SupabasePublicEnv = {
   EXPO_PUBLIC_SUPABASE_URL?: string;
   EXPO_PUBLIC_SUPABASE_ANON_KEY?: string;
+  EXPO_PUBLIC_SUPABASE_AUTH_REDIRECT_URL?: string;
+  EXPO_PUBLIC_SITE_URL?: string;
+  EXPO_PUBLIC_APP_SCHEME?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 };
 
@@ -92,8 +101,57 @@ export function getSupabasePublicConfig(
   return {
     EXPO_PUBLIC_SUPABASE_URL: merged.EXPO_PUBLIC_SUPABASE_URL ?? '',
     EXPO_PUBLIC_SUPABASE_ANON_KEY: merged.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    EXPO_PUBLIC_SUPABASE_AUTH_REDIRECT_URL: merged.EXPO_PUBLIC_SUPABASE_AUTH_REDIRECT_URL ?? '',
+    EXPO_PUBLIC_SITE_URL: merged.EXPO_PUBLIC_SITE_URL ?? '',
+    EXPO_PUBLIC_APP_SCHEME: merged.EXPO_PUBLIC_APP_SCHEME ?? '',
     SUPABASE_SERVICE_ROLE_KEY: merged.SUPABASE_SERVICE_ROLE_KEY ?? '',
   };
+}
+
+export function getSupabaseAuthRedirectUrl(
+  source: SupabasePublicConfigSource = getSupabasePublicConfig()
+): string {
+  const envSource = normalizeSupabaseConfigSource(source);
+  const isBrowserRuntime = typeof window !== 'undefined';
+  const processEnv = !isBrowserRuntime && typeof process !== 'undefined' && process.env
+    ? process.env as Record<string, string | undefined>
+    : {};
+  const expoExtra = readExpoPublicExtra();
+  const merged: Record<string, string | undefined> = {
+    ...processEnv,
+    ...expoExtra,
+    ...envSource,
+  };
+
+  const explicitRedirect = (merged.EXPO_PUBLIC_SUPABASE_AUTH_REDIRECT_URL ?? '').trim();
+  if (explicitRedirect) {
+    return explicitRedirect;
+  }
+
+  const siteUrl = (merged.EXPO_PUBLIC_SITE_URL ?? '').trim();
+  if (siteUrl) {
+    try {
+      return new URL('/auth/callback', siteUrl).toString();
+    } catch {
+      return siteUrl.replace(/\/$/, '') + '/auth/callback';
+    }
+  }
+
+  const appScheme = (merged.EXPO_PUBLIC_APP_SCHEME ?? '').trim();
+  if (appScheme) {
+    return `${appScheme}://auth/callback`;
+  }
+
+  try {
+    const Linking = require('expo-linking');
+    if (typeof Linking.createURL === 'function') {
+      return Linking.createURL('/auth/callback');
+    }
+  } catch {
+    // Fallback is handled below.
+  }
+
+  return '';
 }
 
 export type SupabaseEnvState = {

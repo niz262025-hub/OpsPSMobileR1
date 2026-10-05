@@ -11,6 +11,7 @@ import {
   type SellerVerificationStatus,
 } from '../services/adminFoundation';
 import { getSupabaseClient } from '../services/supabaseClient';
+import { getSupabaseAuthRedirectUrl } from '../services/supabaseSchema';
 
 export type UserRole = 'founder' | 'customer' | 'admin' | 'support';
 
@@ -352,10 +353,12 @@ export function AuthProvider({
 
     setLoading(true);
     try {
+      const authRedirectUrl = getSupabaseAuthRedirectUrl();
       const { data, error } = await client.auth.signUp({
         email: account.email,
         password: account.password,
         options: {
+          emailRedirectTo: authRedirectUrl || undefined,
           data: {
             full_name: account.name,
             role: account.role,
