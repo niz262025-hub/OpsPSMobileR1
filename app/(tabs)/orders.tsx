@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useMockDatabase } from '../../services/mockDatabase';
+import { useAuth } from '../../context/AuthContext';
+import { getDataSource } from '../../services/repository';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 function getOrderDisplayStatus(order: { requestStatus?: string; status?: string; paymentStatus?: string; availabilityStatus?: string }) {
@@ -44,7 +45,42 @@ function getOrderDisplayStatus(order: { requestStatus?: string; status?: string;
 }
 
 export default function OrdersScreen() {
-  const db = useMockDatabase();
+  const { user, profile, membership, business, role } = useAuth();
+  const [orders, setOrders] = useState<Array<{ id: string; customerName: string; total: number; requestStatus?: string; status?: string; tripId?: string; productId?: string; businessId?: string }>>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      const repo = getDataSource('production');
+      try {
+        let rows: Array<{ id: string; customerName: string; total: number; requestStatus?: string; status?: string; tripId?: string; productId?: string; businessId?: string }> = [];
+
+        if (role === 'customer' || !membership?.business_id) {
+          const customerId = profile?.id ?? user?.id ?? undefined;
+          const result = customerId ? await repo.orders.listForCustomer(customerId) : [];
+          rows = result;
+        } else if (membership.business_id) {
+          rows = await repo.orders.listForBusiness(membership.business_id);
+        } else if (business?.id) {
+          rows = await repo.orders.listForBusiness(business.id);
+        }
+
+        if (active) {
+          setOrders(rows);
+        }
+      } catch {
+        if (active) {
+          setOrders([]);
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [business?.id, membership?.business_id, profile?.id, role, user?.id]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -52,11 +88,9 @@ export default function OrdersScreen() {
         <Text style={styles.title}>Orders</Text>
         <Text style={styles.subtitle}>Review customer requests and fulfilment status.</Text>
 
-        {db.orders.map((order) => {
-          const orderItem = db.orderItems.find((item) => item.orderId === order.id);
-          const variant = orderItem ? db.productVariants.find((item) => item.id === orderItem.productVariantId) : undefined;
-          const product = variant ? db.products.find((item) => item.id === variant.productId) : undefined;
-          const trip = db.trips.find((item) => item.id === order.tripId);
+        {orders.length === 0 ? (
+          <Text style={styles.empty}>No orders found for this account.</Text>
+        ) : orders.map((order) => {
           const statusLabel = getOrderDisplayStatus(order);
 
           return (
@@ -65,11 +99,11 @@ export default function OrdersScreen() {
                 <View style={styles.info}>
                   <Text style={styles.order}>{order.id}</Text>
                   <Text style={styles.customer}>{order.customerName}</Text>
-                  <Text style={styles.meta}>{product?.name ?? 'Product'} · {trip?.name ?? 'Trip'}</Text>
+                  <Text style={styles.meta}>Order · {order.productId ?? 'Product'}</Text>
                 </View>
 
                 <View style={styles.amountColumn}>
-                  <Text style={styles.amount}>RM{order.total.toFixed(2)}</Text>
+                  <Text style={styles.amount}>RM{Number(order.total ?? 0).toFixed(2)}</Text>
                   <Text style={styles.statusLabel}>Status</Text>
                   <Text style={styles.status}>{statusLabel}</Text>
                 </View>
@@ -106,4 +140,5 @@ const styles = StyleSheet.create({
   status: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700', textAlign: 'right', marginTop: SPACING.xs },
   viewButton: { marginTop: SPACING.md, alignSelf: 'flex-end', backgroundColor: THEME.primary, borderRadius: BORDER_RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
   viewButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  empty: { color: THEME.text.secondary, marginTop: SPACING.md },
 });

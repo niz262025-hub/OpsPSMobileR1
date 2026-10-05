@@ -19,12 +19,16 @@ import { Link, PackagePlus } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
-import {
-  createProduct,
-  PRODUCT_SIZE_OPTIONS,
-  ProductCategory,
-  useMockDatabase,
-} from '../../services/mockDatabase';
+import { useAuth } from '../../context/AuthContext';
+import { getDataSource } from '../../services/repository';
+
+type ProductCategory = 'Clothing' | 'Shoes' | 'Other';
+
+const PRODUCT_SIZE_OPTIONS: Record<ProductCategory, string[]> = {
+  Clothing: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  Shoes: ['35', '36', '37', '38', '39', '40', '41', '42'],
+  Other: [],
+};
 
 import {
   BORDER_RADIUS,
@@ -98,6 +102,8 @@ async function normalizeProductImageUri(uri: string): Promise<string> {
 
 export default function MarketplaceScreen() {
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
+  const { membership, business } = useAuth();
+  const businessId = membership?.business_id ?? business?.id ?? undefined;
   const routeTripId = Array.isArray(tripId) ? tripId[0] : tripId;
   const fallbackTripId =
     typeof window !== 'undefined'
@@ -105,9 +111,9 @@ export default function MarketplaceScreen() {
       : undefined;
   const resolvedTripId = routeTripId ?? fallbackTripId;
 
-  const db = useMockDatabase();
-
   const [name, setName] = useState('');
+  const [products, setProducts] = useState<Array<{ id: string; name: string; image?: string; sellingPrice?: number; tripId?: string }>>([]);
+  const [tripName, setTripName] = useState('No trip selected');
   const [image, setImage] = useState('');
 
   const [category, setCategory] =
@@ -138,11 +144,52 @@ export default function MarketplaceScreen() {
       ? []
       : PRODUCT_SIZE_OPTIONS[category];
 
-  const products = db.products;
-  const tripLabel =
-    typeof resolvedTripId === 'string' && resolvedTripId.trim()
-      ? db.trips.find((trip) => trip.id === resolvedTripId)?.name ?? resolvedTripId
-      : 'No trip selected';
+  React.useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!businessId) {
+        if (active) {
+          setProducts([]);
+          setTripName('No trip selected');
+        }
+        return;
+      }
+
+      try {
+        const repo = getDataSource('production');
+        const [productRows, tripRows] = await Promise.all([
+          repo.products.listPublishedForBusiness(businessId),
+          repo.trips.listForBusiness(businessId),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setProducts(productRows);
+        if (typeof resolvedTripId === 'string' && resolvedTripId.trim()) {
+          const trip = tripRows.find((entry) => entry.id === resolvedTripId);
+          setTripName(trip?.name ?? resolvedTripId);
+          return;
+        }
+
+        setTripName('No trip selected');
+      } catch {
+        if (active) {
+          setProducts([]);
+          setTripName('No trip selected');
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [businessId, resolvedTripId]);
+
+  const tripLabel = tripName;
 
   const selectCategory = (next: ProductCategory) => {
     setCategory(next);
@@ -200,6 +247,11 @@ export default function MarketplaceScreen() {
     }
 
     try {
+      if (!businessId) {
+        setFormError('You must belong to a business before creating a product.');
+        return;
+      }
+
       const durableImage = image.trim()
         ? await normalizeProductImageUri(image)
         : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
@@ -215,11 +267,14 @@ export default function MarketplaceScreen() {
             <text x="600" y="470" text-anchor="middle" font-size="72" font-family="Arial, sans-serif" fill="white" font-weight="700">${name.trim() || 'OpsPS Product'}</text>
           </svg>
         `)}`;
-      const product = createProduct({
+      const repo = getDataSource('production');
+      const product = await repo.products.create({
+        businessId,
         name,
         image: durableImage,
         category,
         tripId: resolvedTripId,
+        description: undefined,
         size: size || undefined,
         stock: stockNumber,
         costPrice: costNumber,
@@ -244,7 +299,7 @@ export default function MarketplaceScreen() {
         return;
       }
 
-      const productPath = `/product/${product.id}?businessId=${encodeURIComponent(product.businessId || 'business-default')}`;
+      const productPath = `/product/${product.id}?businessId=${encodeURIComponent(product.businessId || businessId)}`;
       const appOrigin =
         typeof window !== 'undefined' && window.location?.origin
           ? window.location.origin

@@ -81,6 +81,7 @@ export interface TripRepository {
 
 export interface ProductRepository {
   listForBusiness(businessId: string): Promise<Product[]>;
+  listPublishedForBusiness(businessId: string): Promise<Product[]>;
   create(input: {
     businessId: string;
     name: string;
@@ -92,9 +93,33 @@ export interface ProductRepository {
     sellingPrice: number;
     size?: string;
     stock?: number;
+    status?: 'ready' | 'preorder';
+    isPublished?: boolean;
+  }): Promise<Product | null>;
+  update(input: {
+    productId: string;
+    businessId: string;
+    name?: string;
+    category?: ProductCategory;
+    image?: string;
+    tripId?: string;
+    description?: string;
+    costPrice?: number;
+    sellingPrice?: number;
+    size?: string;
+    stock?: number;
+    status?: 'ready' | 'preorder';
+    isPublished?: boolean;
   }): Promise<Product | null>;
   getProduct(productId: string, businessId: string): Promise<Product | null>;
   listVariantsForProduct(productId: string, businessId: string): Promise<{ id: string; productId: string; size: string; stock: number }[]>;
+  updateVariant(input: {
+    variantId: string;
+    businessId: string;
+    productId?: string;
+    size?: string;
+    stock?: number;
+  }): Promise<{ id: string; productId: string; size: string; stock: number } | null>;
   getProductVariant(productVariantId: string, businessId: string): Promise<{ id: string; productId: string; size: string; stock: number } | null>;
 }
 
@@ -409,6 +434,9 @@ class MockDataSource implements DataSource {
     async listForBusiness(businessId: string) {
       return getMockDatabaseSnapshot().products.filter((product) => product.businessId === businessId);
     },
+    async listPublishedForBusiness(businessId: string) {
+      return getMockDatabaseSnapshot().products.filter((product) => product.businessId === businessId && product.status === 'ready');
+    },
     async create(input) {
       return createProduct({
         name: input.name,
@@ -423,6 +451,28 @@ class MockDataSource implements DataSource {
         businessId: input.businessId,
       });
     },
+    async update(input) {
+      const snapshot = getMockDatabaseSnapshot();
+      const product = snapshot.products.find((entry) => entry.id === input.productId && entry.businessId === input.businessId);
+      if (!product) {
+        return null;
+      }
+      const updated = {
+        ...product,
+        name: input.name ?? product.name,
+        category: input.category ?? product.category,
+        image: input.image ?? product.image,
+        tripId: input.tripId ?? product.tripId,
+        description: input.description ?? product.description,
+        costPrice: input.costPrice ?? product.costPrice,
+        sellingPrice: input.sellingPrice ?? product.sellingPrice,
+        status: input.status ?? product.status,
+        size: input.size ?? product.size,
+        stock: input.stock ?? product.stock,
+      };
+      snapshot.products = snapshot.products.map((entry) => entry.id === product.id ? updated : entry);
+      return updated;
+    },
     async getProduct(productId, businessId) {
       const product = getProduct(productId, getMockDatabaseSnapshot(), businessId);
       return product ?? null;
@@ -430,6 +480,20 @@ class MockDataSource implements DataSource {
     async listVariantsForProduct(productId: string, businessId: string) {
       const variants = getMockDatabaseSnapshot().productVariants.filter((variant) => variant.productId === productId && variant.businessId === businessId);
       return variants.map((variant) => ({ id: variant.id, productId: variant.productId, size: variant.size, stock: variant.stock }));
+    },
+    async updateVariant(input) {
+      const snapshot = getMockDatabaseSnapshot();
+      const variant = snapshot.productVariants.find((entry) => entry.id === input.variantId && entry.businessId === input.businessId && (!input.productId || entry.productId === input.productId));
+      if (!variant) {
+        return null;
+      }
+      const updated = {
+        ...variant,
+        size: input.size ?? variant.size,
+        stock: input.stock ?? variant.stock,
+      };
+      snapshot.productVariants = snapshot.productVariants.map((entry) => entry.id === variant.id ? updated : entry);
+      return updated;
     },
     async getProductVariant(productVariantId, businessId) {
       const variant = getProductVariant(productVariantId, getMockDatabaseSnapshot(), businessId);
@@ -1141,6 +1205,43 @@ class SupabaseDataSource implements DataSource {
 
       return (productRows as any[]).map((row) => mapProductRow(row, variantMap.get(row.id) ?? []));
     },
+    async listPublishedForBusiness(businessId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return [];
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data: productRows, error: productsError } = await client
+        .from('products')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('is_published', true);
+
+      if (productsError || !productRows) {
+        return [];
+      }
+
+      const { data: variantRows } = await client
+        .from('product_variants')
+        .select('*')
+        .eq('business_id', businessId);
+
+      const variantMap = new Map<string, Array<{ size: string; stock: number }>>();
+      if (variantRows) {
+        for (const row of variantRows as any[]) {
+          const key = row.product_id;
+          const existing = variantMap.get(key) ?? [];
+          existing.push({ size: row.size ?? 'Standard', stock: Number(row.stock ?? 0) });
+          variantMap.set(key, existing);
+        }
+      }
+
+      return (productRows as any[]).map((row) => mapProductRow(row, variantMap.get(row.id) ?? []));
+    },
     async create(input) {
       const client = getSupabaseClient();
       if (!client) {
@@ -1170,8 +1271,8 @@ class SupabaseDataSource implements DataSource {
           image_url: input.image,
           cost_price: Number(input.costPrice || 0),
           selling_price: Number(input.sellingPrice || 0),
-          status: 'ready',
-          is_published: false,
+          status: input.status ?? 'ready',
+          is_published: Boolean(input.isPublished ?? false),
         })
         .select('*')
         .single();
@@ -1193,6 +1294,64 @@ class SupabaseDataSource implements DataSource {
       }
 
       return mapProductRow(data, [{ size: variantRow.size, stock: variantRow.stock }]);
+    },
+    async update(input) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      const existing = await this.getProduct(input.productId, input.businessId);
+      if (!existing) {
+        return null;
+      }
+
+      if (input.tripId) {
+        const tripMatches = await verifyTripBelongsToBusiness(client, input.businessId, input.tripId);
+        if (!tripMatches) {
+          return null;
+        }
+      }
+
+      const payload: Record<string, unknown> = {
+        name: input.name ?? existing.name,
+        category: input.category ?? existing.category,
+        description: input.description ?? existing.description,
+        image_url: input.image ?? existing.image,
+        trip_id: input.tripId ?? existing.tripId,
+        cost_price: Number(input.costPrice ?? existing.costPrice),
+        selling_price: Number(input.sellingPrice ?? existing.sellingPrice),
+        status: input.status ?? existing.status,
+        is_published: typeof input.isPublished === 'boolean' ? input.isPublished : Boolean(existing.status === 'ready'),
+      };
+
+      const { data, error } = await client
+        .from('products')
+        .update(payload)
+        .eq('id', input.productId)
+        .eq('business_id', input.businessId)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      if (typeof input.stock === 'number' || input.size) {
+        const baseVariant = await this.listVariantsForProduct(input.productId, input.businessId);
+        const variantToUpdate = baseVariant[0] ?? null;
+        if (variantToUpdate) {
+          await this.updateVariant({
+            variantId: variantToUpdate.id,
+            businessId: input.businessId,
+            productId: input.productId,
+            size: input.size ?? variantToUpdate.size,
+            stock: input.stock ?? variantToUpdate.stock,
+          });
+        }
+      }
+
+      return this.getProduct(input.productId, input.businessId);
     },
     async getProduct(productId, businessId) {
       const client = getSupabaseClient();
@@ -1244,6 +1403,28 @@ class SupabaseDataSource implements DataSource {
       }
 
       return (data as any[]).map((row) => mapProductVariantRow(row));
+    },
+    async updateVariant(input) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      const baseQuery = client.from('product_variants').update({
+        size: input.size ?? undefined,
+        stock: input.stock ?? undefined,
+      }).eq('id', input.variantId).eq('business_id', input.businessId);
+
+      if (input.productId) {
+        baseQuery.eq('product_id', input.productId);
+      }
+
+      const { data, error } = await baseQuery.select('*').single();
+      if (error || !data) {
+        return null;
+      }
+
+      return mapProductVariantRow(data);
     },
     async getProductVariant(productVariantId, businessId) {
       const client = getSupabaseClient();
@@ -1428,16 +1609,32 @@ class SupabaseDataSource implements DataSource {
       }
 
       const profileId = await getCurrentProfileId(client);
-      const queryByCustomerId = customerId ? client.from('orders').select('*').eq('customer_id', customerId).eq('id', orderId).maybeSingle() : Promise.resolve({ data: null, error: null });
-      const queryByProfileId = profileId ? client.from('orders').select('*').eq('customer_profile_id', profileId).eq('id', orderId).maybeSingle() : Promise.resolve({ data: null, error: null });
+      const candidates = new Set<string>();
+      if (customerId) candidates.add(customerId);
+      if (profileId) candidates.add(profileId);
 
-      const [customerResult, profileResult] = await Promise.all([queryByCustomerId, queryByProfileId]);
-      const data = customerResult.data ?? profileResult.data;
-      if (customerResult.error || profileResult.error || !data) {
+      const results = await Promise.all(
+        [...candidates].map(async (candidateId) => {
+          const byCustomerId = await client.from('orders').select('*').eq('customer_id', candidateId).eq('id', orderId).maybeSingle();
+          if (byCustomerId.data && !byCustomerId.error) {
+            return byCustomerId.data;
+          }
+
+          const byProfileId = await client.from('orders').select('*').eq('customer_profile_id', candidateId).eq('id', orderId).maybeSingle();
+          if (byProfileId.data && !byProfileId.error) {
+            return byProfileId.data;
+          }
+
+          return null;
+        })
+      );
+
+      const data = results.find((row) => row) ?? null;
+      if (!data) {
         return null;
       }
 
-      return mapOrderRow(data);
+      return mapOrderRow(data as any);
     },
     async listForCustomer(customerId: string) {
       const client = getSupabaseClient();
@@ -1446,16 +1643,22 @@ class SupabaseDataSource implements DataSource {
       }
 
       const profileId = await getCurrentProfileId(client);
-      const [customerResult, profileResult] = await Promise.all([
-        customerId ? client.from('orders').select('*').eq('customer_id', customerId) : Promise.resolve({ data: [], error: null }),
-        profileId ? client.from('orders').select('*').eq('customer_profile_id', profileId) : Promise.resolve({ data: [], error: null }),
-      ]);
+      const candidates = new Set<string>();
+      if (customerId) candidates.add(customerId);
+      if (profileId) candidates.add(profileId);
 
-      if (customerResult.error || profileResult.error) {
-        return [];
-      }
+      const results = await Promise.all(
+        [...candidates].map(async (candidateId) => {
+          const byCustomerId = await client.from('orders').select('*').eq('customer_id', candidateId);
+          const byProfileId = await client.from('orders').select('*').eq('customer_profile_id', candidateId);
+          if (byCustomerId.error || byProfileId.error) {
+            return [];
+          }
+          return [...(byCustomerId.data ?? []), ...(byProfileId.data ?? [])];
+        })
+      );
 
-      const rows = [...(customerResult.data ?? []), ...(profileResult.data ?? [])];
+      const rows = results.flat();
       const seen = new Set<string>();
       return rows.filter((row: any) => {
         const key = row?.id;

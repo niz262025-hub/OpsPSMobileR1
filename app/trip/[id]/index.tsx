@@ -15,6 +15,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, CheckCircle2, Package, ShoppingBag } from 'lucide-react-native';
 import { useMockDatabase, markBuyListItemBought, createBuyListItem, updateBuyListItem, deleteBuyListItem, getTripProducts, getTripOrders, getTripBuyListItems, getProductVariant, getProduct, closeTrip, addTripExpense, getTripExpenses, addTripCostOfGoods, getTripCostOfGoods, getTripProfit, type TripExpenseType } from '../../../services/mockDatabase';
+import { useAuth } from '../../../context/AuthContext';
+import { getDataSource } from '../../../services/repository';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../../theme';
 import { StatusBadge } from '../../../components/StatusBadge';
 
@@ -53,8 +55,11 @@ function createTripExpenseDraft(): TripExpenseDraft {
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
+  const { membership, business } = useAuth();
   const db = useMockDatabase();
+  const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [activeTab, setActiveTab] = useState<TabType>('products');
+  const [trip, setTrip] = useState<{ id: string; businessId?: string; name: string; destination: string; tripDate: string; notes: string; status: 'planning' | 'open' | 'closed'; createdAt: string } | null>(null);
   const [buyItemName, setBuyItemName] = useState('');
   const [buyItemQuantity, setBuyItemQuantity] = useState('1');
   const [editingBuyItem, setEditingBuyItem] = useState<string | null>(null);
@@ -71,9 +76,38 @@ export default function TripDetailScreen() {
     { id: `cogs-${Date.now()}`, productName: '', quantity: '1', unitCost: '0', notes: '' },
   ]);
 
-  const trip = db.trips.find((entry: { id: string }) => entry.id === id);
-  const tripProducts = useMemo(() => getTripProducts(trip?.id ?? '', db), [trip, db]);
-  const tripOrders = useMemo(() => getTripOrders(trip?.id ?? '', db), [trip, db]);
+  React.useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!id || !businessId) {
+        if (active) {
+          setTrip(null);
+        }
+        return;
+      }
+
+      try {
+        const repo = getDataSource('production');
+        const nextTrip = await repo.trips.getForBusiness(businessId, String(id));
+        if (active) {
+          setTrip(nextTrip ?? null);
+        }
+      } catch {
+        if (active) {
+          setTrip(null);
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [businessId, id]);
+
+  const tripProducts = useMemo(() => (trip ? getTripProducts(trip.id, db) : []), [trip, db]);
+  const tripOrders = useMemo(() => (trip ? getTripOrders(trip.id, db) : []), [trip, db]);
   const buyListItems = useMemo(() => getTripBuyListItems(trip?.id ?? '', db), [trip, db]);
   const tripExpenses = useMemo(() => getTripExpenses(trip?.id ?? '', db), [trip, db]);
   const tripCostOfGoods = useMemo(() => getTripCostOfGoods(trip?.id ?? '', db), [trip, db]);
@@ -102,8 +136,8 @@ export default function TripDetailScreen() {
     setCogsDrafts((current) => [...current, { id: `cogs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, productName: '', quantity: '1', unitCost: '0', notes: '' }]);
   };
 
-  const saveCloseTrip = () => {
-    if (!trip) return;
+  const saveCloseTrip = async () => {
+    if (!trip || !businessId) return;
 
     const validExpenseDrafts = closeFlowDrafts.filter((draft) => Number(draft.amount) > 0);
     const validCogsDrafts = cogsDrafts.filter((draft) => draft.productName.trim() && Number(draft.quantity) > 0 && Number(draft.unitCost) > 0);
@@ -149,7 +183,14 @@ export default function TripDetailScreen() {
       return;
     }
 
-    closeTrip(trip.id);
+    const repo = getDataSource('production');
+    const closed = await repo.trips.closeTrip(trip.id, businessId);
+    if (!closed) {
+      setCloseFlowError('This trip could not be closed in Supabase.');
+      return;
+    }
+
+    setTrip(closed);
     setShowCloseFlow(false);
     setCloseFlowError('');
     setCloseFlowDrafts([createTripExpenseDraft()]);

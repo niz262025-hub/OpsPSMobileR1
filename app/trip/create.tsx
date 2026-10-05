@@ -4,10 +4,13 @@ import { router } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { ArrowLeft, Calendar } from 'lucide-react-native';
 
-import { createTrip } from '../../services/mockDatabase';
+import { useAuth } from '../../context/AuthContext';
+import { getDataSource } from '../../services/repository';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 export default function CreateTripScreen() {
+  const { membership, business } = useAuth();
+  const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [name, setName] = useState('');
   const [destination, setDestination] = useState('');
   const [tripDate, setTripDate] = useState(new Date());
@@ -15,13 +18,31 @@ export default function CreateTripScreen() {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim() || !destination.trim()) {
       setError('Please complete the trip name, destination and date.');
       return;
     }
 
-    createTrip({ name, destination, tripDate: tripDate.toISOString().slice(0, 10), notes });
+    if (!businessId) {
+      setError('You must belong to a business before creating a trip.');
+      return;
+    }
+
+    const repo = getDataSource('production');
+    const created = await repo.trips.create({
+      businessId,
+      name,
+      destination,
+      tripDate: tripDate.toISOString().slice(0, 10),
+      notes,
+    });
+
+    if (!created) {
+      setError('Trip could not be created. Please retry with a valid business context.');
+      return;
+    }
+
     router.replace('/(tabs)/trips');
   };
 

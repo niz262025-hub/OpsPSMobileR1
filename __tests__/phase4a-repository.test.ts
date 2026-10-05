@@ -284,4 +284,114 @@ describe('phase 4a production repository', () => {
       })
     ).resolves.toBeNull();
   });
+
+  it('updates product and variant data within the same business tenant', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Signature tee',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: false,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 12,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    const updatedProduct = await repo.products.update({
+      productId: 'product-1',
+      businessId: 'biz-1',
+      name: 'OpsPS Tee Updated',
+      sellingPrice: 30,
+      stock: 9,
+      status: 'ready',
+      isPublished: true,
+    });
+
+    expect(updatedProduct?.name).toBe('OpsPS Tee Updated');
+    expect(updatedProduct?.sellingPrice).toBe(30);
+
+    const refreshedProduct = await repo.products.getProduct('product-1', 'biz-1');
+    expect(refreshedProduct?.sellingPrice).toBe(30);
+
+    expect(await repo.products.listVariantsForProduct('product-1', 'biz-1')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ size: 'M', stock: 9 }),
+      ])
+    );
+  });
+
+  it('returns only published products for marketplace listing', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'Published Item',
+        category: 'Clothing',
+        description: 'Ready to sell',
+        image_url: 'https://example.com/published.png',
+        cost_price: 15,
+        selling_price: 39,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      trip: {
+        id: 'trip-1',
+        business_id: 'biz-1',
+        name: 'Trip A',
+        destination: 'Kota Baru',
+        trip_date: '2026-09-20',
+        notes: 'Launch week',
+        status: 'planning',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 15,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    }) as any);
+
+    const repo = getDataSource('production');
+    const published = await repo.products.listPublishedForBusiness('biz-1');
+
+    expect(published).toHaveLength(1);
+    expect(published[0].name).toBe('Published Item');
+    expect(published[0].businessId).toBe('biz-1');
+  });
 });

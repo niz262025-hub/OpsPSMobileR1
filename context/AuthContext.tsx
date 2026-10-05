@@ -4,14 +4,13 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Session, User } from '@supabase/supabase-js';
 
 import {
   clearActiveBusinessScope,
   setActiveBusinessScope,
 } from '../services/mockDatabase';
 import {
-  canSellerUseBusinessPrivileges,
   normalizeSellerVerificationStatus,
   type SellerVerificationStatus,
 } from '../services/adminFoundation';
@@ -40,9 +39,45 @@ export type AuthRegistrationResult = {
   statusCode?: number;
 };
 
+type AuthProfileRow = {
+  id?: string;
+  auth_user_id?: string | null;
+  business_id?: string | null;
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  role?: string | null;
+};
+
+type AuthBusinessRow = {
+  id?: string | null;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type AuthMembershipRow = {
+  id?: string | null;
+  business_id?: string | null;
+  user_id?: string | null;
+  role?: string | null;
+};
+
 type AuthContextValue = {
   accounts: AuthAccount[];
   ready: boolean;
+  loading: boolean;
+  user: User | null;
+  session: Session | null;
+  profile: AuthProfileRow | null;
+  business: AuthBusinessRow | null;
+  membership: AuthMembershipRow | null;
+  role: UserRole | null;
   register: (account: AuthAccount) => Promise<AuthRegistrationResult>;
   login: (
     email: string,
@@ -53,18 +88,6 @@ type AuthContextValue = {
   currentUser: AuthAccount | null;
 };
 
-const ACCOUNTS_KEY = '@opsps_accounts';
-const SESSION_KEY = '@opsps_session';
-const ACTIVE_BUSINESS_KEY = '@opsps_active_business_id';
-
-function isProductionRuntime(): boolean {
-  if (typeof __DEV__ === 'boolean') {
-    return !__DEV__;
-  }
-
-  return process.env.NODE_ENV === 'production';
-}
-
 export function sanitizePersistedAccount(account: Partial<AuthAccount> | null | undefined) {
   if (!account) {
     return null;
@@ -73,48 +96,6 @@ export function sanitizePersistedAccount(account: Partial<AuthAccount> | null | 
   const sanitized = { ...account };
   delete sanitized.password;
   return sanitized;
-}
-
-function syncBrowserAuthState(user: AuthAccount | null) {
-  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-    return;
-  }
-
-  try {
-    if (!user) {
-      window.localStorage.removeItem(SESSION_KEY);
-      window.localStorage.removeItem(ACTIVE_BUSINESS_KEY);
-      return;
-    }
-
-    window.localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify(sanitizePersistedAccount(user))
-    );
-    if (user.role === 'founder' && user.businessId) {
-      window.localStorage.setItem(ACTIVE_BUSINESS_KEY, user.businessId);
-      return;
-    }
-
-    window.localStorage.removeItem(ACTIVE_BUSINESS_KEY);
-  } catch {
-    // Ignore browser storage write failures in restricted contexts.
-  }
-}
-
-function syncBrowserAccounts(accounts: AuthAccount[]) {
-  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(
-      ACCOUNTS_KEY,
-      JSON.stringify(accounts.map((account) => sanitizePersistedAccount(account)))
-    );
-  } catch {
-    // Ignore browser storage write failures in restricted contexts.
-  }
 }
 
 export function classifySupabaseSignupError(
@@ -179,255 +160,157 @@ const AuthContext = createContext<AuthContextValue | undefined>(
   undefined
 );
 
-/**
- * Creates a stable business scope ID.
- *
- * IMPORTANT:
- * Do not use Math.random() here.
- * The same account must always resolve to the same businessId.
- */
-function createBusinessScopeId(
-  account: Pick<AuthAccount, 'email' | 'role' | 'name'>
-): string {
-  const seeded = `${account.role}:${
-    account.email || account.name || 'business'
-  }`
-    .trim()
-    .toLowerCase();
-
-  const slug =
-    seeded
-      .replace(/[^a-z0-9]+/gi, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 48) || 'business';
-
-  return `business-${slug}`;
-}
-
-/**
- * Normalizes an account loaded from storage or received during registration.
- *
- * Existing accounts without a businessId are migrated to a stable ID.
- */
-function normalizeAccount(
-  account: Partial<AuthAccount>
-): AuthAccount {
-  const email = String(account.email ?? '').trim();
-
-  const role: UserRole =
-    account.role === 'customer'
-      ? 'customer'
-      : account.role === 'admin'
-        ? 'admin'
-        : account.role === 'support'
-          ? 'support'
-          : 'founder';
-
-  const name = String(account.name ?? '');
-
-  const businessId =
-    account.businessId ||
-    createBusinessScopeId({
-      email,
-      role,
-      name,
-    });
-
-  return {
-    email,
-    password: String(account.password ?? ''),
-    role,
-    name,
-    businessName: account.businessName ?? '',
-    phone: account.phone ?? '',
-    address: account.address ?? '',
-    businessId,
-    sellerVerificationStatus: normalizeSellerVerificationStatus(account.sellerVerificationStatus ?? 'PENDING'),
-  };
-}
-
 export function AuthProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [accounts, setAccounts] = useState<AuthAccount[]>([]);
-
   const [currentUser, setCurrentUser] = useState<AuthAccount | null>(null);
-
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<AuthProfileRow | null>(null);
+  const [business, setBusiness] = useState<AuthBusinessRow | null>(null);
+  const [membership, setMembership] = useState<AuthMembershipRow | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const applyBusinessScopeForUser = (user: AuthAccount | null) => {
     if (user?.role === 'founder' && user.businessId) {
-      const sellerApproved = canSellerUseBusinessPrivileges(user.role, user.sellerVerificationStatus ?? 'PENDING');
-      if (!sellerApproved) {
-        clearActiveBusinessScope();
-        syncBrowserAuthState(null);
-        return;
-      }
-
       setActiveBusinessScope(user.businessId);
-      syncBrowserAuthState(user);
       return;
     }
 
     clearActiveBusinessScope();
-    syncBrowserAuthState(null);
   };
 
-  const applySupabaseSession = async () => {
+  const applySupabaseSession = async (supabaseSession: Session | null): Promise<AuthAccount | null> => {
     const client = getSupabaseClient();
-    if (!client) {
+    if (!client || !supabaseSession) {
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setBusiness(null);
+      setMembership(null);
+      setRole(null);
+      setCurrentUser(null);
       return null;
     }
 
-    const { data, error } = await client.auth.getSession();
-    if (error || !data.session) {
-      return null;
-    }
-
-    const user = data.session.user;
-    const { data: profileData } = await client
+    const authUser = supabaseSession.user;
+    const { data: profileData, error: profileError } = await client
       .from('profiles')
       .select('*')
-      .eq('auth_user_id', user.id)
+      .eq('auth_user_id', authUser.id)
       .maybeSingle();
 
-    const { data: membershipData } = await client
+    if (profileError && profileError.code !== 'PGRST116') {
+      throw profileError;
+    }
+
+    const { data: membershipRows, error: membershipError } = await client
       .from('business_memberships')
-      .select('business_id, role')
-      .eq('user_id', user.id)
+      .select('*')
+      .eq('user_id', authUser.id)
       .limit(1);
 
-    const businessId = membershipData?.[0]?.business_id ?? undefined;
-    const normalizedRole = (profileData?.role as UserRole) || (membershipData?.[0]?.role as UserRole) || 'customer';
+    if (membershipError) {
+      throw membershipError;
+    }
+
+    const membershipRow = membershipRows?.[0] ?? null;
+    let businessRow: AuthBusinessRow | null = null;
+
+    if (membershipRow?.business_id) {
+      const { data: businessData, error: businessError } = await client
+        .from('businesses')
+        .select('*')
+        .eq('id', membershipRow.business_id)
+        .maybeSingle();
+
+      if (businessError) {
+        throw businessError;
+      }
+
+      businessRow = businessData ?? null;
+    }
+
+    const normalizedRole = (profileData?.role as UserRole) || (membershipRow?.role as UserRole) || 'customer';
     const normalizedUser: AuthAccount = {
-      email: user.email ?? '',
+      email: authUser.email ?? '',
       password: '',
       role: normalizedRole,
-      name: profileData?.full_name ?? user.user_metadata?.full_name ?? user.email ?? 'User',
-      businessId,
-      businessName: profileData?.business_id ? 'Supabase Business' : '',
+      name: profileData?.full_name ?? authUser.user_metadata?.full_name ?? authUser.email ?? 'User',
+      businessId: membershipRow?.business_id ?? undefined,
+      businessName: businessRow?.name ?? '',
       phone: profileData?.phone ?? '',
       address: profileData?.address ?? '',
-      sellerVerificationStatus: normalizeSellerVerificationStatus(profileData?.seller_verification_status ?? 'PENDING'),
+      sellerVerificationStatus: normalizeSellerVerificationStatus((businessRow as { seller_verification_status?: string } | null | undefined)?.seller_verification_status ?? 'PENDING'),
     };
 
+    setSession(supabaseSession);
+    setUser(authUser);
+    setProfile(profileData ?? null);
+    setBusiness(businessRow);
+    setMembership(membershipRow ?? null);
+    setRole(normalizedRole);
     setCurrentUser(normalizedUser);
     applyBusinessScopeForUser(normalizedUser);
-    syncBrowserAuthState(normalizedUser);
     return normalizedUser;
   };
 
-  /**
-   * Restore accounts and existing session.
-   */
   useEffect(() => {
     let active = true;
 
     const restoreAuth = async () => {
       try {
         const client = getSupabaseClient();
-        if (client) {
-          const supabaseSession = await applySupabaseSession();
-          if (supabaseSession && active) {
-            setReady(true);
-            return;
-          }
-        }
-
-        if (isProductionRuntime()) {
+        if (!client) {
           clearActiveBusinessScope();
-          syncBrowserAuthState(null);
           setAccounts([]);
           setCurrentUser(null);
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setBusiness(null);
+          setMembership(null);
+          setRole(null);
           setReady(true);
           return;
         }
 
-        const [
-          storedAccounts,
-          storedSession,
-        ] = await Promise.all([
-          AsyncStorage.getItem(ACCOUNTS_KEY),
-          AsyncStorage.getItem(SESSION_KEY),
-        ]);
+        const { data, error } = await client.auth.getSession();
+        if (error) {
+          throw error;
+        }
 
-        const parsedAccounts = storedAccounts
-          ? (JSON.parse(
-              storedAccounts
-            ) as Partial<AuthAccount>[])
-          : [];
-
-        /**
-         * Normalize/migrate all existing accounts.
-         *
-         * This is important because older accounts may not
-         * have businessId yet.
-         */
-        const normalizedAccounts =
-          parsedAccounts.map(normalizeAccount);
-
-        if (!active) {
+        const supabaseSession = data.session;
+        if (supabaseSession && active) {
+          await applySupabaseSession(supabaseSession);
+          setReady(true);
           return;
         }
-
-        setAccounts(normalizedAccounts);
-
-        /**
-         * Persist migrated accounts so the generated
-         * businessId does not change on the next launch.
-         */
-        if (
-          JSON.stringify(normalizedAccounts) !==
-          JSON.stringify(parsedAccounts)
-        ) {
-          await AsyncStorage.setItem(
-            ACCOUNTS_KEY,
-            JSON.stringify(normalizedAccounts.map((account) => sanitizePersistedAccount(account)))
-          );
-        }
-
-        syncBrowserAccounts(normalizedAccounts);
-
-        const savedSession = storedSession
-          ? (JSON.parse(
-              storedSession
-            ) as Partial<AuthAccount>)
-          : null;
-
-        const normalizedSession = savedSession
-          ? normalizeAccount(savedSession)
-          : null;
-
-        if (!active) {
-          return;
-        }
-
-        if (normalizedSession) {
-          setCurrentUser(normalizedSession);
-          applyBusinessScopeForUser(normalizedSession);
-          syncBrowserAuthState(normalizedSession);
-
-          /**
-           * Persist the normalized session too, especially
-           * for older sessions that did not contain businessId.
-           */
-          await AsyncStorage.setItem(
-            SESSION_KEY,
-            JSON.stringify(sanitizePersistedAccount(normalizedSession))
-          );
-        } else {
-          clearActiveBusinessScope();
-          syncBrowserAuthState(null);
-        }
-      } catch (error) {
-        console.warn(
-          'Unable to restore authentication state:',
-          error
-        );
 
         clearActiveBusinessScope();
+        setAccounts([]);
+        setCurrentUser(null);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setBusiness(null);
+        setMembership(null);
+        setRole(null);
+      } catch (error) {
+        console.warn('Unable to restore authentication state:', error);
+        clearActiveBusinessScope();
+        setCurrentUser(null);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setBusiness(null);
+        setMembership(null);
+        setRole(null);
       } finally {
         if (active) {
           setReady(true);
@@ -436,6 +319,32 @@ export function AuthProvider({
     };
 
     void restoreAuth();
+
+    const client = getSupabaseClient();
+    if (client) {
+      const { data: authListener } = client.auth.onAuthStateChange(async (_event, nextSession) => {
+        if (!nextSession) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setBusiness(null);
+          setMembership(null);
+          setRole(null);
+          setCurrentUser(null);
+          clearActiveBusinessScope();
+          setReady(true);
+          return;
+        }
+
+        await applySupabaseSession(nextSession);
+        setReady(true);
+      });
+
+      return () => {
+        active = false;
+        authListener.subscription.unsubscribe();
+      };
+    }
 
     return () => {
       active = false;
@@ -451,7 +360,7 @@ export function AuthProvider({
     account: AuthAccount
   ): Promise<AuthRegistrationResult> => {
     const client = getSupabaseClient();
-    if (!client && isProductionRuntime()) {
+    if (!client) {
       return {
         ok: false,
         kind: 'auth_error',
@@ -459,7 +368,8 @@ export function AuthProvider({
       };
     }
 
-    if (client) {
+    setLoading(true);
+    try {
       const { data, error } = await client.auth.signUp({
         email: account.email,
         password: account.password,
@@ -489,55 +399,15 @@ export function AuthProvider({
         return classifySupabaseSignupError(profileError ?? { status: 0, message: 'Unable to create profile.' });
       }
 
-      const normalizedAccount = normalizeAccount({
-        ...account,
-        sellerVerificationStatus: 'PENDING',
-      });
-      setCurrentUser(normalizedAccount);
-      applyBusinessScopeForUser(normalizedAccount);
-      syncBrowserAuthState(normalizedAccount);
-      await AsyncStorage.setItem(
-        SESSION_KEY,
-        JSON.stringify(sanitizePersistedAccount(normalizedAccount))
-      );
+      const { data: sessionData } = await client.auth.getSession();
+      if (sessionData.session) {
+        await applySupabaseSession(sessionData.session);
+      }
+
       return { ok: true, message: 'Registration successful.' };
+    } finally {
+      setLoading(false);
     }
-
-    const normalizedAccount =
-      normalizeAccount({
-        ...account,
-        sellerVerificationStatus: account.role === 'founder' ? 'PENDING' : undefined,
-      });
-
-    const emailExists = accounts.some(
-      (entry) =>
-        entry.email.toLowerCase() ===
-          normalizedAccount.email.toLowerCase() &&
-        entry.role === normalizedAccount.role
-    );
-
-    if (emailExists) {
-      return {
-        ok: false,
-        kind: 'duplicate',
-        message: 'An account with this email already exists.',
-      };
-    }
-
-    const nextAccounts = [
-      ...accounts,
-      normalizedAccount,
-    ];
-
-    setAccounts(nextAccounts);
-    syncBrowserAccounts(nextAccounts);
-
-    await AsyncStorage.setItem(
-      ACCOUNTS_KEY,
-      JSON.stringify(nextAccounts.map((account) => sanitizePersistedAccount(account)))
-    );
-
-    return { ok: true, message: 'Registration successful.' };
   };
 
   /**
@@ -549,11 +419,12 @@ export function AuthProvider({
     role: UserRole
   ): Promise<boolean> => {
     const client = getSupabaseClient();
-    if (!client && isProductionRuntime()) {
+    if (!client) {
       return false;
     }
 
-    if (client) {
+    setLoading(true);
+    try {
       const { data, error } = await client.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -575,87 +446,52 @@ export function AuthProvider({
 
       const { data: membershipData } = await client
         .from('business_memberships')
-        .select('business_id')
+        .select('*')
         .eq('user_id', data.user.id)
         .limit(1);
 
+      const membershipRow = membershipData?.[0] ?? null;
+      const normalizedRole = (profileData?.role as UserRole) || (membershipRow?.role as UserRole) || role;
       const normalizedAccount: AuthAccount = {
         email: data.user.email ?? email.trim(),
         password,
-        role: profileData?.role ?? role,
+        role: normalizedRole,
         name: profileData?.full_name ?? data.user.user_metadata?.full_name ?? email.trim(),
-        businessId: membershipData?.[0]?.business_id ?? undefined,
-        businessName: membershipData?.[0]?.business_id ? 'Supabase Business' : '',
+        businessId: membershipRow?.business_id ?? undefined,
+        businessName: membershipRow?.business_id ? 'Supabase Business' : '',
         phone: profileData?.phone ?? '',
         address: profileData?.address ?? '',
         sellerVerificationStatus: normalizeSellerVerificationStatus((profileData as { seller_verification_status?: string } | null | undefined)?.seller_verification_status ?? 'PENDING'),
       };
 
       setCurrentUser(normalizedAccount);
+      setRole(normalizedRole);
       applyBusinessScopeForUser(normalizedAccount);
-      syncBrowserAuthState(normalizedAccount);
-      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(normalizedAccount));
       return true;
+    } finally {
+      setLoading(false);
     }
-
-    const sanitizedEmail = email.trim();
-
-    const account = accounts.find(
-      (entry) =>
-        entry.email.toLowerCase() ===
-          sanitizedEmail.toLowerCase() &&
-        entry.password === password &&
-        entry.role === role
-    );
-
-    if (!account) {
-      return false;
-    }
-
-    const resolvedAccount =
-      normalizeAccount(account);
-
-    setCurrentUser(resolvedAccount);
-    applyBusinessScopeForUser(resolvedAccount);
-    syncBrowserAuthState(resolvedAccount);
-
-    await AsyncStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify(sanitizePersistedAccount(resolvedAccount))
-    );
-
-    const updatedAccounts = accounts.map(
-      (entry) =>
-        entry.email.toLowerCase() ===
-          resolvedAccount.email.toLowerCase() &&
-        entry.role === resolvedAccount.role
-          ? resolvedAccount
-          : entry
-    );
-
-    setAccounts(updatedAccounts);
-    syncBrowserAccounts(updatedAccounts);
-
-    await AsyncStorage.setItem(
-      ACCOUNTS_KEY,
-      JSON.stringify(updatedAccounts.map((account) => sanitizePersistedAccount(account)))
-    );
-
-    return true;
   };
 
   /**
    * Logout.
    */
   const logout = async (): Promise<void> => {
+    const client = getSupabaseClient();
+
+    if (client) {
+      await client.auth.signOut();
+    }
+
     setCurrentUser(null);
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setBusiness(null);
+    setMembership(null);
+    setRole(null);
 
     clearActiveBusinessScope();
-    syncBrowserAuthState(null);
-
-    await AsyncStorage.removeItem(
-      SESSION_KEY
-    );
   };
 
   return (
@@ -663,6 +499,13 @@ export function AuthProvider({
       value={{
         accounts,
         ready,
+        loading,
+        user,
+        session,
+        profile,
+        business,
+        membership,
+        role,
         register,
         login,
         logout,

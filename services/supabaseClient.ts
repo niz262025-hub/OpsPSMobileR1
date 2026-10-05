@@ -25,8 +25,8 @@ export function createSupabaseClientFromConfig(
   if (!client || clientKey !== configKey) {
     client = createClient(env.url, env.anonKey, {
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        persistSession: true,
+        autoRefreshToken: true,
         detectSessionInUrl: false,
       },
     });

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 
 import { StatusBadge } from '../../components/StatusBadge';
-import { useMockDatabase, getTripOrders, getTripProducts } from '../../services/mockDatabase';
+import { useAuth } from '../../context/AuthContext';
+import { getDataSource } from '../../services/repository';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 type TripStatus = 'planning' | 'open' | 'closed';
@@ -22,8 +23,70 @@ function formatDate(date: string) {
 
 export default function TripsScreen() {
   const { width } = useWindowDimensions();
-  const db = useMockDatabase();
+  const { membership, business } = useAuth();
+  const businessId = membership?.business_id ?? business?.id ?? undefined;
+  const [trips, setTrips] = useState<Array<{ id: string; name: string; destination: string; tripDate: string; status: 'planning' | 'open' | 'closed' }>>([]);
+  const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
+  const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const desktop = width >= 900;
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!businessId) {
+        if (active) {
+          setTrips([]);
+          setOrderCounts({});
+          setProductCounts({});
+        }
+        return;
+      }
+
+      try {
+        const repo = getDataSource('production');
+        const [tripRows, orderRows, productRows] = await Promise.all([
+          repo.trips.listForBusiness(businessId),
+          repo.orders.listForBusiness(businessId),
+          repo.products.listForBusiness(businessId),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setTrips(tripRows);
+        setOrderCounts(Object.fromEntries(
+          Object.entries(
+            tripRows.reduce<Record<string, number>>((accumulator, trip) => {
+              accumulator[trip.id] = 0;
+              return accumulator;
+            }, {})
+          )
+        ));
+
+        const nextOrderCounts: Record<string, number> = {};
+        const nextProductCounts: Record<string, number> = {};
+        for (const row of tripRows) {
+          nextOrderCounts[row.id] = orderRows.filter((order) => order.tripId === row.id).length;
+          nextProductCounts[row.id] = productRows.filter((product) => product.tripId === row.id).length;
+        }
+        setOrderCounts(nextOrderCounts);
+        setProductCounts(nextProductCounts);
+      } catch {
+        if (active) {
+          setTrips([]);
+          setOrderCounts({});
+          setProductCounts({});
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [businessId]);
 
   const openTrip = (tripId: string) => router.push({ pathname: '/trip/[id]', params: { id: tripId } });
 
@@ -48,20 +111,20 @@ export default function TripsScreen() {
                 <Text key={label} style={[styles.headerText, styles[columnStyles[label as keyof typeof columnStyles]]]}>{label}</Text>
               ))}
             </View>
-            {db.trips.map((trip) => (
+            {trips.map((trip) => (
               <View key={trip.id} style={styles.row}>
                 <Text style={[styles.cellText, styles.tripColumn]}>{trip.name}</Text>
                 <Text style={[styles.cellText, styles.destinationColumn]}>{trip.destination}</Text>
                 <Text style={[styles.cellText, styles.dateColumn]}>{formatDate(trip.tripDate)}</Text>
-                <Text style={[styles.cellText, styles.countColumn]}>{getTripOrders(trip.id, db).length}</Text>
-                <Text style={[styles.cellText, styles.countColumn]}>{getTripProducts(trip.id, db).length}</Text>
+                <Text style={[styles.cellText, styles.countColumn]}>{orderCounts[trip.id] ?? 0}</Text>
+                <Text style={[styles.cellText, styles.countColumn]}>{productCounts[trip.id] ?? 0}</Text>
                 <View style={styles.statusColumn}>{statusBadge(trip.status)}</View>
                 <Pressable style={styles.actionColumn} onPress={() => openTrip(trip.id)}><Text style={styles.actionText}>View</Text></Pressable>
               </View>
             ))}
           </View>
         ) : (
-          db.trips.map((trip) => (
+          trips.map((trip) => (
             <Pressable key={trip.id} style={styles.card} onPress={() => openTrip(trip.id)}>
               <View style={styles.cardTop}>
                 <View style={styles.cardTitleWrap}>
@@ -72,8 +135,8 @@ export default function TripsScreen() {
               </View>
               <View style={styles.cardStats}>
                 <Text style={styles.statText}>Date: {formatDate(trip.tripDate)}</Text>
-                <Text style={styles.statText}>Orders: {getTripOrders(trip.id, db).length}</Text>
-                <Text style={styles.statText}>Products: {getTripProducts(trip.id, db).length}</Text>
+                <Text style={styles.statText}>Orders: {orderCounts[trip.id] ?? 0}</Text>
+                <Text style={styles.statText}>Products: {productCounts[trip.id] ?? 0}</Text>
               </View>
               <Text style={styles.actionText}>View</Text>
             </Pressable>
