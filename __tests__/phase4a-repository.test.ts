@@ -739,4 +739,134 @@ describe('phase 4a production repository', () => {
     const buyList = await repo.orders.listBuyListForBusiness('biz-1');
     expect(buyList).toEqual([]);
   });
+
+  it('marks an insufficient-stock buy list item as bought and replenishes the variant stock', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      product: {
+        id: 'product-3',
+        business_id: 'biz-1',
+        trip_id: 'trip-3',
+        name: 'OpsPS Hoodie',
+        category: 'Clothing',
+        description: 'Warm layer',
+        image_url: 'https://example.com/hoodie.png',
+        cost_price: 22,
+        selling_price: 49,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-3',
+        business_id: 'biz-1',
+        product_id: 'product-3',
+        size: 'L',
+        stock: 2,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [{
+        id: 'order-buy-3',
+        business_id: 'biz-1',
+        trip_id: 'trip-3',
+        product_id: 'product-3',
+        customer_profile_id: 'profile-3',
+        customer_name: 'Chloe',
+        customer_phone: '0123456783',
+        delivery_address: 'KL',
+        order_date: '2026-09-12T08:00:00.000Z',
+        subtotal: 98,
+        shipping_fee: 0,
+        total: 98,
+        payment_status: 'pending',
+        order_status: 'pending',
+        request_status: 'PENDING_AVAILABILITY',
+        payment_option: 'bank',
+        payment_mode: 'bank',
+        availability_status: 'pending',
+      }],
+      orderItems: [{
+        id: 'order-item-6',
+        business_id: 'biz-1',
+        order_id: 'order-buy-3',
+        product_variant_id: 'variant-3',
+        quantity: 4,
+        packed_quantity: 0,
+      }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const marked = await repo.orders.markBuyListItemBought('biz-1', 'order-buy-3:variant-3');
+
+    expect(marked).toMatchObject({
+      orderId: 'order-buy-3',
+      productVariantId: 'variant-3',
+      quantity: 4,
+      purchased: true,
+    });
+    expect(await repo.orders.listBuyListForBusiness('biz-1')).toEqual([]);
+  });
+
+  it('rejects bought-state updates outside the authenticated business', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      memberships: [{ business_id: 'biz-1', user_id: 'user-1', role: 'founder' }],
+      product: {
+        id: 'product-4',
+        business_id: 'biz-2',
+        trip_id: 'trip-4',
+        name: 'Other Stock',
+        category: 'Clothing',
+        description: 'Not in this business',
+        image_url: 'https://example.com/other-stock.png',
+        cost_price: 14,
+        selling_price: 29,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-4',
+        business_id: 'biz-2',
+        product_id: 'product-4',
+        size: 'S',
+        stock: 1,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [{
+        id: 'order-buy-4',
+        business_id: 'biz-2',
+        trip_id: 'trip-4',
+        product_id: 'product-4',
+        customer_profile_id: 'profile-4',
+        customer_name: 'Dana',
+        customer_phone: '0123456784',
+        delivery_address: 'Johor',
+        order_date: '2026-09-13T08:00:00.000Z',
+        subtotal: 29,
+        shipping_fee: 0,
+        total: 29,
+        payment_status: 'pending',
+        order_status: 'pending',
+        request_status: 'PENDING_AVAILABILITY',
+        payment_option: 'bank',
+        payment_mode: 'bank',
+        availability_status: 'pending',
+      }],
+      orderItems: [{
+        id: 'order-item-7',
+        business_id: 'biz-2',
+        order_id: 'order-buy-4',
+        product_variant_id: 'variant-4',
+        quantity: 3,
+        packed_quantity: 0,
+      }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const result = await repo.orders.markBuyListItemBought('biz-1', 'order-buy-4:variant-4');
+    expect(result).toBeNull();
+  });
 });

@@ -188,6 +188,7 @@ export interface OrderRepository {
   listItemsForOrder(orderId: string, businessId: string): Promise<OrderItemRecord[]>;
   checkStockAvailability(businessId: string, orderId: string): Promise<StockCheckResult | null>;
   listBuyListForBusiness(businessId: string): Promise<BuyListItemRecord[]>;
+  markBuyListItemBought(businessId: string, itemId: string): Promise<BuyListItemRecord | null>;
   create(input: {
     businessId: string;
     tripId: string;
@@ -684,6 +685,38 @@ class MockDataSource implements DataSource {
       }
 
       return [...entries.values()];
+    },
+    async markBuyListItemBought(businessId: string, itemId: string) {
+      const snapshot = getMockDatabaseSnapshot();
+      const separatorIndex = itemId.lastIndexOf(':');
+      if (separatorIndex <= 0 || separatorIndex === itemId.length - 1) {
+        return null;
+      }
+
+      const orderId = itemId.slice(0, separatorIndex);
+      const productVariantId = itemId.slice(separatorIndex + 1);
+      const order = snapshot.orders.find((entry) => entry.id === orderId && entry.businessId === businessId);
+      const item = snapshot.orderItems.find((entry) => entry.orderId === orderId && entry.productVariantId === productVariantId);
+      const variant = getProductVariant(productVariantId, snapshot, businessId);
+      if (!order || !item || !variant) {
+        return null;
+      }
+
+      const product = getProduct(variant.productId, snapshot, businessId);
+      const updatedVariant = { ...variant, stock: Number(variant.stock ?? 0) + Number(item.quantity ?? 0) };
+      snapshot.productVariants = snapshot.productVariants.map((entry) => entry.id === productVariantId ? updatedVariant : entry);
+
+      return {
+        id: itemId,
+        businessId,
+        tripId: order.tripId,
+        orderId: order.id,
+        productId: product?.id ?? variant.productId,
+        productVariantId: variant.id,
+        itemName: product?.name ?? 'Product',
+        quantity: Math.max(1, Number(item.quantity ?? 0)),
+        purchased: true,
+      };
     },
     async create(input) {
       const product = getProduct(input.productId, getMockDatabaseSnapshot(), input.businessId);
@@ -1769,6 +1802,89 @@ class SupabaseDataSource implements DataSource {
       }
 
       return [...buyList.values()];
+    },
+    async markBuyListItemBought(businessId: string, itemId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const separatorIndex = itemId.lastIndexOf(':');
+      if (separatorIndex <= 0 || separatorIndex === itemId.length - 1) {
+        return null;
+      }
+
+      const orderId = itemId.slice(0, separatorIndex);
+      const productVariantId = itemId.slice(separatorIndex + 1);
+
+      const { data: orderData, error: orderError } = await client
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      const order = orderData as any;
+      const { data: itemData, error: itemError } = await client
+        .from('order_items')
+        .select('*')
+        .eq('order_id', orderId)
+        .eq('product_variant_id', productVariantId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (itemError || !itemData) {
+        return null;
+      }
+
+      const item = itemData as any;
+      const { data: variantData, error: variantError } = await client
+        .from('product_variants')
+        .select('*')
+        .eq('id', productVariantId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (variantError || !variantData) {
+        return null;
+      }
+
+      const variant = variantData as any;
+      const nextStock = Number(variant.stock ?? 0) + Number(item.quantity ?? 0);
+      const { data: updatedVariant, error: updateError } = await client
+        .from('product_variants')
+        .update({ stock: nextStock })
+        .eq('id', productVariantId)
+        .eq('business_id', businessId)
+        .select('*')
+        .single();
+
+      if (updateError || !updatedVariant) {
+        return null;
+      }
+
+      const { data: productData } = await client.from('products').select('*').eq('id', variant.product_id).eq('business_id', businessId).maybeSingle();
+      const product = (productData as any) ?? null;
+
+      return {
+        id: itemId,
+        businessId,
+        tripId: order.trip_id ?? undefined,
+        orderId: order.id,
+        productId: product?.id ?? variant.product_id,
+        productVariantId: variant.id,
+        itemName: product?.name ?? 'Product',
+        quantity: Math.max(1, Number(item.quantity ?? 0)),
+        purchased: true,
+      };
     },
     async create(input) {
       const client = getSupabaseClient();
