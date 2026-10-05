@@ -1,17 +1,21 @@
 import { getSupabaseClient } from './supabaseClient';
 import {
+  addFinanceTransaction,
   createProduct,
   createTrip,
+  deleteFinanceTransaction,
   getMockDatabaseSnapshot,
   getProduct,
   getProductVariant,
   getTripProducts,
   getTripOrders,
   getTripProfit,
+  type FinancePaymentMethod,
   type Order,
   type Product,
   type ProductCategory,
   type TripRecord,
+  updateFinanceTransaction,
 } from './mockDatabase';
 
 export type OpspsRole = 'founder' | 'customer' | 'admin' | 'support';
@@ -213,6 +217,52 @@ export interface OrderRepository {
 
 export type PaymentRepositoryStatus = 'pending' | 'pending_verification' | 'authorized' | 'success' | 'paid' | 'partial' | 'pay_later' | 'failed' | 'cancelled' | 'refunded';
 
+export type FinanceTransactionRecord = {
+  id: string;
+  business_id: string;
+  trip_id?: string | null;
+  order_id?: string | null;
+  product_id?: string | null;
+  description: string;
+  amount: number;
+  type: 'income' | 'expense';
+  payment_method?: string | null;
+  category?: string | null;
+  reference_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  is_monthly_expense?: boolean;
+};
+
+export interface FinanceRepository {
+  listForBusiness(businessId: string): Promise<FinanceTransactionRecord[]>;
+  create(input: {
+    businessId: string;
+    tripId?: string;
+    orderId?: string;
+    productId?: string;
+    description: string;
+    amount: number;
+    type: 'income' | 'expense';
+    paymentMethod?: string;
+    category?: string;
+    referenceId?: string;
+  }): Promise<FinanceTransactionRecord | null>;
+  update(id: string, businessId: string, input: Partial<{
+    tripId: string | null;
+    orderId: string | null;
+    productId: string | null;
+    description: string;
+    amount: number;
+    type: 'income' | 'expense';
+    paymentMethod: string | null;
+    category: string | null;
+    referenceId: string | null;
+  }>): Promise<FinanceTransactionRecord | null>;
+  delete(id: string, businessId: string): Promise<boolean>;
+  getTripSummary(businessId: string, tripId: string): Promise<{ salesRevenue: number; costOfGoods: number; grossProfit: number; moneyIn: number; moneyOut: number; outstandingRevenue: number; netProfit: number }>;
+}
+
 export type PaymentRecordRow = {
   id: string;
   business_id: string;
@@ -317,6 +367,7 @@ export interface DataSource {
   products: ProductRepository;
   orders: OrderRepository;
   shipments: ShippingRepository;
+  finance: FinanceRepository;
   payments: PaymentRepository;
 }
 
@@ -430,6 +481,27 @@ function mapPaymentRow(row: any): PaymentRecordRow {
     customer_id: row.customer_id ?? row.customerId ?? null,
     created_at: row.created_at ?? new Date().toISOString(),
     updated_at: row.updated_at ?? new Date().toISOString(),
+  };
+}
+
+function mapFinanceTransactionRow(row: any): FinanceTransactionRecord {
+  const normalizedType = String(row.type ?? 'expense').toLowerCase() === 'income' ? 'income' : 'expense';
+  const category = row.category ?? 'General';
+  return {
+    id: row.id,
+    business_id: row.business_id,
+    trip_id: row.trip_id ?? null,
+    order_id: row.order_id ?? null,
+    product_id: row.product_id ?? null,
+    description: row.description ?? 'Finance entry',
+    amount: Number(row.amount ?? 0),
+    type: normalizedType,
+    payment_method: row.payment_method ?? row.paymentMethod ?? 'bank',
+    category,
+    reference_id: row.reference_id ?? row.referenceId ?? null,
+    created_at: row.created_at ?? new Date().toISOString(),
+    updated_at: row.updated_at ?? new Date().toISOString(),
+    is_monthly_expense: Boolean(row.is_monthly_expense ?? category === 'Monthly Expense'),
   };
 }
 
@@ -1089,6 +1161,105 @@ class MockDataSource implements DataSource {
         createdAt: order.shipment!.createdAt,
         updatedAt: order.shipment!.createdAt,
       }));
+    },
+  };
+
+  finance: FinanceRepository = {
+    async listForBusiness(businessId: string) {
+      const snapshot = getMockDatabaseSnapshot();
+      return snapshot.financeTransactions
+        .filter((transaction) => !transaction.tripId || snapshot.trips.some((trip) => trip.id === transaction.tripId && trip.businessId === businessId))
+        .map((transaction) => mapFinanceTransactionRow({
+          ...transaction,
+          business_id: businessId,
+          trip_id: transaction.tripId ?? null,
+          order_id: transaction.orderId ?? null,
+          product_id: transaction.productId ?? null,
+        }));
+    },
+    async create(input) {
+      const paymentMethod = (input.paymentMethod ?? 'bank') as FinancePaymentMethod;
+      const entity = addFinanceTransaction({
+        description: input.description,
+        amount: Number(input.amount ?? 0),
+        type: input.type,
+        paymentMethod,
+        category: input.category ?? 'General',
+        referenceId: input.referenceId,
+        tripId: input.tripId,
+        orderId: input.orderId,
+        productId: input.productId,
+      });
+      return mapFinanceTransactionRow({
+        id: entity.id,
+        business_id: input.businessId,
+        trip_id: entity.tripId ?? null,
+        order_id: entity.orderId ?? null,
+        product_id: entity.productId ?? null,
+        description: entity.description,
+        amount: Number(entity.amount ?? 0),
+        type: entity.type,
+        payment_method: entity.paymentMethod ?? 'bank',
+        category: entity.category,
+        reference_id: entity.referenceId ?? null,
+        created_at: entity.date,
+        updated_at: entity.date,
+        is_monthly_expense: Boolean(entity.isMonthlyExpense ?? entity.category === 'Monthly Expense'),
+      });
+    },
+    async update(id, businessId, input) {
+      const snapshot = getMockDatabaseSnapshot();
+      const current = snapshot.financeTransactions.find((transaction) => transaction.id === id);
+      if (!current) {
+        return null;
+      }
+      const next = {
+        ...current,
+        description: input.description ?? current.description,
+        amount: input.amount ?? current.amount,
+        type: input.type ?? current.type,
+        paymentMethod: (input.paymentMethod ?? current.paymentMethod) as FinancePaymentMethod,
+        category: input.category ?? current.category,
+        referenceId: input.referenceId ?? current.referenceId,
+        tripId: input.tripId ?? current.tripId,
+        orderId: input.orderId ?? current.orderId,
+        productId: input.productId ?? current.productId,
+      };
+      updateFinanceTransaction(id, next);
+      return mapFinanceTransactionRow({
+        id: next.id,
+        business_id: businessId,
+        trip_id: next.tripId ?? null,
+        order_id: next.orderId ?? null,
+        product_id: next.productId ?? null,
+        description: next.description,
+        amount: Number(next.amount ?? 0),
+        type: next.type,
+        payment_method: next.paymentMethod ?? 'bank',
+        category: next.category,
+        reference_id: next.referenceId ?? null,
+        created_at: next.date,
+        updated_at: next.date,
+        is_monthly_expense: Boolean(next.isMonthlyExpense ?? next.category === 'Monthly Expense'),
+      });
+    },
+    async delete(id, businessId) {
+      const snapshot = getMockDatabaseSnapshot();
+      const current = snapshot.financeTransactions.find((transaction) => transaction.id === id);
+      if (!current) {
+        return false;
+      }
+      deleteFinanceTransaction(id);
+      return true;
+    },
+    async getTripSummary(businessId, tripId) {
+      const snapshot = getMockDatabaseSnapshot();
+      const trip = snapshot.trips.find((entry) => entry.id === tripId && entry.businessId === businessId);
+      if (!trip) {
+        return { salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 };
+      }
+      const result = getTripProfit(tripId, snapshot);
+      return { ...result, moneyOut: result.moneyOut, outstandingRevenue: result.outstandingRevenue };
     },
   };
 
@@ -2611,6 +2782,148 @@ class SupabaseDataSource implements DataSource {
       }
 
       return (data as any[]).map((row) => mapShipmentRow(row));
+    },
+  };
+
+  finance: FinanceRepository = {
+    async listForBusiness(businessId: string) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data, error } = await client
+        .from('finance_transactions')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false });
+
+      if (error || !data) {
+        return [];
+      }
+
+      return (data as any[]).map((row) => mapFinanceTransactionRow(row));
+    },
+    async create(input) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, input.businessId))) {
+        return null;
+      }
+
+      const { data, error } = await client
+        .from('finance_transactions')
+        .insert({
+          business_id: input.businessId,
+          trip_id: input.tripId ?? null,
+          order_id: input.orderId ?? null,
+          product_id: input.productId ?? null,
+          description: input.description,
+          amount: Number(input.amount ?? 0),
+          type: input.type,
+          payment_method: input.paymentMethod ?? 'bank',
+          category: input.category ?? 'General',
+          reference_id: input.referenceId ?? null,
+        })
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return mapFinanceTransactionRow(data as any);
+    },
+    async update(id, businessId, input) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const payload: Record<string, string | number | null> = {};
+      if (input.tripId !== undefined) payload.trip_id = input.tripId ?? null;
+      if (input.orderId !== undefined) payload.order_id = input.orderId ?? null;
+      if (input.productId !== undefined) payload.product_id = input.productId ?? null;
+      if (input.description !== undefined) payload.description = input.description;
+      if (input.amount !== undefined) payload.amount = Number(input.amount ?? 0);
+      if (input.type !== undefined) payload.type = input.type;
+      if (input.paymentMethod !== undefined) payload.payment_method = input.paymentMethod ?? 'bank';
+      if (input.category !== undefined) payload.category = input.category ?? 'General';
+      if (input.referenceId !== undefined) payload.reference_id = input.referenceId ?? null;
+
+      if (Object.keys(payload).length === 0) {
+        return null;
+      }
+
+      const { data, error } = await client
+        .from('finance_transactions')
+        .update(payload)
+        .eq('id', id)
+        .eq('business_id', businessId)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return mapFinanceTransactionRow(data as any);
+    },
+    async delete(id, businessId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return false;
+      }
+
+      const { error } = await client
+        .from('finance_transactions')
+        .delete()
+        .eq('id', id)
+        .eq('business_id', businessId);
+
+      return !error;
+    },
+    async getTripSummary(businessId, tripId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return { salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 };
+      }
+
+      const [{ data: orderRows, error: ordersError }, { data: txRows, error: txError }] = await Promise.all([
+        client.from('orders').select('total').eq('business_id', businessId).eq('trip_id', tripId),
+        client.from('finance_transactions').select('*').eq('business_id', businessId).eq('trip_id', tripId),
+      ]);
+
+      if (ordersError || txError) {
+        return { salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 };
+      }
+
+      const salesRevenue = (orderRows ?? []).reduce((total: number, row: any) => total + Number(row.total ?? 0), 0);
+      let costOfGoods = 0;
+      let moneyIn = 0;
+      let moneyOut = 0;
+      for (const row of txRows ?? []) {
+        const amount = Number(row.amount ?? 0);
+        if (String(row.type ?? '').toLowerCase() === 'income') {
+          moneyIn += amount;
+        } else {
+          moneyOut += amount;
+        }
+        const category = String(row.category ?? '').toLowerCase();
+        if (row.type === 'expense' && (category.includes('cogs') || category.includes('product cost') || category.includes('purchase') || category.includes('trip expense') || category.includes('cost'))) {
+          costOfGoods += amount;
+        }
+      }
+
+      const grossProfit = salesRevenue - costOfGoods;
+      return {
+        salesRevenue,
+        costOfGoods,
+        grossProfit,
+        moneyIn,
+        moneyOut,
+        outstandingRevenue: Math.max(0, salesRevenue - moneyIn),
+        netProfit: salesRevenue - costOfGoods - moneyOut,
+      };
     },
   };
 
