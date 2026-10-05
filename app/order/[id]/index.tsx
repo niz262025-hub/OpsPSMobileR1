@@ -43,6 +43,15 @@ export default function OrderDetailScreen() {
           return;
         }
 
+        const stockCheck = nextOrder.businessId ? await repo.orders.checkStockAvailability(nextOrder.businessId, nextOrder.id) : null;
+        if (stockCheck && active) {
+          nextOrder = {
+            ...nextOrder,
+            requestStatus: stockCheck.requestStatus,
+            availabilityStatus: stockCheck.availabilityStatus,
+          };
+        }
+
         setOrder(nextOrder);
         const nextItems = await repo.orders.listItemsForOrder(id, nextOrder.businessId ?? businessId ?? '');
         setItems(nextItems ?? []);

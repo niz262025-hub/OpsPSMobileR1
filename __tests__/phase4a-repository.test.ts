@@ -19,6 +19,8 @@ type BusinessScopedClientInput = {
   trip?: Record<string, unknown>;
   product?: Record<string, unknown>;
   variant?: Record<string, unknown>;
+  orders?: Array<Record<string, unknown>>;
+  orderItems?: Array<Record<string, unknown>>;
 };
 
 function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
@@ -65,6 +67,8 @@ function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
     trips: input.trip ? [{ ...trip }] : [],
     products: input.product ? [{ ...product }] : [],
     product_variants: input.variant ? [{ ...variant }] : [],
+    orders: input.orders ? input.orders.map((row) => ({ ...row })) : [],
+    order_items: input.orderItems ? input.orderItems.map((row) => ({ ...row })) : [],
   };
 
   const filterRows = (rows: Array<Record<string, unknown>>, filters: Array<[string, unknown]>) =>
@@ -171,6 +175,12 @@ function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
     }
     if (table === 'product_variants') {
       return buildTableQuery(state.product_variants as Array<Record<string, unknown>>, table);
+    }
+    if (table === 'orders') {
+      return buildTableQuery(state.orders as Array<Record<string, unknown>>, table);
+    }
+    if (table === 'order_items') {
+      return buildTableQuery(state.order_items as Array<Record<string, unknown>>, table);
     }
     return buildTableQuery([] as Array<Record<string, unknown>>, table);
   });
@@ -393,5 +403,147 @@ describe('phase 4a production repository', () => {
     expect(published).toHaveLength(1);
     expect(published[0].name).toBe('Published Item');
     expect(published[0].businessId).toBe('biz-1');
+  });
+
+  it('checks order stock availability against the correct business variant and quantity', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Signature tee',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 12,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [{
+        id: 'order-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        product_id: 'product-1',
+        customer_profile_id: 'profile-1',
+        customer_name: 'Alex',
+        customer_phone: '0123456789',
+        delivery_address: 'Kuala Lumpur',
+        order_date: '2026-09-10T08:00:00.000Z',
+        subtotal: 50,
+        shipping_fee: 0,
+        total: 50,
+        payment_status: 'pending',
+        order_status: 'pending',
+        request_status: 'PENDING_AVAILABILITY',
+        payment_option: 'bank',
+        payment_mode: 'bank',
+        availability_status: 'pending',
+      }],
+      orderItems: [{
+        id: 'order-item-1',
+        business_id: 'biz-1',
+        order_id: 'order-1',
+        product_variant_id: 'variant-1',
+        quantity: 4,
+        packed_quantity: 0,
+      }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const result = await repo.orders.checkStockAvailability('biz-1', 'order-1');
+
+    expect(result).toMatchObject({
+      orderId: 'order-1',
+      businessId: 'biz-1',
+      productId: 'product-1',
+      available: true,
+      requestedQuantity: 4,
+      availableQuantity: 12,
+      requestStatus: 'AVAILABLE',
+      availabilityStatus: 'confirmed',
+    });
+  });
+
+  it('prevents stock availability checks from crossing business or variant ownership', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      product: {
+        id: 'product-1',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        name: 'OpsPS Tee',
+        category: 'Clothing',
+        description: 'Signature tee',
+        image_url: 'https://example.com/product.png',
+        cost_price: 10,
+        selling_price: 25,
+        status: 'ready',
+        is_published: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      variant: {
+        id: 'variant-1',
+        business_id: 'biz-1',
+        product_id: 'product-1',
+        size: 'M',
+        stock: 2,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+      orders: [{
+        id: 'order-2',
+        business_id: 'biz-1',
+        trip_id: 'trip-1',
+        product_id: 'product-1',
+        customer_profile_id: 'profile-1',
+        customer_name: 'Alex',
+        customer_phone: '0123456789',
+        delivery_address: 'Kuala Lumpur',
+        order_date: '2026-09-10T08:00:00.000Z',
+        subtotal: 50,
+        shipping_fee: 0,
+        total: 50,
+        payment_status: 'pending',
+        order_status: 'pending',
+        request_status: 'PENDING_AVAILABILITY',
+        payment_option: 'bank',
+        payment_mode: 'bank',
+        availability_status: 'pending',
+      }],
+      orderItems: [{
+        id: 'order-item-2',
+        business_id: 'biz-1',
+        order_id: 'order-2',
+        product_variant_id: 'variant-1',
+        quantity: 5,
+        packed_quantity: 0,
+      }],
+    }) as any);
+
+    const repo = getDataSource('production');
+    const result = await repo.orders.checkStockAvailability('biz-1', 'order-2');
+
+    expect(result).toMatchObject({
+      orderId: 'order-2',
+      businessId: 'biz-1',
+      productId: 'product-1',
+      available: false,
+      requestedQuantity: 5,
+      availableQuantity: 2,
+      requestStatus: 'OUT_OF_STOCK',
+      availabilityStatus: 'not_available',
+    });
   });
 });

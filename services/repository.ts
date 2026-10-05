@@ -159,10 +159,22 @@ export interface OrderItemRecord {
   packedQuantity: number;
 }
 
+export type StockCheckResult = {
+  orderId: string;
+  businessId: string;
+  productId?: string;
+  available: boolean;
+  requestedQuantity: number;
+  availableQuantity: number;
+  requestStatus: 'AVAILABLE' | 'OUT_OF_STOCK' | 'PENDING_AVAILABILITY';
+  availabilityStatus: 'pending' | 'confirmed' | 'not_available';
+};
+
 export interface OrderRepository {
   listForBusiness(businessId: string): Promise<OrderRecord[]>;
   getForBusiness(businessId: string, orderId: string): Promise<OrderRecord | null>;
   listItemsForOrder(orderId: string, businessId: string): Promise<OrderItemRecord[]>;
+  checkStockAvailability(businessId: string, orderId: string): Promise<StockCheckResult | null>;
   create(input: {
     businessId: string;
     tripId: string;
@@ -575,6 +587,59 @@ class MockDataSource implements DataSource {
         quantity: entry.quantity,
         packedQuantity: entry.packedQuantity ?? 0,
       }));
+    },
+    async checkStockAvailability(businessId: string, orderId: string) {
+      const order = getMockDatabaseSnapshot().orders.find((entry) => entry.businessId === businessId && entry.id === orderId);
+      if (!order) {
+        return null;
+      }
+
+      const items = getMockDatabaseSnapshot().orderItems.filter((entry) => entry.orderId === orderId);
+      if (!items.length) {
+        return {
+          orderId: order.id,
+          businessId: order.businessId ?? businessId,
+          productId: order.productId,
+          available: false,
+          requestedQuantity: 0,
+          availableQuantity: 0,
+          requestStatus: 'PENDING_AVAILABILITY',
+          availabilityStatus: 'pending',
+        };
+      }
+
+      let requestedQuantity = 0;
+      let availableQuantity = Number.POSITIVE_INFINITY;
+      for (const item of items) {
+        const variant = getProductVariant(item.productVariantId, getMockDatabaseSnapshot(), businessId);
+        if (!variant || variant.productId !== order.productId) {
+          return {
+            orderId: order.id,
+            businessId: order.businessId ?? businessId,
+            productId: order.productId,
+            available: false,
+            requestedQuantity: requestedQuantity + Number(item.quantity ?? 0),
+            availableQuantity: 0,
+            requestStatus: 'OUT_OF_STOCK',
+            availabilityStatus: 'not_available',
+          };
+        }
+
+        requestedQuantity += Number(item.quantity ?? 0);
+        availableQuantity = Math.min(availableQuantity, Number(variant.stock ?? 0));
+      }
+
+      const available = Number.isFinite(availableQuantity) && availableQuantity >= requestedQuantity;
+      return {
+        orderId: order.id,
+        businessId: order.businessId ?? businessId,
+        productId: order.productId,
+        available,
+        requestedQuantity,
+        availableQuantity: Number.isFinite(availableQuantity) ? availableQuantity : 0,
+        requestStatus: available ? 'AVAILABLE' : 'OUT_OF_STOCK',
+        availabilityStatus: available ? 'confirmed' : 'not_available',
+      };
     },
     async create(input) {
       const product = getProduct(input.productId, getMockDatabaseSnapshot(), input.businessId);
@@ -1502,6 +1567,101 @@ class SupabaseDataSource implements DataSource {
       }
 
       return (data as any[]).map((row) => mapOrderItemRow(row));
+    },
+    async checkStockAvailability(businessId: string, orderId: string) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const { data: orderData, error: orderError } = await client
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      const order = orderData as any;
+      const { data: itemRows, error: itemsError } = await client
+        .from('order_items')
+        .select('*')
+        .eq('order_id', orderId)
+        .eq('business_id', businessId);
+
+      if (itemsError || !itemRows || itemRows.length === 0) {
+        return {
+          orderId: order.id,
+          businessId: order.business_id ?? businessId,
+          productId: order.product_id ?? undefined,
+          available: false,
+          requestedQuantity: 0,
+          availableQuantity: 0,
+          requestStatus: 'PENDING_AVAILABILITY',
+          availabilityStatus: 'pending',
+        };
+      }
+
+      let requestedQuantity = 0;
+      let availableQuantity = Number.POSITIVE_INFINITY;
+
+      for (const item of itemRows as any[]) {
+        const { data: variantData, error: variantError } = await client
+          .from('product_variants')
+          .select('*')
+          .eq('id', item.product_variant_id)
+          .eq('business_id', businessId)
+          .maybeSingle();
+
+        if (variantError || !variantData) {
+          return {
+            orderId: order.id,
+            businessId: order.business_id ?? businessId,
+            productId: order.product_id ?? undefined,
+            available: false,
+            requestedQuantity: requestedQuantity + Number(item.quantity ?? 0),
+            availableQuantity: 0,
+            requestStatus: 'OUT_OF_STOCK',
+            availabilityStatus: 'not_available',
+          };
+        }
+
+        const variant = variantData as any;
+        if (order.product_id && variant.product_id && order.product_id !== variant.product_id) {
+          return {
+            orderId: order.id,
+            businessId: order.business_id ?? businessId,
+            productId: order.product_id ?? undefined,
+            available: false,
+            requestedQuantity: requestedQuantity + Number(item.quantity ?? 0),
+            availableQuantity: 0,
+            requestStatus: 'OUT_OF_STOCK',
+            availabilityStatus: 'not_available',
+          };
+        }
+
+        requestedQuantity += Number(item.quantity ?? 0);
+        availableQuantity = Math.min(availableQuantity, Number(variant.stock ?? 0));
+      }
+
+      const available = Number.isFinite(availableQuantity) && availableQuantity >= requestedQuantity;
+      return {
+        orderId: order.id,
+        businessId: order.business_id ?? businessId,
+        productId: order.product_id ?? undefined,
+        available,
+        requestedQuantity,
+        availableQuantity: Number.isFinite(availableQuantity) ? availableQuantity : 0,
+        requestStatus: available ? 'AVAILABLE' : 'OUT_OF_STOCK',
+        availabilityStatus: available ? 'confirmed' : 'not_available',
+      };
     },
     async create(input) {
       const client = getSupabaseClient();
