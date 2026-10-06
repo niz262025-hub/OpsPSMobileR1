@@ -153,6 +153,77 @@ export function classifySupabaseSignupError(
   };
 }
 
+function slugifyBusinessName(value: string): string {
+  const base = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+
+  return base || 'opsps-business';
+}
+
+async function ensureAuthenticatedProfileForRole(
+  client: ReturnType<typeof getSupabaseClient>,
+  user: User,
+  role: UserRole
+): Promise<boolean> {
+  if (!client) {
+    return false;
+  }
+
+  const { data: profileData, error: profileError } = await client
+    .from('profiles')
+    .select('*')
+    .eq('auth_user_id', user.id)
+    .maybeSingle();
+
+  if (profileError && profileError.code !== 'PGRST116') {
+    return false;
+  }
+
+  if (profileData) {
+    return true;
+  }
+
+  if (role === 'founder') {
+    const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const businessName = String(metadata.business_name ?? metadata.business ?? 'OpsPS Business');
+    const founderName = String(metadata.full_name ?? user.email ?? 'Founder');
+    const phone = String(metadata.phone ?? '');
+    const address = String(metadata.address ?? '');
+    const email = user.email ?? '';
+
+    const { error: bootstrapError } = await client.rpc('bootstrap_founder_business', {
+      p_name: businessName,
+      p_slug: slugifyBusinessName(businessName),
+      p_email: email,
+      p_phone: phone,
+      p_address: address,
+      p_profile_name: founderName,
+    });
+
+    if (bootstrapError) {
+      return false;
+    }
+
+    return true;
+  }
+
+  const { error: insertError } = await client.from('profiles').insert({
+    auth_user_id: user.id,
+    business_id: null,
+    full_name: user.user_metadata?.full_name ?? user.email ?? 'Customer',
+    email: user.email ?? '',
+    phone: user.user_metadata?.phone ?? '',
+    address: user.user_metadata?.address ?? '',
+    role,
+  });
+
+  return !insertError;
+}
+
 const AuthContext = createContext<AuthContextValue | undefined>(
   undefined
 );
@@ -362,6 +433,9 @@ export function AuthProvider({
           data: {
             full_name: account.name,
             role: account.role,
+            business_name: account.businessName ?? '',
+            phone: account.phone ?? '',
+            address: account.address ?? '',
           },
         },
       });
@@ -370,23 +444,25 @@ export function AuthProvider({
         return classifySupabaseSignupError(error ?? { status: 0, message: 'Unable to create account.' });
       }
 
-      const { error: profileError } = await client.from('profiles').upsert({
-        auth_user_id: data.user.id,
-        full_name: account.name,
-        email: account.email,
-        phone: account.phone ?? '',
-        address: account.address ?? '',
-        role: account.role,
-        business_id: account.businessId ?? null,
-      }, { onConflict: 'auth_user_id' });
-
-      if (profileError) {
-        return classifySupabaseSignupError(profileError ?? { status: 0, message: 'Unable to create profile.' });
-      }
-
       const { data: sessionData } = await client.auth.getSession();
       if (sessionData.session) {
         await applySupabaseSession(sessionData.session);
+      }
+
+      if (!sessionData.session) {
+        return {
+          ok: true,
+          message: 'Registration successful. Please check your email to confirm your account before signing in.',
+        };
+      }
+
+      const profileReady = await ensureAuthenticatedProfileForRole(client, data.user, account.role);
+      if (!profileReady) {
+        return {
+          ok: false,
+          kind: 'auth_error',
+          message: 'Account created. Please confirm your email and sign in to complete your profile setup.',
+        };
       }
 
       return { ok: true, message: 'Registration successful.' };
@@ -416,6 +492,11 @@ export function AuthProvider({
       });
 
       if (error || !data.user) {
+        return false;
+      }
+
+      const profileReady = await ensureAuthenticatedProfileForRole(client, data.user, role);
+      if (!profileReady) {
         return false;
       }
 

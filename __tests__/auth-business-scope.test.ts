@@ -118,6 +118,66 @@ describe('auth business scope', () => {
     expect(authValue.role).toBe('founder');
   });
 
+  it('defers profile creation until an authenticated session exists after email confirmation', async () => {
+    const { AuthProvider, useAuth } = await import('../context/AuthContext');
+
+    const signUpMock = vi.fn(async () => ({
+      data: {
+        user: {
+          id: 'new-founder-user',
+          email: 'new-founder@example.com',
+          user_metadata: { full_name: 'New Founder', role: 'founder' },
+        },
+      },
+      error: null,
+    }));
+
+    const getSessionMock = vi.fn(async () => ({ data: { session: null as any }, error: null }));
+    const fromMock = vi.fn(() => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: null, error: null }),
+        }),
+      }),
+      insert: async () => ({ error: null }),
+      upsert: async () => ({ error: null }),
+    }));
+
+    mockSupabaseClient.auth.signUp = signUpMock;
+    mockSupabaseClient.auth.getSession = getSessionMock;
+    mockSupabaseClient.from = fromMock;
+
+    let authValue: any;
+
+    function Harness() {
+      authValue = useAuth();
+      return null;
+    }
+
+    await act(async () => {
+      create(
+        React.createElement(AuthProvider, null, React.createElement(Harness))
+      );
+    });
+
+    let result: any;
+    await act(async () => {
+      result = await authValue.register({
+        email: 'new-founder@example.com',
+        password: 'Password123!',
+        name: 'New Founder',
+        businessName: 'New Business',
+        phone: '0123456789',
+        address: '123 Test Street',
+        role: 'founder',
+      });
+    });
+
+    expect(signUpMock).toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(fromMock).not.toHaveBeenCalledWith('profiles');
+  });
+
   it('keeps production runtime free of direct mock/local persistence usage in the audited paths', () => {
     const targetedFiles = [
       'app/(tabs)/dashboard.tsx',
