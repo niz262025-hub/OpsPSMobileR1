@@ -1,10 +1,14 @@
 // Theme constants
 export const THEME = {
   primary: '#5B2BD9',
+  primaryStrong: '#3B1F9B',
   accent: '#EC4C99',
   accentAlt: '#F97316',
+  accentSoft: '#F5D6FF',
+  navy: '#181145',
   background: '#F6F4FB',
   surface: '#FFFFFF',
+  surfaceAlt: '#F3F0FF',
   text: {
     primary: '#181145',
     secondary: '#6B6B8A',
@@ -17,6 +21,8 @@ export const THEME = {
     info: '#3B82F6',
   },
   border: '#ECE8F5',
+  gradient: ['#5B2BD9', '#A855F7', '#EC4C99'] as const,
+  gradientWarm: ['#5B2BD9', '#EC4C99', '#F97316'] as const,
   shadow: {
     small: {
       boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.08)',
@@ -25,6 +31,10 @@ export const THEME = {
     medium: {
       boxShadow: '0px 4px 12px rgba(91, 43, 217, 0.12)',
       elevation: 4,
+    },
+    large: {
+      boxShadow: '0px 12px 28px rgba(91, 43, 217, 0.18)',
+      elevation: 8,
     },
   },
 };

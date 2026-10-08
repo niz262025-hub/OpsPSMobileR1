@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ShoppingBag } from 'lucide-react-native';
 
@@ -172,17 +173,20 @@ export default function ProductDetailScreen() {
 
         <Text style={styles.title}>Product</Text>
 
-        <View style={styles.card}>
-          <Image source={{ uri: product.image }} style={styles.image} resizeMode="contain" />
-          <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.price}>RM{product.sellingPrice.toFixed(2)}</Text>
-          {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
-
+        <LinearGradient colors={THEME.gradientWarm} style={styles.heroCard}>
+          <View style={styles.heroImageWrap}>
+            <Image source={{ uri: product.image }} style={styles.image} resizeMode="contain" />
+          </View>
+          <View style={styles.heroMeta}>
+            <Text style={styles.productName}>{product.name}</Text>
+            <Text style={styles.price}>RM{product.sellingPrice.toFixed(2)}</Text>
+            {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
+          </View>
           <View style={styles.metaRow}>
-            <ShoppingBag size={16} color={THEME.primary} />
+            <ShoppingBag size={16} color="#FFFFFF" />
             <Text style={styles.metaText}>{sizes.length > 0 ? `${sizes.length} size option${sizes.length > 1 ? 's' : ''}` : 'No size options'}</Text>
           </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Order Details</Text>
@@ -249,12 +253,15 @@ const styles = StyleSheet.create({
   backText: { color: THEME.primary, fontWeight: '700' },
   title: { color: THEME.text.primary, fontSize: FONT_SIZES['2xl'], fontWeight: '800', marginVertical: SPACING.lg },
   card: { backgroundColor: THEME.surface, borderRadius: BORDER_RADIUS.lg, padding: SPACING['2xl'], marginBottom: SPACING.lg, borderWidth: 1, borderColor: THEME.border, ...THEME.shadow.small },
+  heroCard: { borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.lg, overflow: 'hidden', ...THEME.shadow.medium },
+  heroImageWrap: { borderRadius: BORDER_RADIUS.lg, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.12)' },
   image: { width: '100%', height: 220, backgroundColor: '#F3F4F6', borderRadius: BORDER_RADIUS.md },
-  productName: { color: THEME.text.primary, fontSize: FONT_SIZES.lg, fontWeight: '800', marginTop: SPACING.md },
-  price: { color: THEME.primary, fontSize: FONT_SIZES.lg, fontWeight: '800', marginTop: SPACING.xs },
-  description: { color: THEME.text.secondary, marginTop: SPACING.sm },
+  heroMeta: { marginTop: SPACING.md },
+  productName: { color: '#FFFFFF', fontSize: FONT_SIZES.lg, fontWeight: '800' },
+  price: { color: '#FFFFFF', fontSize: FONT_SIZES.lg, fontWeight: '800', marginTop: SPACING.xs },
+  description: { color: '#F8E7FF', marginTop: SPACING.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md, gap: SPACING.sm },
-  metaText: { color: THEME.text.secondary },
+  metaText: { color: '#FFFFFF', fontWeight: '700' },
   sectionTitle: { color: THEME.text.primary, fontSize: FONT_SIZES.lg, fontWeight: '800', marginBottom: SPACING.lg },
   label: { color: THEME.text.primary, fontWeight: '700', marginBottom: SPACING.sm },
   variantRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.lg },

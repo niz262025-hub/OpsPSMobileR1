@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { getDataSource } from '../../services/repository';
@@ -85,17 +86,20 @@ export default function OrdersScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Orders</Text>
-        <Text style={styles.subtitle}>Review customer requests and fulfilment status.</Text>
+        <LinearGradient colors={THEME.gradientWarm} style={styles.hero}>
+          <Text style={styles.eyebrow}>OPSPS ORDER HUB</Text>
+          <Text style={styles.title}>Orders</Text>
+          <Text style={styles.subtitle}>Review customer requests and fulfilment status.</Text>
+        </LinearGradient>
 
         {orders.length === 0 ? (
-          <Text style={styles.empty}>No orders found for this account.</Text>
+          <View style={styles.emptyCard}><Text style={styles.empty}>No orders found for this account.</Text></View>
         ) : orders.map((order) => {
           const statusLabel = getOrderDisplayStatus(order);
 
           return (
             <Pressable key={order.id} style={styles.card} onPress={() => router.push(`/order/${order.id}`)}>
-              <View style={styles.row}>
+              <View style={styles.topRow}>
                 <View style={styles.info}>
                   <Text style={styles.order}>{order.id}</Text>
                   <Text style={styles.customer}>{order.customerName}</Text>
@@ -104,8 +108,7 @@ export default function OrdersScreen() {
 
                 <View style={styles.amountColumn}>
                   <Text style={styles.amount}>RM{Number(order.total ?? 0).toFixed(2)}</Text>
-                  <Text style={styles.statusLabel}>Status</Text>
-                  <Text style={styles.status}>{statusLabel}</Text>
+                  <View style={styles.statusChip}><Text style={styles.status}>{statusLabel}</Text></View>
                 </View>
               </View>
 
@@ -126,19 +129,22 @@ export default function OrdersScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.background },
   content: { padding: SPACING['2xl'], paddingBottom: SPACING['3xl'] },
-  title: { color: THEME.text.primary, fontSize: FONT_SIZES['2xl'], fontWeight: '800' },
-  subtitle: { color: THEME.text.secondary, marginTop: SPACING.xs, marginBottom: SPACING.lg },
-  card: { backgroundColor: THEME.surface, borderRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: THEME.border, padding: SPACING.lg, marginBottom: SPACING.md },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  hero: { borderRadius: 24, padding: 18, marginBottom: 18, ...THEME.shadow.medium },
+  eyebrow: { color: '#FDE7F3', fontSize: 10, letterSpacing: 1.1, fontWeight: '800', marginBottom: 6 },
+  title: { color: '#FFFFFF', fontSize: FONT_SIZES['2xl'], fontWeight: '800' },
+  subtitle: { color: '#F8E7FF', marginTop: SPACING.xs, marginBottom: SPACING.sm },
+  card: { backgroundColor: THEME.surface, borderRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: THEME.border, padding: SPACING.lg, marginBottom: SPACING.md, ...THEME.shadow.small },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   info: { flex: 1, marginRight: SPACING.md },
   order: { color: THEME.primary, fontWeight: '800' },
   customer: { color: THEME.text.primary, fontSize: FONT_SIZES.base, fontWeight: '700', marginTop: SPACING.xs },
   meta: { color: THEME.text.secondary, fontSize: FONT_SIZES.sm, marginTop: SPACING.xs },
   amountColumn: { alignItems: 'flex-end' },
   amount: { color: THEME.text.primary, fontWeight: '800', textAlign: 'right' },
-  statusLabel: { color: THEME.text.secondary, fontSize: FONT_SIZES.xs, marginTop: SPACING.sm },
-  status: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700', textAlign: 'right', marginTop: SPACING.xs },
+  statusChip: { marginTop: SPACING.xs, backgroundColor: '#F3F0FF', borderRadius: 999, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
+  status: { color: THEME.primary, fontSize: FONT_SIZES.xs, fontWeight: '700', textAlign: 'right' },
   viewButton: { marginTop: SPACING.md, alignSelf: 'flex-end', backgroundColor: THEME.primary, borderRadius: BORDER_RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
   viewButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: THEME.border },
   empty: { color: THEME.text.secondary, marginTop: SPACING.md },
 });
