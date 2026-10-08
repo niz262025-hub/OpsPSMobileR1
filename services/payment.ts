@@ -1,18 +1,40 @@
 export type PaymentStatus =
   | 'pending'
+  | 'submitted'
   | 'pending_verification'
   | 'authorized'
   | 'success'
   | 'paid'
   | 'partial'
   | 'pay_later'
+  | 'rejected'
   | 'failed'
   | 'cancelled'
   | 'refunded';
 
-export type PaymentProviderName = 'mock' | 'stripe' | 'fpx' | 'paynet';
+export type PaymentProviderName = 'mock' | 'stripe' | 'fpx' | 'paynet' | 'sandbox' | 'direct_qr';
+
+export type PaymentProviderEnvironment = 'development' | 'sandbox' | 'production';
 
 export type PaymentAmountCurrency = 'MYR' | 'USD' | 'SGD' | 'IDR' | string;
+
+export type PaymentProviderConfig = {
+  environment?: PaymentProviderEnvironment;
+  successUrl?: string;
+  cancelUrl?: string;
+  webhookSecret?: string;
+  apiKey?: string;
+};
+
+export type PaymentCheckoutSession = {
+  provider: PaymentProviderName;
+  checkoutSessionId: string;
+  providerReference: string;
+  status: 'created' | 'pending' | 'paid' | 'failed';
+  checkoutUrl?: string;
+  isSandbox: boolean;
+  metadata?: Record<string, string | number | boolean | undefined>;
+};
 
 export type PaymentRecord = {
   id: string;
@@ -31,6 +53,13 @@ export type PaymentRecord = {
   webhookVerified?: boolean;
   signatureValid?: boolean;
   financeReconciled?: boolean;
+  paymentProfileId?: string;
+  customerPaymentReference?: string;
+  rejectionReason?: string;
+  paymentInstructionsSnapshot?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  submittedAt?: string;
   metadata?: Record<string, string | number | boolean | undefined>;
   createdAt: string;
   updatedAt: string;
@@ -99,16 +128,19 @@ export type PaymentProviderAdapter = {
   verifySignature: (input: PaymentSignatureInput) => Promise<boolean>;
   handleWebhook: (payment: PaymentRecord, event: PaymentWebhookEvent) => Promise<PaymentRecord>;
   refundPayment: (payment: PaymentRecord, reason?: string) => Promise<PaymentRecord>;
+  createCheckoutSession?: (input: PaymentCreateInput) => Promise<PaymentCheckoutSession>;
 };
 
 const VALID_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
-  pending: ['pending_verification', 'authorized', 'paid', 'failed', 'cancelled'],
-  pending_verification: ['paid', 'failed', 'cancelled'],
+  pending: ['submitted', 'pending_verification', 'authorized', 'paid', 'failed', 'cancelled'],
+  submitted: ['pending_verification', 'rejected', 'cancelled'],
+  pending_verification: ['submitted', 'rejected', 'paid', 'failed', 'cancelled'],
   authorized: ['paid', 'failed', 'cancelled', 'refunded'],
   success: ['paid'],
   paid: ['refunded'],
   partial: ['paid', 'failed', 'cancelled'],
   pay_later: ['paid', 'failed', 'cancelled'],
+  rejected: ['submitted', 'pending_verification', 'cancelled'],
   failed: [],
   cancelled: [],
   refunded: [],
@@ -156,12 +188,14 @@ export function normalizePaymentState(value?: string | null): PaymentStatus {
   const normalized = (value ?? '').trim().toLowerCase();
 
   if (normalized === 'pending') return 'pending';
+  if (normalized === 'submitted') return 'submitted';
   if (normalized === 'pending_verification') return 'pending_verification';
   if (normalized === 'authorized') return 'authorized';
   if (normalized === 'success') return 'success';
   if (normalized === 'paid') return 'paid';
   if (normalized === 'partial') return 'partial';
   if (normalized === 'pay_later') return 'pay_later';
+  if (normalized === 'rejected') return 'rejected';
   if (normalized === 'failed') return 'failed';
   if (normalized === 'cancelled') return 'cancelled';
   if (normalized === 'refunded') return 'refunded';
@@ -190,6 +224,7 @@ export function createPaymentRecord(input: PaymentCreateInput): PaymentRecord {
   const id = input.id ?? `pay_${Math.random().toString(36).slice(2, 10)}`;
 
   const hasProof = typeof input.receiptUri === 'string' && input.receiptUri.trim().length > 0;
+  const status: PaymentStatus = provider === 'direct_qr' ? (hasProof ? 'submitted' : 'pending') : hasProof ? 'pending_verification' : 'pending';
 
   return {
     id,
@@ -202,7 +237,7 @@ export function createPaymentRecord(input: PaymentCreateInput): PaymentRecord {
     provider,
     providerReference: `ref_${id}`,
     providerTransactionId: undefined,
-    status: hasProof ? 'pending_verification' : 'pending',
+    status,
     idempotencyKey: input.idempotencyKey ?? `${input.orderId}:${id}`,
     metadata: {
       ...(input.metadata ?? {}),
@@ -412,6 +447,49 @@ export function refundPaymentRecord(payment: PaymentRecord, reason = 'Refund req
   };
 }
 
+export function createSandboxCheckoutSession(input: {
+  orderId: string;
+  businessId: string;
+  amount: number;
+  currency?: string;
+  customerId?: string;
+  provider?: PaymentProviderName;
+  successUrl?: string;
+  cancelUrl?: string;
+  metadata?: Record<string, string | number | boolean | undefined>;
+}): PaymentCheckoutSession {
+  const normalizedProvider: PaymentProviderName = input.provider === 'stripe' ? 'stripe' : 'sandbox';
+  const amount = Number(input.amount ?? 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Sandbox checkout requires a positive amount.');
+  }
+
+  const checkoutSessionId = `cs_${normalizedProvider}_${Date.now().toString(36)}_${String(input.orderId).slice(0, 12)}`;
+  const providerReference = `ref_${normalizedProvider}_${String(input.orderId).slice(0, 12)}_${Math.random().toString(36).slice(2, 10)}`;
+  const successUrl = input.successUrl ?? 'https://sandbox.example.test/payments/success';
+  const cancelUrl = input.cancelUrl ?? 'https://sandbox.example.test/payments/cancel';
+
+  return {
+    provider: normalizedProvider,
+    checkoutSessionId,
+    providerReference,
+    status: 'created',
+    checkoutUrl: `${successUrl}?session=${checkoutSessionId}`,
+    isSandbox: true,
+    metadata: {
+      ...(input.metadata ?? {}),
+      businessId: input.businessId,
+      orderId: input.orderId,
+      customerId: input.customerId ?? 'anonymous',
+      amount,
+      currency: input.currency ?? 'MYR',
+      provider: normalizedProvider,
+      env: 'sandbox',
+      cancelUrl,
+    },
+  };
+}
+
 export function getMockPaymentProvider(): PaymentProviderAdapter {
   return {
     name: 'mock',
@@ -438,7 +516,104 @@ export function getMockPaymentProvider(): PaymentProviderAdapter {
   };
 }
 
-export function getPaymentProvider(name: PaymentProviderName = 'mock'): PaymentProviderAdapter {
+export function getStripeSandboxPaymentProvider(config: PaymentProviderConfig = {}): PaymentProviderAdapter {
+  const environment = (config.environment ?? process.env.PAYMENT_PROVIDER_ENV ?? 'sandbox').toLowerCase() as PaymentProviderEnvironment;
+  const isSandbox = environment !== 'production';
+
+  return {
+    name: 'stripe',
+    createPayment: async (input) => {
+      const amount = Number(input.amount ?? 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error('Stripe sandbox checkout requires a positive amount.');
+      }
+
+      const session = createSandboxCheckoutSession({
+        orderId: input.orderId,
+        businessId: input.businessId,
+        amount,
+        currency: input.currency ?? 'MYR',
+        customerId: input.customerId,
+        provider: 'stripe',
+        successUrl: config.successUrl ?? process.env.EXPO_PUBLIC_PAYMENT_SUCCESS_URL,
+        cancelUrl: config.cancelUrl ?? process.env.EXPO_PUBLIC_PAYMENT_CANCEL_URL,
+        metadata: {
+          provider: 'stripe',
+          env: environment,
+          sandbox: isSandbox,
+        },
+      });
+
+      return {
+        id: `pay_stripe_${Date.now().toString(36)}`,
+        orderId: input.orderId,
+        businessId: input.businessId,
+        customerId: input.customerId,
+        amount,
+        currency: input.currency ?? 'MYR',
+        provider: 'stripe',
+        providerReference: session.providerReference,
+        providerTransactionId: session.checkoutSessionId,
+        status: 'pending',
+        idempotencyKey: input.idempotencyKey ?? `${input.orderId}:${input.businessId}:${session.checkoutSessionId}`,
+        callbackEventId: undefined,
+        metadata: {
+          ...(input.metadata ?? {}),
+          checkoutSessionId: session.checkoutSessionId,
+          sandbox: true,
+          environment,
+          provider: 'stripe',
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    },
+    verifySignature: async ({ payload, signature, secret }) => {
+      return verifyPaymentSignature({
+        payload,
+        signature,
+        secret: secret ?? config.webhookSecret ?? process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET,
+        provider: 'stripe',
+      });
+    },
+    handleWebhook: async (payment, event) => {
+      const withEvent = await handlePaymentWebhook(payment, event, config.webhookSecret ?? process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET);
+      return withEvent as PaymentRecord;
+    },
+    refundPayment: async (payment, reason) => refundPaymentRecord(payment, reason),
+    createCheckoutSession: async (input) => createSandboxCheckoutSession({
+      orderId: input.orderId,
+      businessId: input.businessId,
+      amount: Number(input.amount ?? 0),
+      currency: input.currency ?? 'MYR',
+      customerId: input.customerId,
+      provider: 'stripe',
+      successUrl: config.successUrl ?? process.env.EXPO_PUBLIC_PAYMENT_SUCCESS_URL,
+      cancelUrl: config.cancelUrl ?? process.env.EXPO_PUBLIC_PAYMENT_CANCEL_URL,
+      metadata: {
+        provider: 'stripe',
+        env: environment,
+        sandbox: isSandbox,
+      },
+    }),
+  };
+}
+
+export function getPaymentProvider(name: PaymentProviderName = 'mock', config: PaymentProviderConfig = {}): PaymentProviderAdapter {
+  if (name === 'stripe') {
+    return getStripeSandboxPaymentProvider(config);
+  }
+
+  if (name === 'direct_qr') {
+    return {
+      name: 'direct_qr',
+      createPayment: async (input) => createPaymentRecord({ ...input, provider: 'direct_qr' }),
+      verifySignature: async () => true,
+      handleWebhook: async (payment) => payment,
+      refundPayment: async (payment, reason) => refundPaymentRecord(payment, reason),
+    };
+  }
+
   if (name === 'mock') {
     return getMockPaymentProvider();
   }

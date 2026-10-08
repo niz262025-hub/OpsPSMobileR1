@@ -1,0 +1,10 @@
+project_id = "opsps-sandbox"
+
+[api]
+port = 54321
+
+[functions.create-payment-checkout]
+verify_jwt = true
+
+[functions.payment-webhook]
+verify_jwt = false

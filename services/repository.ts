@@ -216,7 +216,7 @@ export interface OrderRepository {
   listForCustomer(customerId: string): Promise<OrderRecord[]>;
 }
 
-export type PaymentRepositoryStatus = 'pending' | 'pending_verification' | 'authorized' | 'success' | 'paid' | 'partial' | 'pay_later' | 'failed' | 'cancelled' | 'refunded';
+export type PaymentRepositoryStatus = 'pending' | 'submitted' | 'pending_verification' | 'authorized' | 'success' | 'paid' | 'partial' | 'pay_later' | 'rejected' | 'failed' | 'cancelled' | 'refunded';
 
 export type FinanceTransactionRecord = {
   id: string;
@@ -280,8 +280,16 @@ export type PaymentRecordRow = {
   callback_event_id?: string;
   webhook_verified?: boolean;
   verified?: boolean;
+  verified_at?: string | null;
+  verified_by?: string | null;
+  submitted_at?: string | null;
   receipt_uri?: string | null;
   customer_id?: string | null;
+  customer_payment_reference?: string | null;
+  rejection_reason?: string | null;
+  payment_instructions_snapshot?: string | null;
+  payment_profile_id?: string | null;
+  verification_event_id?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -301,17 +309,45 @@ export interface PaymentRepository {
     webhookVerified?: boolean;
     customerId?: string;
     receiptUri?: string;
+    customerPaymentReference?: string;
+    paymentInstructionsSnapshot?: string;
+    paymentProfileId?: string;
   }): Promise<PaymentRecordRow | null>;
   getById(paymentId: string, businessId: string): Promise<PaymentRecordRow | null>;
   getByOrder(businessId: string, orderId: string): Promise<PaymentRecordRow | null>;
   listForBusiness(businessId: string): Promise<PaymentRecordRow[]>;
+  listPendingForBusiness(businessId: string): Promise<PaymentRecordRow[]>;
+  submitDirectQrPayment(input: {
+    businessId: string;
+    orderId: string;
+    amount: number;
+    customerId?: string;
+    paymentMethod?: string;
+    paymentProfileId?: string;
+    receiptUri?: string;
+    customerPaymentReference?: string;
+    paymentInstructionsSnapshot?: string;
+    idempotencyKey?: string;
+  }): Promise<PaymentRecordRow | null>;
+  verifyDirectQrPayment(paymentId: string, businessId: string, verifiedBy?: string, overrides?: {
+    orderId?: string;
+    rejectionReason?: string;
+    paymentProfileId?: string;
+    verificationEventId?: string;
+  }): Promise<PaymentRecordRow | null>;
+  rejectDirectQrPayment(paymentId: string, businessId: string, rejectionReason: string, verifiedBy?: string): Promise<PaymentRecordRow | null>;
   transition(paymentId: string, businessId: string, nextStatus: PaymentRepositoryStatus, overrides?: {
     providerReference?: string;
     providerTransactionId?: string;
     callbackEventId?: string;
     webhookVerified?: boolean;
     verified?: boolean;
+    verifiedBy?: string;
     receiptUri?: string;
+    customerPaymentReference?: string;
+    rejectionReason?: string;
+    paymentProfileId?: string;
+    verificationEventId?: string;
     metadata?: Record<string, unknown>;
   }): Promise<PaymentRecordRow | null>;
   refund(paymentId: string, businessId: string, reason?: string): Promise<PaymentRecordRow | null>;
@@ -478,8 +514,16 @@ function mapPaymentRow(row: any): PaymentRecordRow {
     callback_event_id: row.callback_event_id ?? undefined,
     webhook_verified: Boolean(row.webhook_verified ?? false),
     verified: Boolean(row.verified ?? false),
+    verified_at: row.verified_at ?? row.verifiedAt ?? null,
+    verified_by: row.verified_by ?? row.verifiedBy ?? null,
+    submitted_at: row.submitted_at ?? row.submittedAt ?? null,
     receipt_uri: row.receipt_uri ?? row.receiptUri ?? null,
     customer_id: row.customer_id ?? row.customerId ?? null,
+    customer_payment_reference: row.customer_payment_reference ?? row.customerPaymentReference ?? null,
+    rejection_reason: row.rejection_reason ?? row.rejectionReason ?? null,
+    payment_instructions_snapshot: row.payment_instructions_snapshot ?? row.paymentInstructionsSnapshot ?? null,
+    payment_profile_id: row.payment_profile_id ?? row.paymentProfileId ?? null,
+    verification_event_id: row.verification_event_id ?? row.verificationEventId ?? null,
     created_at: row.created_at ?? new Date().toISOString(),
     updated_at: row.updated_at ?? new Date().toISOString(),
   };
@@ -1280,22 +1324,31 @@ class MockDataSource implements DataSource {
 
   payments: PaymentRepository = {
     async create(input) {
+      const normalizedProvider = (input.provider ?? input.paymentMethod ?? 'mock').toLowerCase();
+      const hasProof = Boolean(input.receiptUri && input.receiptUri.trim().length > 0);
+      const isDirectQr = normalizedProvider === 'direct_qr' || input.paymentMethod?.toUpperCase() === 'DIRECT_QR';
+      const paymentStatus = isDirectQr ? (hasProof || input.customerPaymentReference ? 'submitted' : 'pending') : hasProof ? 'pending_verification' : 'pending';
+
       return {
         id: `payment-mock-${Date.now()}`,
         business_id: input.businessId,
         order_id: input.orderId,
         payment_method: input.paymentMethod ?? 'bank',
-        payment_status: 'pending',
-        status: 'pending',
+        payment_status: paymentStatus,
+        status: paymentStatus,
         amount: Number(input.amount ?? 0),
         currency: input.currency ?? 'MYR',
-        provider: input.provider ?? 'mock',
+        provider: normalizedProvider,
         provider_reference: input.providerReference ?? undefined,
         provider_transaction_id: input.providerTransactionId ?? undefined,
         idempotency_key: input.idempotencyKey ?? `${input.orderId}:${input.businessId}`,
         callback_event_id: input.callbackEventId ?? undefined,
         webhook_verified: Boolean(input.webhookVerified ?? false),
         verified: false,
+        receipt_uri: input.receiptUri ?? null,
+        customer_id: input.customerId ?? null,
+        customer_payment_reference: input.customerPaymentReference ?? null,
+        payment_instructions_snapshot: input.paymentInstructionsSnapshot ?? null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -1305,12 +1358,12 @@ class MockDataSource implements DataSource {
         id: paymentId,
         business_id: businessId,
         order_id: 'order-mock',
-        payment_method: 'bank',
+        payment_method: 'DIRECT_QR',
         payment_status: 'pending',
         status: 'pending',
         amount: 0,
         currency: 'MYR',
-        provider: 'mock',
+        provider: 'direct_qr',
         idempotency_key: `${paymentId}:${businessId}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -1321,12 +1374,12 @@ class MockDataSource implements DataSource {
         id: `payment-mock-${orderId}`,
         business_id: businessId,
         order_id: orderId,
-        payment_method: 'bank',
+        payment_method: 'DIRECT_QR',
         payment_status: 'pending',
         status: 'pending',
         amount: 0,
         currency: 'MYR',
-        provider: 'mock',
+        provider: 'direct_qr',
         idempotency_key: `${orderId}:${businessId}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -1337,41 +1390,112 @@ class MockDataSource implements DataSource {
         id: `payment-mock-${businessId}`,
         business_id: businessId,
         order_id: 'order-mock',
-        payment_method: 'bank',
+        payment_method: 'DIRECT_QR',
         payment_status: 'pending',
         status: 'pending',
         amount: 0,
         currency: 'MYR',
-        provider: 'mock',
+        provider: 'direct_qr',
         idempotency_key: `${businessId}-mock`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }];
     },
-    async transition(paymentId, businessId, nextStatus) {
-      return {
+    async listPendingForBusiness(businessId) {
+      return [{
+        id: `payment-mock-pending-${businessId}`,
+        business_id: businessId,
+        order_id: 'order-mock',
+        payment_method: 'DIRECT_QR',
+        payment_status: 'submitted',
+        status: 'submitted',
+        amount: 0,
+        currency: 'MYR',
+        provider: 'direct_qr',
+        verified: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }];
+    },
+    async submitDirectQrPayment(input) {
+      const amount = Number(input.amount ?? 0);
+      return this.create({
+        businessId: input.businessId,
+        orderId: input.orderId,
+        amount,
+        currency: 'MYR',
+        paymentMethod: input.paymentMethod ?? 'DIRECT_QR',
+        provider: 'direct_qr',
+        customerId: input.customerId,
+        receiptUri: input.receiptUri,
+        customerPaymentReference: input.customerPaymentReference,
+        paymentInstructionsSnapshot: input.paymentInstructionsSnapshot,
+        paymentProfileId: input.paymentProfileId,
+        idempotencyKey: input.idempotencyKey ?? `${input.businessId}:${input.orderId}:direct_qr`,
+      });
+    },
+    async verifyDirectQrPayment(paymentId, businessId, verifiedBy, overrides = {}) {
+      const existing = await this.getById(paymentId, businessId);
+      if (!existing || !['submitted', 'pending_verification', 'rejected'].includes(existing.payment_status ?? '')) {
+        return null;
+      }
+      return this.transition(paymentId, businessId, 'paid', {
+        verified: true,
+        verifiedBy: verifiedBy ?? undefined,
+        verificationEventId: overrides.verificationEventId ?? `verify-${paymentId}`,
+      });
+    },
+    async rejectDirectQrPayment(paymentId, businessId, rejectionReason, verifiedBy) {
+      const existing = await this.getById(paymentId, businessId);
+      if (!existing || !['submitted', 'pending_verification', 'rejected'].includes(existing.payment_status ?? '')) {
+        return null;
+      }
+      return this.transition(paymentId, businessId, 'rejected', {
+        rejectionReason,
+        verified: false,
+        verifiedBy: verifiedBy ?? undefined,
+      });
+    },
+    async transition(paymentId, businessId, nextStatus, overrides = {}) {
+      const normalizedStatus = String(nextStatus).toLowerCase();
+      if ((normalizedStatus === 'paid' || normalizedStatus === 'approved' || normalizedStatus === 'success') && overrides.verified !== true) {
+        return null;
+      }
+
+      const record = {
         id: paymentId,
         business_id: businessId,
         order_id: 'order-mock',
-        payment_method: 'bank',
-        payment_status: nextStatus,
-        status: nextStatus,
+        payment_method: 'DIRECT_QR',
+        payment_status: normalizedStatus,
+        status: normalizedStatus,
         amount: 0,
         currency: 'MYR',
-        provider: 'mock',
+        provider: 'direct_qr',
+        verified: Boolean(overrides.verified ?? false),
+        verified_by: overrides.verifiedBy ?? null,
+        customer_payment_reference: overrides.customerPaymentReference ?? null,
+        rejection_reason: overrides.rejectionReason ?? null,
+        receipt_uri: overrides.receiptUri ?? null,
         idempotency_key: `${paymentId}:${businessId}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+
+      return record;
     },
     async refund(paymentId, businessId, reason) {
-      return this.transition(paymentId, businessId, 'refunded');
+      return this.transition(paymentId, businessId, 'refunded', { rejectionReason: reason });
     },
     async cancel(paymentId, businessId) {
       return this.transition(paymentId, businessId, 'cancelled');
     },
-    async reconcileFinanceForPayment() {
-      return [];
+    async reconcileFinanceForPayment(paymentId, businessId) {
+      const payment = await this.getById(paymentId, businessId);
+      if (!payment || payment.payment_status !== 'paid') {
+        return [];
+      }
+      return [{ id: paymentId, business_id: businessId, order_id: payment.order_id, amount: Number(payment.amount ?? 0), payment_status: payment.payment_status, description: 'Direct QR payment received' }];
     },
   };
 }
@@ -3063,13 +3187,20 @@ class SupabaseDataSource implements DataSource {
       }
 
       const hasProof = typeof input.receiptUri === 'string' && input.receiptUri.trim().length > 0;
+      const hasReference = typeof input.customerPaymentReference === 'string' && input.customerPaymentReference.trim().length > 0;
+      const isDirectQr = (input.paymentMethod ?? input.provider ?? '').toString().toUpperCase() === 'DIRECT_QR' || (input.provider ?? '').toString().toLowerCase() === 'direct_qr';
+      const nextStatus: PaymentRepositoryStatus = isDirectQr ? (hasProof || hasReference ? 'submitted' : 'pending') : (hasProof ? 'pending_verification' : 'pending');
       const { data, error } = await client.from('payments').insert({
         business_id: input.businessId,
         order_id: input.orderId,
         payment_method: input.paymentMethod ?? 'bank',
         amount: expectedAmount,
-        payment_status: hasProof ? 'pending_verification' : 'pending',
+        payment_status: nextStatus,
         receipt_uri: input.receiptUri ?? null,
+        customer_payment_reference: input.customerPaymentReference ?? null,
+        payment_instructions_snapshot: input.paymentInstructionsSnapshot ?? null,
+        payment_profile_id: input.paymentProfileId ?? null,
+        idempotency_key: input.idempotencyKey ?? `${input.businessId}:${input.orderId}:${input.paymentMethod ?? 'bank'}`,
         verified: false,
       }).select('*').single();
 
@@ -3118,6 +3249,198 @@ class SupabaseDataSource implements DataSource {
 
       return (data as any[]).map((row) => mapPaymentRow(row));
     },
+    async listPendingForBusiness(businessId) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return [];
+      }
+
+      const { data, error } = await client
+        .from('payments')
+        .select('*')
+        .eq('business_id', businessId)
+        .in('payment_status', ['submitted', 'pending_verification', 'rejected']);
+
+      if (error || !data) {
+        return [];
+      }
+
+      return (data as any[]).map((row) => mapPaymentRow(row));
+    },
+    async submitDirectQrPayment(input) {
+      const client = getSupabaseClient();
+      if (!client) {
+        return null;
+      }
+
+      if (!(await hasMembership(client, input.businessId))) {
+        return null;
+      }
+
+      const orderQuery = await client
+        .from('orders')
+        .select('id, business_id, total, payment_status, order_status, customer_id, customer_profile_id')
+        .eq('id', input.orderId)
+        .eq('business_id', input.businessId)
+        .maybeSingle();
+
+      if (orderQuery.error || !orderQuery.data) {
+        return null;
+      }
+
+      const order = orderQuery.data as any;
+      const expectedAmount = Number(input.amount ?? order.total ?? 0);
+      if (Number(order.total ?? 0) > 0 && Math.abs(expectedAmount - Number(order.total)) > 0.01) {
+        return null;
+      }
+
+      if (order.order_status === 'cancelled') {
+        return null;
+      }
+
+      if (input.customerId && order.customer_id && order.customer_id !== input.customerId) {
+        return null;
+      }
+
+      const existing = await client.from('payments').select('*').eq('order_id', input.orderId).eq('business_id', input.businessId).limit(1);
+      if (!existing.error && existing.data && existing.data.length > 0) {
+        const first = existing.data[0] as any;
+        const currentStatus = String(first.payment_status ?? '').toLowerCase();
+        if (['submitted', 'pending_verification', 'rejected'].includes(currentStatus)) {
+          return mapPaymentRow(first);
+        }
+      }
+
+      const paymentMethod = (input.paymentMethod ?? 'DIRECT_QR').toString().toUpperCase();
+      const receiptUri = typeof input.receiptUri === 'string' && input.receiptUri.trim().length > 0 ? input.receiptUri : undefined;
+      const customerPaymentReference = typeof input.customerPaymentReference === 'string' && input.customerPaymentReference.trim().length > 0 ? input.customerPaymentReference.trim() : undefined;
+      const paymentInstructionsSnapshot = input.paymentInstructionsSnapshot ?? 'Direct QR payment instructions provided to the customer.';
+
+      return this.create({
+        businessId: input.businessId,
+        orderId: input.orderId,
+        amount: expectedAmount,
+        currency: 'MYR',
+        paymentMethod,
+        provider: 'direct_qr',
+        customerId: input.customerId,
+        receiptUri,
+        customerPaymentReference,
+        paymentInstructionsSnapshot,
+        paymentProfileId: input.paymentProfileId,
+        idempotencyKey: input.idempotencyKey ?? `${input.businessId}:${input.orderId}:direct_qr`,
+      });
+    },
+    async verifyDirectQrPayment(paymentId, businessId, verifiedBy, overrides = {}) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const payment = await this.getById(paymentId, businessId);
+      if (!payment) {
+        return null;
+      }
+
+      const orderQuery = await client
+        .from('orders')
+        .select('id, business_id, total, order_status, payment_status')
+        .eq('id', payment.order_id)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (orderQuery.error || !orderQuery.data) {
+        return null;
+      }
+
+      const order = orderQuery.data as any;
+      const orderStatus = String(order.order_status ?? '').toLowerCase();
+      if (orderStatus === 'cancelled') {
+        return null;
+      }
+
+      const paymentMethod = String(payment.payment_method ?? '').toUpperCase();
+      if (paymentMethod !== 'DIRECT_QR') {
+        return null;
+      }
+
+      if (payment.payment_status && !['submitted', 'pending_verification', 'rejected'].includes(payment.payment_status.toLowerCase())) {
+        return null;
+      }
+
+      const normalizedAmount = Number(payment.amount ?? 0);
+      const orderAmount = Number(order.total ?? 0);
+      if (orderAmount > 0 && Math.abs(normalizedAmount - orderAmount) > 0.01) {
+        return null;
+      }
+
+      const verifiedUserId = verifiedBy || (await getUserIdFromAuth(client)) || undefined;
+      if (!verifiedUserId) {
+        return null;
+      }
+
+      const pendingVerification = await this.transition(paymentId, businessId, 'pending_verification', {
+        verified: false,
+        customerPaymentReference: payment.customer_payment_reference ?? undefined,
+        receiptUri: payment.receipt_uri ?? undefined,
+      });
+
+      if (!pendingVerification) {
+        return null;
+      }
+
+      const updated = await this.transition(paymentId, businessId, 'paid', {
+        verified: true,
+        verifiedBy: verifiedUserId,
+        verificationEventId: overrides.verificationEventId ?? `verify-${paymentId}`,
+      });
+
+      if (!updated) {
+        return null;
+      }
+
+      await client.from('orders').update({
+        payment_status: 'paid',
+        order_status: 'payment_received',
+        payment_verified_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', payment.order_id).eq('business_id', businessId);
+
+      return updated;
+    },
+    async rejectDirectQrPayment(paymentId, businessId, rejectionReason, verifiedBy) {
+      const client = getSupabaseClient();
+      if (!client || !(await hasMembership(client, businessId))) {
+        return null;
+      }
+
+      const payment = await this.getById(paymentId, businessId);
+      if (!payment) {
+        return null;
+      }
+
+      const normalizedReason = String(rejectionReason ?? '').trim();
+      if (!normalizedReason) {
+        return null;
+      }
+
+      const paymentMethod = String(payment.payment_method ?? '').toUpperCase();
+      if (paymentMethod !== 'DIRECT_QR') {
+        return null;
+      }
+
+      const updated = await this.transition(paymentId, businessId, 'rejected', {
+        rejectionReason: normalizedReason,
+        verified: false,
+        verifiedBy: verifiedBy ?? undefined,
+      });
+
+      if (!updated) {
+        return null;
+      }
+
+      return updated;
+    },
     async transition(paymentId, businessId, nextStatus, overrides = {}) {
       const client = getSupabaseClient();
       if (!client || !(await hasMembership(client, businessId))) {
@@ -3130,23 +3453,26 @@ class SupabaseDataSource implements DataSource {
       }
 
       const normalized = nextStatus.toLowerCase() as PaymentRepositoryStatus;
-      if (!['pending', 'pending_verification', 'authorized', 'success', 'paid', 'partial', 'pay_later', 'failed', 'cancelled', 'refunded'].includes(normalized)) {
+      const allowedStatuses: PaymentRepositoryStatus[] = ['pending', 'submitted', 'pending_verification', 'authorized', 'success', 'paid', 'partial', 'pay_later', 'rejected', 'failed', 'cancelled', 'refunded'];
+      if (!allowedStatuses.includes(normalized)) {
         throw new Error(`Invalid payment transition: ${existing.payment_status} -> ${normalized}`);
       }
 
-      if (!['pending', 'pending_verification', 'authorized', 'success', 'paid', 'partial', 'pay_later', 'failed', 'cancelled', 'refunded'].includes(existing.payment_status ?? 'pending')) {
+      if (!allowedStatuses.includes((existing.payment_status ?? 'pending') as PaymentRepositoryStatus)) {
         throw new Error(`Invalid payment transition: ${existing.payment_status} -> ${normalized}`);
       }
 
       const from = ((existing.payment_status ?? 'pending') as PaymentRepositoryStatus).toLowerCase() as PaymentRepositoryStatus;
       const validList: Record<PaymentRepositoryStatus, PaymentRepositoryStatus[]> = {
-        pending: ['pending_verification', 'authorized', 'paid', 'failed', 'cancelled'],
-        pending_verification: ['paid', 'failed', 'cancelled'],
+        pending: ['submitted', 'pending_verification', 'authorized', 'paid', 'failed', 'cancelled'],
+        submitted: ['pending_verification', 'rejected', 'cancelled'],
+        pending_verification: ['submitted', 'rejected', 'paid', 'failed', 'cancelled'],
         authorized: ['paid', 'failed', 'cancelled', 'refunded'],
         success: ['paid'],
         paid: ['refunded'],
         partial: ['paid', 'failed', 'cancelled'],
         pay_later: ['paid', 'failed', 'cancelled'],
+        rejected: ['submitted', 'pending_verification', 'cancelled'],
         failed: [],
         cancelled: [],
         refunded: [],
@@ -3154,6 +3480,13 @@ class SupabaseDataSource implements DataSource {
 
       if (from === normalized) {
         return existing;
+      }
+
+      if (normalized === 'paid' || normalized === 'success') {
+        const serverVerified = overrides.verified === true || existing.verified === true || Boolean(overrides.callbackEventId || overrides.providerTransactionId);
+        if (!serverVerified) {
+          return null;
+        }
       }
 
       if (!validList[from]?.includes(normalized)) {
@@ -3167,9 +3500,29 @@ class SupabaseDataSource implements DataSource {
       const payload: Record<string, unknown> = {
         payment_status: normalized,
         verified: overrides.verified ?? ((normalized === 'paid' || normalized === 'success') || existing.verified),
-        verified_at: overrides.verified ? new Date().toISOString() : undefined,
+        verified_at: overrides.verified === true ? new Date().toISOString() : (normalized === 'paid' || normalized === 'success') ? existing.verified_at ?? new Date().toISOString() : undefined,
         updated_at: new Date().toISOString(),
       };
+
+      if (overrides.verifiedBy) {
+        payload.verified_by = overrides.verifiedBy;
+      }
+
+      if (overrides.customerPaymentReference) {
+        payload.customer_payment_reference = overrides.customerPaymentReference;
+      }
+
+      if (overrides.rejectionReason) {
+        payload.rejection_reason = overrides.rejectionReason;
+      }
+
+      if (overrides.paymentProfileId) {
+        payload.payment_profile_id = overrides.paymentProfileId;
+      }
+
+      if (overrides.verificationEventId) {
+        payload.verification_event_id = overrides.verificationEventId;
+      }
 
       if (overrides.receiptUri) {
         payload.receipt_uri = overrides.receiptUri;

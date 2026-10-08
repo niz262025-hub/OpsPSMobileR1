@@ -17,7 +17,8 @@ export default function PurchaseFormScreen() {
   const [productCost, setProductCost] = useState('0');
   const [quantity, setQuantity] = useState('1');
   const [receipt, setReceipt] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank'>('bank');
+  const [paymentMethod, setPaymentMethod] = useState<'DIRECT_QR'>('DIRECT_QR');
+  const [paymentReference, setPaymentReference] = useState('');
   const [transport, setTransport] = useState('0');
   const [parking, setParking] = useState('0');
   const [toll, setToll] = useState('0');
@@ -114,10 +115,12 @@ export default function PurchaseFormScreen() {
       orderId: order.id,
       amount: Number(order.total ?? total ?? 0),
       currency: 'MYR',
-      provider: 'mock',
+      provider: 'direct_qr',
       paymentMethod,
       customerId: user?.id ?? profile?.id ?? undefined,
       receiptUri: receipt || undefined,
+      customerPaymentReference: paymentReference.trim() || undefined,
+      paymentInstructionsSnapshot: 'Pay directly to the business account shown below. Upload proof and your payment reference after paying.',
     });
 
     if (!created) {
@@ -125,16 +128,18 @@ export default function PurchaseFormScreen() {
       return;
     }
 
-    const verified = await repo.payments.transition(created.id, order.businessId, 'paid', {
-      verified: true,
+    const submitted = await repo.payments.transition(created.id, order.businessId, 'submitted', {
+      customerPaymentReference: paymentReference.trim() || undefined,
       receiptUri: receipt || created.receipt_uri || undefined,
+      verified: false,
     });
 
-    if (!verified) {
-      Alert.alert('Payment verification failed', 'The payment record could not be verified for this order.');
+    if (!submitted) {
+      Alert.alert('Payment submission failed', 'The payment could not be submitted for seller verification.');
       return;
     }
 
+    Alert.alert('Payment submitted', 'Payment submitted. Waiting for seller verification.');
     router.replace(`/order/${order.id}`);
   };
 
@@ -144,30 +149,7 @@ export default function PurchaseFormScreen() {
       return;
     }
 
-    const repo = getDataSource('production');
-    const created = await repo.payments.create({
-      businessId: order.businessId,
-      orderId: order.id,
-      amount: Number(order.total ?? total ?? 0),
-      currency: 'MYR',
-      provider: 'mock',
-      paymentMethod,
-      customerId: user?.id ?? profile?.id ?? undefined,
-      receiptUri: receipt || undefined,
-    });
-
-    if (!created) {
-      Alert.alert('Payment Required', 'Verify the order and payment details before creating a payment record.');
-      return;
-    }
-
-    await repo.payments.transition(created.id, order.businessId, 'paid', {
-      verified: true,
-      receiptUri: receipt || created.receipt_uri || undefined,
-    });
-
-    Alert.alert('Payment Saved', 'The payment record was persisted for this order.');
-    router.replace(`/order/${order.id}`);
+    Alert.alert('Extra stock not supported', 'Direct QR payment must be submitted for the customer order flow only.');
   };
 
   return (
@@ -193,18 +175,27 @@ export default function PurchaseFormScreen() {
             <Field key={label as string} label={label as string} value={value as string} onChangeText={setter as (value: string) => void} />
           ))}
           <Text style={styles.total}>Total: RM{total.toFixed(2)}</Text>
-          <Text style={styles.label}>Paid From</Text>
+          <Text style={styles.label}>Payment Method</Text>
           <View style={styles.actions}>
-            {(['cash', 'bank'] as const).map((value) => (
+            {(['DIRECT_QR'] as const).map((value) => (
               <Pressable key={value} style={[styles.option, paymentMethod === value && styles.selected]} onPress={() => setPaymentMethod(value)}>
                 <Text style={styles.optionText}>{value}</Text>
               </Pressable>
             ))}
           </View>
+          <View style={styles.infoBlock}>
+            <Text style={styles.section}>Seller payment details</Text>
+            <Text style={styles.infoLine}>Method: Direct QR</Text>
+            <Text style={styles.infoLine}>Bank / e-wallet: Maybank / DuitNow / TNG QR</Text>
+            <Text style={styles.infoLine}>Account holder: OpsPS Business Owner</Text>
+            <Text style={styles.infoLine}>Instructions: Scan the QR or transfer to the active business account and upload proof.</Text>
+          </View>
+          <Text style={styles.label}>Payment reference</Text>
+          <TextInput value={paymentReference} onChangeText={setPaymentReference} placeholder="e.g. DuitNow transfer ref or TNG ref" style={styles.referenceInput} />
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.section}>Purchase Receipt</Text>
+          <Text style={styles.section}>Payment proof</Text>
           {receipt ? (
             <View>
               <Image source={{ uri: receipt }} style={styles.receipt} />
@@ -229,8 +220,8 @@ export default function PurchaseFormScreen() {
           )}
         </View>
 
-        <Pressable disabled={!receipt} style={[styles.primary, !receipt && styles.disabled]} onPress={classification === 'extra_stock' ? () => { void saveExtra(); } : () => { void createPayment(); }}>
-          <Text style={styles.primaryText}>{classification === 'extra_stock' ? 'Save Extra Stock' : 'Confirm Customer Order Purchase'}</Text>
+        <Pressable disabled={!receipt && !paymentReference} style={[styles.primary, !receipt && !paymentReference && styles.disabled]} onPress={classification === 'extra_stock' ? () => { void saveExtra(); } : () => { void createPayment(); }}>
+          <Text style={styles.primaryText}>{classification === 'extra_stock' ? 'Save Extra Stock' : 'Payment Made'}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -256,6 +247,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
   label: { color: THEME.text.primary, fontWeight: '700' },
   input: { width: 120, borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, textAlign: 'right', color: THEME.text.primary },
+  referenceInput: { borderWidth: 1, borderColor: THEME.border, borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, marginTop: SPACING.sm, color: THEME.text.primary },
+  infoBlock: { marginTop: SPACING.md, padding: SPACING.md, borderRadius: BORDER_RADIUS.md, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: THEME.border },
+  infoLine: { color: THEME.text.secondary, marginBottom: SPACING.xs },
   actions: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
   option: { backgroundColor: '#F5F3FF', borderRadius: BORDER_RADIUS.md, padding: SPACING.md },
   selected: { borderWidth: 2, borderColor: THEME.primary },

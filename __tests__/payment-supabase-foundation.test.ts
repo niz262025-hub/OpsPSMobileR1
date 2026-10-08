@@ -453,7 +453,7 @@ describe('phase 4c payment foundation', () => {
 
     expect(createdPayment).not.toBeNull();
     expect(inserted.payments).not.toHaveProperty('currency');
-    expect(inserted.payments).not.toHaveProperty('idempotency_key');
+    expect(inserted.payments).toHaveProperty('idempotency_key');
     expect(inserted.payments).toHaveProperty('payment_status');
   });
 

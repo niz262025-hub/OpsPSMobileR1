@@ -182,4 +182,49 @@ describe('payment provider architecture', () => {
     expect(created.provider).toBe('mock');
     expect(verified).toBe(true);
   });
+
+  it('creates a sandbox stripe checkout record without exposing secrets', async () => {
+    const provider = getMockPaymentProvider();
+    const created = await provider.createPayment({
+      orderId: 'sandbox-order-1',
+      businessId: 'business-1',
+      amount: 75,
+      provider: 'mock',
+    });
+
+    expect(created.provider).toBe('mock');
+    expect(created.amount).toBe(75);
+    expect(created.idempotencyKey).toContain('sandbox-order-1');
+  });
+
+  it('supports the stripe sandbox adapter while keeping pay_later internal', async () => {
+    const provider = (await import('../services/payment')).getPaymentProvider('stripe');
+    const created = await provider.createPayment({
+      orderId: 'order-sandbox-2',
+      businessId: 'business-1',
+      amount: 120,
+      currency: 'MYR',
+      idempotencyKey: 'idem-sandbox-2',
+      customerId: 'cust-1',
+    });
+
+    expect(created.provider).toBe('stripe');
+    expect(created.status).toBe('pending');
+    expect(created.providerReference).toContain('ref_');
+    expect(created.metadata?.sandbox).toBe(true);
+    expect(created.metadata?.provider).toBe('stripe');
+    expect(created.metadata?.environment).toBe('sandbox');
+    expect((await import('../services/payment')).normalizePaymentState('pay_later')).toBe('pay_later');
+  });
+
+  it('rejects invalid stripe sandbox amounts before checkout creation', async () => {
+    const provider = (await import('../services/payment')).getPaymentProvider('stripe');
+
+    await expect(provider.createPayment({
+      orderId: 'order-bad-amount',
+      businessId: 'business-1',
+      amount: 0,
+      currency: 'MYR',
+    })).rejects.toThrow(/positive amount/i);
+  });
 });
