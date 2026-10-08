@@ -66,6 +66,7 @@ export interface AuthRepository {
 
 export interface BusinessRepository {
   getCurrentBusinessIdForUser(userId: string): Promise<string | null>;
+  getBySlug(slug: string): Promise<BusinessRecord | null>;
   createBusinessForFounder(input: {
     founderUserId: string;
     founderName: string;
@@ -593,6 +594,21 @@ class MockDataSource implements DataSource {
   business: BusinessRepository = {
     async getCurrentBusinessIdForUser() {
       return null;
+    },
+    async getBySlug(slug: string) {
+      if (!slug || !slug.trim()) {
+        return null;
+      }
+
+      return {
+        id: 'mock-business',
+        name: 'OpsPS Demo',
+        slug: slug.trim(),
+        email: 'opsps@example.com',
+        phone: '+60123456789',
+        address: 'Kuala Lumpur',
+        status: 'active',
+      } satisfies BusinessRecord;
     },
     async createBusinessForFounder() {
       return { businessId: 'mock-business' };
@@ -1744,6 +1760,34 @@ class SupabaseDataSource implements DataSource {
       }
 
       return data[0]?.business_id ?? null;
+    },
+    async getBySlug(slug: string) {
+      const client = getSupabaseClient();
+      if (!client || !slug.trim()) {
+        return null;
+      }
+
+      const { data, error } = await client
+        .from('businesses')
+        .select('*')
+        .eq('slug', slug.trim())
+        .maybeSingle();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return {
+        id: data.id,
+        name: data.name ?? 'OpsPS Business',
+        slug: data.slug ?? slug.trim(),
+        email: data.email ?? null,
+        phone: data.phone ?? null,
+        address: data.address ?? null,
+        status: data.status ?? 'active',
+        created_at: data.created_at ?? undefined,
+        updated_at: data.updated_at ?? undefined,
+      } satisfies BusinessRecord;
     },
     async createBusinessForFounder(input) {
       const client = getSupabaseClient();

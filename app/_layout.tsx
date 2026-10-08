@@ -12,7 +12,7 @@ export function AuthRouteGuard() {
   useEffect(() => {
     if (!ready) return;
 
-    const publicRoutes = ['/login', '/register', '/forgot-password', '/', '/legal', '/product'];
+    const publicRoutes = ['/login', '/register', '/forgot-password', '/', '/legal', '/product', '/opsps'];
     if (publicRoutes.includes(pathname) || publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
       return;
     }
