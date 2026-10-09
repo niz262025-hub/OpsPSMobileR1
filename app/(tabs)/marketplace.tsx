@@ -56,6 +56,19 @@ const directPlatforms = [
   'Telegram',
 ];
 
+const MARKETPLACE_STATUSES = ['DRAFT', 'LIVE', 'PAUSED'] as const;
+
+function slugifyMarketplaceValue(value: string) {
+  const cleaned = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+
+  return cleaned || 'opsps-business';
+}
+
 async function blobToDataUrl(blob: Blob): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -115,6 +128,13 @@ export default function MarketplaceScreen() {
   const [products, setProducts] = useState<Array<{ id: string; name: string; image?: string; sellingPrice?: number; tripId?: string }>>([]);
   const [tripName, setTripName] = useState('No trip selected');
   const [image, setImage] = useState('');
+  const [marketplaceName, setMarketplaceName] = useState('');
+  const [marketplaceDisplayName, setMarketplaceDisplayName] = useState('');
+  const [marketplaceSlug, setMarketplaceSlug] = useState('');
+  const [marketplaceStatus, setMarketplaceStatus] = useState<(typeof MARKETPLACE_STATUSES)[number]>('DRAFT');
+  const [marketplaceDescription, setMarketplaceDescription] = useState('');
+  const [marketplaceWhatsapp, setMarketplaceWhatsapp] = useState('');
+  const [marketplaceCover, setMarketplaceCover] = useState('');
 
   const [category, setCategory] =
     useState<ProductCategory>('Clothing');
@@ -167,7 +187,14 @@ export default function MarketplaceScreen() {
           return;
         }
 
+        const fallbackBusinessName = business?.name ?? 'OpsPS Business';
+        const nextDisplayName = marketplaceDisplayName || fallbackBusinessName;
+        const nextSlug = marketplaceSlug || slugifyMarketplaceValue(fallbackBusinessName);
         setProducts(productRows);
+        setMarketplaceName(fallbackBusinessName);
+        setMarketplaceDisplayName(nextDisplayName);
+        setMarketplaceSlug(nextSlug);
+        setMarketplaceStatus((current) => current || 'DRAFT');
         if (typeof resolvedTripId === 'string' && resolvedTripId.trim()) {
           const trip = tripRows.find((entry) => entry.id === resolvedTripId);
           setTripName(trip?.name ?? resolvedTripId);
@@ -187,9 +214,10 @@ export default function MarketplaceScreen() {
     return () => {
       active = false;
     };
-  }, [businessId, resolvedTripId]);
+  }, [business, businessId, marketplaceDisplayName, marketplaceSlug, resolvedTripId]);
 
   const tripLabel = tripName;
+  const marketplaceUrl = `https://myops.com.my/opsps/${marketplaceSlug || 'opsps-business'}`;
 
   const selectCategory = (next: ProductCategory) => {
     setCategory(next);
@@ -529,13 +557,52 @@ export default function MarketplaceScreen() {
         >
           <View style={styles.headingRow}>
             <View>
-              <Text style={styles.eyebrow}>Product operations</Text>
-              <Text style={styles.title}>Marketplace Catalog</Text>
+              <Text style={styles.eyebrow}>Founder workspace</Text>
+              <Text style={styles.title}>My Marketplace</Text>
               <Text style={styles.subtitle}>
-                Upload, price and share products from one place.
+                Preview your storefront, review status, and publish products from one place.
               </Text>
             </View>
             <PackagePlus size={28} color={THEME.primary} />
+          </View>
+
+          <View style={styles.marketplaceCard}>
+            <View style={styles.marketplaceHeaderRow}>
+              <Text style={styles.sectionTitle}>Marketplace Preview</Text>
+              <View style={styles.statusBadge}><Text style={styles.statusBadgeText}>{marketplaceStatus}</Text></View>
+            </View>
+
+            <Text style={styles.label}>Marketplace URL</Text>
+            <View style={styles.linkBox}>
+              <Link size={17} color={THEME.primary} />
+              <Text style={styles.linkText} selectable>{marketplaceUrl}</Text>
+            </View>
+
+            <View style={styles.marketplaceActions}>
+              <Pressable style={styles.secondaryButton} onPress={() => router.push(`/opsps/${encodeURIComponent(marketplaceSlug || 'opsps-business')}`)}>
+                <Text style={styles.secondaryButtonText}>Preview</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={() => Clipboard.setStringAsync(marketplaceUrl)}>
+                <Text style={styles.secondaryButtonText}>Copy Link</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={() => setMarketplaceStatus((current) => current === 'LIVE' ? 'PAUSED' : current === 'PAUSED' ? 'DRAFT' : 'LIVE')}>
+                <Text style={styles.secondaryButtonText}>Publish / Unpublish</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.fieldRow}>
+              <Field label="Marketplace Name" value={marketplaceName} onChangeText={setMarketplaceName} placeholder="OpsPS Business" />
+              <Field label="Display Name" value={marketplaceDisplayName} onChangeText={setMarketplaceDisplayName} placeholder="Your shopper name" />
+            </View>
+
+            <View style={styles.fieldRow}>
+              <Field label="Slug" value={marketplaceSlug} onChangeText={(value) => setMarketplaceSlug(slugifyMarketplaceValue(value))} placeholder="opsps-business" />
+              <Field label="Status" value={marketplaceStatus} onChangeText={(value) => setMarketplaceStatus((MARKETPLACE_STATUSES as readonly string[]).includes(value) ? value as typeof marketplaceStatus : 'DRAFT')} placeholder="DRAFT" />
+            </View>
+
+            <Field label="Description" value={marketplaceDescription} onChangeText={setMarketplaceDescription} placeholder="Tell customers what your trip collections include" />
+            <Field label="WhatsApp / Contact" value={marketplaceWhatsapp} onChangeText={setMarketplaceWhatsapp} placeholder="+60123456789" />
+            <Field label="Cover / Banner URL" value={marketplaceCover} onChangeText={setMarketplaceCover} placeholder="https://..." />
           </View>
 
           <View style={styles.formCard}>
