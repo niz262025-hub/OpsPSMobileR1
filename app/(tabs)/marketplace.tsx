@@ -937,6 +937,47 @@ const styles = StyleSheet.create({
       SPACING.xs,
   },
 
+  marketplaceCard: {
+    backgroundColor: THEME.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING['2xl'],
+    borderWidth: 1,
+    borderColor: THEME.border,
+    ...THEME.shadow.small,
+    marginBottom: SPACING.lg,
+  },
+
+  marketplaceHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+
+  statusBadge: {
+    backgroundColor: '#E9F7EF',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderWidth: 1,
+    borderColor: '#BAE6C8',
+  },
+
+  statusBadgeText: {
+    color: '#0F766E',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+
+  marketplaceActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+
   formCard: {
     backgroundColor:
       THEME.surface,
