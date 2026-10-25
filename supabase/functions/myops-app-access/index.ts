@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { canonicalMyopsRequest, isMyopsTicket, isUuid, readSessionIdFromJwt } from './contract.ts';
+import { canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
 
-const PRODUCT = 'opsps';
+const PRODUCT = OPSPS_MYOPS_PRODUCT;
 const VALID_FOR_MS = 20_000;
 const APP_ID = /^[a-z][a-z0-9_-]{1,31}$/;
 const USER_REF = /^[A-Za-z0-9_-]{43}$/;

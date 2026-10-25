@@ -4,10 +4,15 @@ import {
   canonicalMyopsRequest,
   isMyopsTicket,
   isUuid,
+  OPSPS_MYOPS_PRODUCT,
   readSessionIdFromJwt,
 } from '../supabase/functions/myops-app-access/contract';
 
 describe('MYOPS app access contract', () => {
+  it('uses the OpsPS product slug registered in MYOPS', () => {
+    expect(OPSPS_MYOPS_PRODUCT).toBe('opsp');
+  });
+
   it('validates opaque launch tickets and UUIDs', () => {
     expect(isMyopsTicket('A'.repeat(43))).toBe(true);
     expect(isMyopsTicket('A'.repeat(42))).toBe(false);

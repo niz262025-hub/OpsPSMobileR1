@@ -18,8 +18,8 @@ OpsPS has a source implementation for MYOPS launch tickets, entitlement refresh,
 ## Required before staging UAT
 
 1. Configure the staging Expo build with `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
-2. Deploy the Edge Function with server-side secrets: `MYOPS_APP_API_ORIGIN`, `MYOPS_APP_ID=opsps`, `MYOPS_KEY_VERSION`, `MYOPS_APP_PRIVATE_KEY_CURRENT` (Ed25519 PKCS#8 PEM), and `OPSPS_ALLOWED_ORIGINS` (comma-separated exact HTTPS origins). Supabase's service-role/secret key must remain server-side.
-3. Confirm the MYOPS service uses the same signed request contract and returns `session_id`, opaque 43-character `user_ref`, and `product=opsps` for redeem; entitlement must return `entitled` and `session_active` booleans.
+2. Deploy the Edge Function with server-side secrets: `MYOPS_APP_API_ORIGIN`, `MYOPS_APP_ID=opsp`, `MYOPS_KEY_VERSION`, `MYOPS_APP_PRIVATE_KEY_CURRENT` (Ed25519 PKCS#8 PEM), and `OPSPS_ALLOWED_ORIGINS` (comma-separated exact HTTPS origins). The registered MYOPS product slug and app ID are `opsp`; `opsps` is only the repository name. Supabase's service-role/secret key must remain server-side.
+3. Confirm the MYOPS service uses the same signed request contract and returns `session_id`, opaque 43-character `user_ref`, and `product=opsp` for redeem; entitlement must return `entitled` and `session_active` booleans.
 4. Apply migration 017 to a disposable/staging database after replaying the repository's historical migrations. Seed `myops_identity_links` only for verified, pre-existing OpsPS Auth users; check every protected table and storage policy exists in that database.
 5. Configure the MYOPS OpsPS launch URL to return to the HTTPS OpsPS origin with the one-time ticket in the URL fragment (`#t=<ticket>`). Run browser UAT for valid, expired, replayed, and revoked tickets, package denial, network failure, logout, founder/customer workflows, payment proofs, and cross-business access.
 
