@@ -16,6 +16,14 @@ export function extractMyopsLaunchTicket(url: string): string | null {
   }
 }
 
+export function clearMyopsLaunchTicketFromUrl(): void {
+  if (typeof window === 'undefined' || (!window.location.hash.includes('t=') && !window.location.search.includes('t='))) return;
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('t');
+  cleanUrl.hash = '';
+  window.history.replaceState(null, '', `${cleanUrl.pathname}${cleanUrl.search}`);
+}
+
 export async function redeemMyopsLaunchTicket(
   client: SupabaseClient,
   ticket: string,

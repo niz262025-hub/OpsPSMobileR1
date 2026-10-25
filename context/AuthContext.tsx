@@ -14,6 +14,7 @@ import {
 import { getSupabaseClient } from '../services/supabaseClient';
 import { getSupabaseAuthRedirectUrl } from '../services/supabaseSchema';
 import {
+  clearMyopsLaunchTicketFromUrl,
   endMyopsAppSession,
   extractMyopsLaunchTicket,
   refreshMyopsEntitlement,
@@ -276,6 +277,7 @@ export function AuthProvider({
         const launchUrl = await Linking.getInitialURL();
         const ticket = launchUrl ? extractMyopsLaunchTicket(launchUrl) : null;
         if (ticket) {
+          clearMyopsLaunchTicketFromUrl();
           const launchedSession = await redeemMyopsLaunchTicket(client, ticket);
           if (launchedSession && active) {
             const entitled = await refreshMyopsEntitlement(client);
@@ -348,6 +350,7 @@ export function AuthProvider({
       const linkListener = Linking.addEventListener('url', async ({ url }) => {
         const ticket = extractMyopsLaunchTicket(url);
         if (!ticket || !active) return;
+        clearMyopsLaunchTicketFromUrl();
         const launchedSession = await redeemMyopsLaunchTicket(client, ticket);
         if (!launchedSession || !active) return;
         const entitled = await refreshMyopsEntitlement(client);

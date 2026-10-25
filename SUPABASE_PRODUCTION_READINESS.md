@@ -9,7 +9,7 @@ OpsPS has a source implementation for MYOPS launch tickets, entitlement refresh,
 ## Implemented in this branch
 
 - Landing, login, registration, and password-reset entry points direct users to MYOPS. OpsPS no longer accepts a separate password login or registration.
-- The `/launch` route is a real Expo Web route: it waits for MYOPS session validation, then sends founders, customers, and platform admins to their matching OpsPS dashboard. Rejected access shows a clear return-to-MYOPS action.
+- The `/launch` route is a real Expo Web route: it removes the one-time ticket from the browser URL, waits for MYOPS session validation, then sends founders, customers, and platform admins to their matching OpsPS dashboard. Rejected access shows a clear return-to-MYOPS action.
 - `myops-app-access` validates the 60-second launch ticket through the signed MYOPS `/api/app/redeem` contract, then creates a Supabase Auth session for an operator-linked account.
 - The Edge Function signs MYOPS requests with an Ed25519 private key stored server-side. It refreshes the package entitlement and revokes the bound OpsPS session on denial.
 - Migration `017_opsps_myops_app_sessions.sql` adds trusted identity links, binds Supabase JWT session IDs to MYOPS sessions, and applies a restrictive RLS session gate to the app's business data and private payment proofs. The legacy `SECURITY DEFINER` founder-bootstrap RPC is revoked from client roles.
