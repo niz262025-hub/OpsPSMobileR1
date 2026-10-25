@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clearMyopsLaunchTicketFromUrl, extractMyopsLaunchTicket } from '../services/myopsAppAccess';
 import {
   canonicalJson,
   canonicalMyopsRequest,
@@ -9,8 +10,33 @@ import {
 } from '../supabase/functions/myops-app-access/contract';
 
 describe('MYOPS app access contract', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   it('uses the OpsPS product slug registered in MYOPS', () => {
     expect(OPSPS_MYOPS_PRODUCT).toBe('opsp');
+  });
+
+  it('extracts the one-time ticket from the MYOPS launch fragment', () => {
+    const ticket = 'A'.repeat(43);
+    expect(extractMyopsLaunchTicket(`https://opsps.example.test/launch#t=${ticket}`)).toBe(ticket);
+    expect(extractMyopsLaunchTicket('https://opsps.example.test/launch#t=invalid')).toBeNull();
+  });
+
+  it('removes the launch ticket from browser history before redeeming it', () => {
+    const ticket = 'A'.repeat(43);
+    const replaceState = vi.fn();
+    vi.stubGlobal('window', {
+      location: {
+        href: `https://opsps.example.test/launch?keep=1#t=${ticket}`,
+        hash: `#t=${ticket}`,
+        search: '?keep=1',
+      },
+      history: { replaceState },
+    });
+
+    clearMyopsLaunchTicketFromUrl();
+
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/launch?keep=1');
   });
 
   it('validates opaque launch tickets and UUIDs', () => {
