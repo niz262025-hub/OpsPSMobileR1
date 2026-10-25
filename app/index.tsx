@@ -13,7 +13,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
   ArrowRight,
-  Check,
   Globe,
   Package,
   ShoppingBag,
@@ -54,30 +53,9 @@ const content = {
     financeSub:
       'Pantau sales, kos, expenses dan keuntungan.',
 
-    pricingTitle: 'Pilih Pelan OpsPS',
-    pricingSub:
-      'Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.',
-
-    founder: 'FOUNDER',
-    founderUsers: 'RM29/bulan',
-    founderPrice: 'RM29',
-    founderCycle: '/bulan',
-    founderDescription:
-      'Founder plan untuk 100 perniagaan pertama.',
-    founder1: 'RM29 sebulan semasa aktif',
-    founder2: 'Untuk 100 perniagaan pertama',
-    founder3: 'Akses penuh OpsPS',
-    founderButton: 'Jadi Founder',
-
-    standard: 'PRO',
-    standardUsers: 'RM49/bulan',
-    standardPrice: 'RM49',
-    standardCycle: '/bulan',
-    standardDescription:
-      'Pro plan untuk operasi OpsPS yang berkembang.',
-    standard1: 'RM49 setiap bulan',
-    standard2: 'Akses penuh OpsPS',
-    standard3: 'Untuk perniagaan aktif',
+    accessTitle: 'Akses & pelan melalui MYOPS',
+    accessSub: 'Log masuk sekali di MYOPS. Pakej anda menentukan aplikasi yang boleh dibuka.',
+    accessButton: 'Teruskan ke MYOPS',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
@@ -111,30 +89,9 @@ const content = {
     financeSub:
       'Monitor sales, costs, expenses and profit.',
 
-    pricingTitle: 'Choose Your OpsPS Plan',
-    pricingSub:
-      'Free RM0 • Founder RM29/month • Pro RM49/month • Team +RM10/user/month.',
-
-    founder: 'FOUNDER',
-    founderUsers: 'RM29/month',
-    founderPrice: 'RM29',
-    founderCycle: '/month',
-    founderDescription:
-      'Founder plan for the first 100 businesses.',
-    founder1: 'RM29/month while active',
-    founder2: 'For the first 100 businesses',
-    founder3: 'Full OpsPS access',
-    founderButton: 'Become a Founder',
-
-    standard: 'PRO',
-    standardUsers: 'RM49/month',
-    standardPrice: 'RM49',
-    standardCycle: '/month',
-    standardDescription:
-      'Pro plan for growing OpsPS operations.',
-    standard1: 'RM49 per month',
-    standard2: 'Full OpsPS access',
-    standard3: 'For active businesses',
+    accessTitle: 'Access and plans through MYOPS',
+    accessSub: 'Sign in once at MYOPS. Your package controls which apps you can open.',
+    accessButton: 'Continue to MYOPS',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
@@ -168,30 +125,9 @@ const content = {
     financeSub:
       'Sales, costs, expenses और profit monitor करें.',
 
-    pricingTitle: 'अपना OpsPS Plan चुनें',
-    pricingSub:
-      'Free RM0 • Founder RM29/माह • Pro RM49/माह • Team +RM10/यूज़र/माह.',
-
-    founder: 'FOUNDER',
-    founderUsers: 'RM29/माह',
-    founderPrice: 'RM29',
-    founderCycle: '/माह',
-    founderDescription:
-      'Founder plan पहले 100 businesses के लिए।',
-    founder1: 'RM29/माह जबकि सक्रिय',
-    founder2: 'पहले 100 businesses के लिए',
-    founder3: 'पूर्ण OpsPS एक्सेस',
-    founderButton: 'Founder बनें',
-
-    standard: 'PRO',
-    standardUsers: 'RM49/माह',
-    standardPrice: 'RM49',
-    standardCycle: '/माह',
-    standardDescription:
-      'बढ़ते OpsPS ऑपरेशन के लिए Pro प्लान।',
-    standard1: 'RM49 प्रति माह',
-    standard2: 'पूर्ण OpsPS एक्सेस',
-    standard3: 'सक्रिय businesses के लिए',
+    accessTitle: 'MYOPS के जरिए ऐप और प्लान का एक्सेस',
+    accessSub: 'MYOPS में एक बार साइन इन करें। आपका पैकेज तय करता है कि कौन-से ऐप खुलेंगे।',
+    accessButton: 'MYOPS पर जाएँ',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
@@ -225,41 +161,16 @@ const content = {
     financeSub:
       '查看销售、成本、费用和利润。',
 
-    pricingTitle: '选择 OpsPS 方案',
-    pricingSub:
-      'Free RM0 • Founder RM29/月 • Pro RM49/月 • Team +RM10/用户/月.',
-
-    founder: 'FOUNDER',
-    founderUsers: 'RM29/月',
-    founderPrice: 'RM29',
-    founderCycle: '/月',
-    founderDescription:
-      'Founder 方案适用于前 100 家业务。',
-    founder1: '活动期间 RM29/月',
-    founder2: '适用于前 100 家业务',
-    founder3: '完整 OpsPS 权限',
-    founderButton: '成为 Founder',
-
-    standard: 'PRO',
-    standardUsers: 'RM49/月',
-    standardPrice: 'RM49',
-    standardCycle: '/月',
-    standardDescription:
-      '适合增长中的 OpsPS 业务的 Pro 方案。',
-    standard1: '每月 RM49',
-    standard2: '完整 OpsPS 权限',
-    standard3: '适合活跃业务',
+    accessTitle: '通过 MYOPS 管理应用权限和套餐',
+    accessSub: '只需登录一次 MYOPS。您的套餐会决定哪些应用可以使用。',
+    accessButton: '前往 MYOPS',
 
     footer: '© 2026 OpsPS. Personal Shopper System.',
   },
 };
 
 function goLogin() {
-  router.push('/login');
-}
-
-function goFounderRegistration() {
-  router.push('/register/founder');
+  openOfficialLink('https://www.myops.com.my/');
 }
 
 function openOfficialLink(url: string) {
@@ -441,12 +352,12 @@ export default function LandingPage() {
             {/* ONLY ONE CTA */}
 
             <Pressable
-              onPress={goFounderRegistration}
+              onPress={goLogin}
               style={styles.freeButton}
             >
               <View>
                 <Text style={styles.freeButtonTitle}>
-                  Founder
+                  {t.accessButton}
                 </Text>
 
               </View>
@@ -534,157 +445,15 @@ export default function LandingPage() {
         </View>
 
 
-        {/* PRICING */}
+        {/* MYOPS ACCESS */}
 
         <View style={styles.section}>
-
-          <Text style={styles.sectionTitle}>
-            {t.pricingTitle}
-          </Text>
-
-          <Text style={styles.sectionSub}>
-            {t.pricingSub}
-          </Text>
-
-          <View
-            style={[
-              styles.pricingRow,
-              !desktop && styles.pricingMobile,
-            ]}
-          >
-
-            {/* FOUNDER 100 */}
-
-            <View
-              style={[
-                styles.plan,
-                styles.founderPlan,
-              ]}
-            >
-
-              <View style={styles.planHeader}>
-
-                <View style={styles.founderBadge}>
-                  <Sparkles
-                    size={13}
-                    color="#FFFFFF"
-                  />
-
-                  <Text style={styles.badgeText}>
-                    {t.founder}
-                  </Text>
-                </View>
-
-                <Text style={styles.users}>
-                  {t.founderUsers}
-                </Text>
-
-              </View>
-
-              <View style={styles.priceRow}>
-
-                <Text style={styles.founderPrice}>
-                  {t.founderPrice}
-                </Text>
-
-                <Text style={styles.founderMonth}>
-                  {t.founderCycle}
-                </Text>
-
-              </View>
-
-              <Text style={styles.founderDescription}>
-                {t.founderDescription}
-              </Text>
-
-              <View style={styles.checkList}>
-
-                <CheckLine text={t.founder1} />
-
-                <CheckLine text={t.founder2} />
-
-                <CheckLine text={t.founder3} />
-
-              </View>
-
-              <Pressable
-                onPress={goFounderRegistration}
-                style={styles.founderButton}
-              >
-                <Text style={styles.founderButtonText}>
-                  {t.founderButton}
-                </Text>
-
-                <ArrowRight
-                  size={18}
-                  color="#5B2BD9"
-                />
-              </Pressable>
-
-            </View>
-
-
-            {/* STANDARD */}
-
-            <View
-              style={[
-                styles.plan,
-                styles.standardPlan,
-              ]}
-            >
-
-              <View style={styles.standardHeader}>
-
-                <View>
-                  <Text style={styles.standardTitle}>
-                    {t.standard}
-                  </Text>
-
-                  <Text style={styles.standardLabel}>
-                    {t.standardUsers}
-                  </Text>
-                </View>
-
-              </View>
-
-              <View style={styles.priceRow}>
-
-                <Text style={styles.standardPrice}>
-                  {t.standardPrice}
-                </Text>
-
-                <Text style={styles.standardMonth}>
-                  {t.standardCycle}
-                </Text>
-
-              </View>
-
-              <Text style={styles.standardDescription}>
-                {t.standardDescription}
-              </Text>
-
-              <View style={styles.checkList}>
-
-                <CheckLine
-                  text={t.standard1}
-                  muted
-                />
-
-                <CheckLine
-                  text={t.standard2}
-                  muted
-                />
-
-                <CheckLine
-                  text={t.standard3}
-                  muted
-                />
-
-              </View>
-
-            </View>
-
-          </View>
+          <Text style={styles.sectionTitle}>{t.accessTitle}</Text>
+          <Text style={styles.sectionSub}>{t.accessSub}</Text>
+          <Pressable onPress={goLogin} style={styles.founderButton}>
+            <Text style={styles.founderButtonText}>{t.accessButton}</Text>
+            <ArrowRight size={18} color="#5B2BD9" />
+          </Pressable>
         </View>
 
 
@@ -770,51 +539,6 @@ function NeedItem({
 
       <Text style={styles.needSubtitle}>
         {subtitle}
-      </Text>
-
-    </View>
-  );
-}
-
-
-/* =====================================================
-   CHECK LINE
-===================================================== */
-
-function CheckLine({
-  text,
-  muted = false,
-}: {
-  text: string;
-  muted?: boolean;
-}) {
-  return (
-    <View style={styles.checkLine}>
-
-      <View
-        style={[
-          styles.checkCircle,
-          muted && styles.checkCircleMuted,
-        ]}
-      >
-        <Check
-          size={12}
-          color={
-            muted
-              ? '#8E899B'
-              : '#FFFFFF'
-          }
-          strokeWidth={3}
-        />
-      </View>
-
-      <Text
-        style={[
-          styles.checkText,
-          muted && styles.checkTextMuted,
-        ]}
-      >
-        {text}
       </Text>
 
     </View>

@@ -1,50 +1,28 @@
-# Supabase Production Readiness
+# OpsPS Web production readiness
 
-## Current status
+**Status checked: 2026-10-25**
 
-The current workspace is **NOT CONFIGURED** for Supabase. No Supabase environment variables were present during the Priority 6 assessment on 2026-09-05. The app therefore remains mock-backed.
+## Current decision
 
-The client now validates the public configuration and can run a read-only diagnostic for auth session access and a `businesses` table read. It does not write data, deploy migrations, or expose a service-role key.
+OpsPS Web is buildable and its local checks pass, but it is **not ready for go-live**. This checkout has no `EXPO_PUBLIC_SUPABASE_URL` or `EXPO_PUBLIC_SUPABASE_ANON_KEY` configured. There has been no staging connection or live browser UAT in this run, and the app does not yet use MYOPS single sign-on or MYOPS subscription entitlements.
 
-## Required external inputs
+## What is implemented
 
-Configure these in the Expo build/runtime environment:
+- `AuthContext` uses Supabase Auth for sign-up, login, session restore, and logout. When Supabase is missing, authentication operations fail closed; they do not create a local password login.
+- The default production data source in `services/repository.ts` is Supabase-backed and throws if Supabase is not configured. Mock data is a separate explicit mode used for local/demo flows and tests.
+- The repository contains migrations for auth membership, tenant-scoped RLS, founder bootstrap, payment/shipping hardening, and payment provider metadata (migrations `001`–`016`, with historical version gaps).
+- Local verification on 2026-10-25 passed: 126 tests, TypeScript check, lint, and Expo Web export.
 
-```text
-EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<project-anon-key>
-```
+## Remaining go-live blockers
 
-Keep this server-side only and never add it to an `EXPO_PUBLIC_*` variable:
+1. **MYOPS SSO and access:** Public landing-page access buttons now lead to MYOPS, and OpsPS no longer displays its own pricing or generated subscription status. The legacy `/login` and `/register` routes still exist; the app has no MYOPS ticket redemption, trusted identity mapping, app-session enforcement, or entitlement check. A web-compatible server endpoint/BFF must be chosen and implemented before users can enter directly from MYOPS without a second login.
+2. **Staging configuration:** configure the Supabase project URL and anon key in the Expo build environment. Keep any service-role key server-side; the static web client must never receive it.
+3. **Migration validation:** inspect the complete historical migration sequence and replay it on a disposable Supabase project. Verify RLS for every business-scoped table and confirm cross-business reads/writes are denied. The numbered gaps mean a clean replay cannot be assumed from the files currently present.
+4. **End-to-end UAT:** verify login/launch, expired or revoked access, logout, founder and customer workflows, payment and shipment callbacks, reporting/export, and desktop/mobile browser layouts against staging. `UAT_REPORT.md` records the earlier UI checklist as not executed; local unit tests do not replace this.
+5. **Billing ownership:** OpsPS still has its own plan/subscription UI and schema. Confirm the MYOPS package entitlement mapping and remove/disable any app-side billing gate before launch so package access is controlled centrally by MYOPS.
 
-```text
-SUPABASE_SERVICE_ROLE_KEY=<project-service-role-key>
-```
+## Deployment guardrails
 
-The service-role key is not required by the mobile client and must only be used by a trusted migration or server process.
-
-## Audit findings
-
-- `AuthContext` persists local accounts and sessions with AsyncStorage; it does not use Supabase Auth.
-- `mockDatabase` owns application reads and writes; no repository currently targets Supabase tables.
-- `subscriptionFoundation.ts`, `payment.ts`, and `shipping.ts` are domain/provider contracts with mock behavior, not Supabase persistence adapters.
-- `001_opsps_core_schema.sql` defines the initial tables and foreign keys, but it has no RLS enablement or policies.
-- `profiles.id` is generated independently and is not linked to `auth.users.id`; a production auth/RLS design must establish that relationship.
-- The schema does not yet model payment webhook event uniqueness, shipment webhook event uniqueness, provider idempotency keys, or the full provider-agnostic shipping address/status contract.
-- The schema has no audit trail for sensitive state changes and no server-side webhook ingress.
-
-## Safe deployment decision
-
-Do not deploy the current migration to a production project yet. Applying tables without RLS would create data-isolation risk, while adding guessed policies could block valid founder/customer flows or permit cross-business access. The next migration must first define the authenticated user to business membership relationship, then enable and test RLS for every business-scoped table.
-
-## Migration order
-
-1. Create an `auth.users` membership mapping for business access and define founder/customer/admin role rules.
-2. Enable RLS and add tested policies for each business-scoped table.
-3. Add unique idempotency/event constraints for payments and shipments.
-4. Deploy to a non-production Supabase project and verify auth, scoped reads, scoped writes, and denied cross-business access.
-5. Migrate one narrow repository, starting with read-only trips/products, before moving orders, finance, payments, or shipments.
-
-## What remains mock
-
-Founder and customer authentication, mock database persistence, subscriptions, payments, shipping, webhook processing, and finance reconciliation remain mock/local until the secured Supabase schema, server-side integrations, and production credentials are available.
+- Do not deploy the current state to production or claim go-live until staging migration replay, RLS checks, MYOPS SSO/entitlement checks, and browser UAT pass.
+- Do not apply guessed RLS changes to a production database. Use a disposable or staging Supabase project first.
+- Never put `SUPABASE_SERVICE_ROLE_KEY` in an `EXPO_PUBLIC_*` variable or static web bundle.

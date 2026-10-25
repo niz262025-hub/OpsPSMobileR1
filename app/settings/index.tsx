@@ -1,14 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Image, Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
-import {
-  OPSPS_PLAN_DEFINITIONS,
-  getDefaultSubscriptionForRole,
-  isSubscriptionActive,
-} from '../../services/subscriptionFoundation';
 
 const PRODUCT_SIZE_OPTIONS = {
   Clothing: ['XS', 'S', 'M', 'L', 'XL'],
@@ -19,7 +14,7 @@ import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 const paymentMethodOptions = ['Bank Transfer', 'QR Payment', 'DuitNow', 'Touch & Go', 'Atome', 'Buy Now Pay Later'];
 
 export default function SettingsScreen() {
-  const { logout, currentUser, business, profile, membership } = useAuth();
+  const { logout, currentUser, business, profile } = useAuth();
   const [businessProfile, setBusinessProfile] = useState({
     businessName: business?.name ?? currentUser?.businessName ?? 'Business',
     phone: business?.phone ?? currentUser?.phone ?? '',
@@ -77,14 +72,6 @@ export default function SettingsScreen() {
       email: profile?.email ?? currentUser?.email ?? '',
     });
   }, [business, currentUser, profile]);
-
-  const subscription = currentUser
-    ? getDefaultSubscriptionForRole(
-        currentUser.role,
-        currentUser.businessId ?? membership?.business_id ?? 'business-default',
-        currentUser.email,
-      )
-    : null;
 
   const field = (value: string, onChangeText: (value: string) => void, placeholder: string) => (
     <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={THEME.text.light} style={styles.input} />
@@ -177,20 +164,17 @@ export default function SettingsScreen() {
         <Section title="Account">
           {field(user.name, (value) => setUser({ ...user, name: value }), 'Name')}
           {field(user.email, (value) => setUser({ ...user, email: value }), 'Email')}
-          <Pressable style={styles.secondary} onPress={async () => { await logout(); router.replace('/login'); }}>
+          <Pressable style={styles.secondary} onPress={async () => { await logout(); void Linking.openURL('https://www.myops.com.my/'); }}>
             <Text style={styles.secondaryText}>Logout</Text>
           </Pressable>
         </Section>
 
-        {subscription && (
-          <Section title="Subscription Status">
-            <Text style={styles.note}>Plan: {OPSPS_PLAN_DEFINITIONS[subscription.plan].label}</Text>
-            <Text style={styles.note}>Status: {isSubscriptionActive(subscription) ? 'Active' : 'Restricted'}</Text>
-            <Text style={styles.note}>Billing: {subscription.billingCycle}</Text>
-            <Text style={styles.note}>Start: {subscription.startDate}</Text>
-            <Text style={styles.note}>Renewal: {subscription.renewalDate ?? 'No renewal required'}</Text>
-          </Section>
-        )}
+        <Section title="Package access">
+          <Text style={styles.note}>Your MYOPS package controls access to OpsPS and the other apps.</Text>
+          <Pressable style={styles.secondary} onPress={() => { void Linking.openURL('https://www.myops.com.my/'); }}>
+            <Text style={styles.secondaryText}>Manage access in MYOPS</Text>
+          </Pressable>
+        </Section>
 
         <Pressable style={styles.primary} onPress={saveAll}>
           <Text style={styles.primaryText}>Save Settings</Text>
