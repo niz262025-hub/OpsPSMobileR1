@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 
 const mockSupabaseClient = {
+  functions: {
+    invoke: vi.fn(async () => ({ data: { entitled: true }, error: null })),
+  },
   auth: {
     getSession: vi.fn(async () => ({
       data: {
@@ -118,7 +121,7 @@ describe('auth business scope', () => {
     expect(authValue.role).toBe('founder');
   });
 
-  it('defers profile creation until an authenticated session exists after email confirmation', async () => {
+  it('rejects standalone registration and password login so MYOPS remains the only entry point', async () => {
     const { AuthProvider, useAuth } = await import('../context/AuthContext');
 
     const signUpMock = vi.fn(async () => ({
@@ -132,20 +135,8 @@ describe('auth business scope', () => {
       error: null,
     }));
 
-    const getSessionMock = vi.fn(async () => ({ data: { session: null as any }, error: null }));
-    const fromMock = vi.fn(() => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: null, error: null }),
-        }),
-      }),
-      insert: async () => ({ error: null }),
-      upsert: async () => ({ error: null }),
-    }));
-
     mockSupabaseClient.auth.signUp = signUpMock;
-    mockSupabaseClient.auth.getSession = getSessionMock;
-    mockSupabaseClient.from = fromMock;
+    mockSupabaseClient.auth.getSession = vi.fn(async () => ({ data: { session: null as any }, error: null }));
 
     let authValue: any;
 
@@ -173,9 +164,11 @@ describe('auth business scope', () => {
       });
     });
 
-    expect(signUpMock).toHaveBeenCalled();
-    expect(result.ok).toBe(true);
-    expect(fromMock).not.toHaveBeenCalledWith('profiles');
+    expect(signUpMock).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('MYOPS');
+    await expect(authValue.login('new-founder@example.com', 'Password123!', 'founder')).resolves.toBe(false);
+    expect(mockSupabaseClient.auth.signInWithPassword).not.toHaveBeenCalled();
   });
 
   it('keeps production runtime free of direct mock/local persistence usage in the audited paths', () => {

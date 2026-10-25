@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import { Linking } from 'react-native';
 import type { Session, User } from '@supabase/supabase-js';
 
 import {
@@ -12,6 +13,12 @@ import {
 } from '../services/adminFoundation';
 import { getSupabaseClient } from '../services/supabaseClient';
 import { getSupabaseAuthRedirectUrl } from '../services/supabaseSchema';
+import {
+  endMyopsAppSession,
+  extractMyopsLaunchTicket,
+  refreshMyopsEntitlement,
+  redeemMyopsLaunchTicket,
+} from '../services/myopsAppAccess';
 
 export type UserRole = 'founder' | 'customer' | 'admin' | 'support';
 
@@ -153,77 +160,6 @@ export function classifySupabaseSignupError(
   };
 }
 
-function slugifyBusinessName(value: string): string {
-  const base = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-
-  return base || 'opsps-business';
-}
-
-async function ensureAuthenticatedProfileForRole(
-  client: ReturnType<typeof getSupabaseClient>,
-  user: User,
-  role: UserRole
-): Promise<boolean> {
-  if (!client) {
-    return false;
-  }
-
-  const { data: profileData, error: profileError } = await client
-    .from('profiles')
-    .select('*')
-    .eq('auth_user_id', user.id)
-    .maybeSingle();
-
-  if (profileError && profileError.code !== 'PGRST116') {
-    return false;
-  }
-
-  if (profileData) {
-    return true;
-  }
-
-  if (role === 'founder') {
-    const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
-    const businessName = String(metadata.business_name ?? metadata.business ?? 'OpsPS Business');
-    const founderName = String(metadata.full_name ?? user.email ?? 'Founder');
-    const phone = String(metadata.phone ?? '');
-    const address = String(metadata.address ?? '');
-    const email = user.email ?? '';
-
-    const { error: bootstrapError } = await client.rpc('bootstrap_founder_business', {
-      p_name: businessName,
-      p_slug: slugifyBusinessName(businessName),
-      p_email: email,
-      p_phone: phone,
-      p_address: address,
-      p_profile_name: founderName,
-    });
-
-    if (bootstrapError) {
-      return false;
-    }
-
-    return true;
-  }
-
-  const { error: insertError } = await client.from('profiles').insert({
-    auth_user_id: user.id,
-    business_id: null,
-    full_name: user.user_metadata?.full_name ?? user.email ?? 'Customer',
-    email: user.email ?? '',
-    phone: user.user_metadata?.phone ?? '',
-    address: user.user_metadata?.address ?? '',
-    role,
-  });
-
-  return !insertError;
-}
-
 const AuthContext = createContext<AuthContextValue | undefined>(
   undefined
 );
@@ -337,6 +273,19 @@ export function AuthProvider({
           return;
         }
 
+        const launchUrl = await Linking.getInitialURL();
+        const ticket = launchUrl ? extractMyopsLaunchTicket(launchUrl) : null;
+        if (ticket) {
+          const launchedSession = await redeemMyopsLaunchTicket(client, ticket);
+          if (launchedSession && active) {
+            const entitled = await refreshMyopsEntitlement(client);
+            if (entitled) await applySupabaseSession(launchedSession);
+            else await client.auth.signOut();
+            setReady(true);
+            return;
+          }
+        }
+
         const { data, error } = await client.auth.getSession();
         if (error) {
           throw error;
@@ -344,7 +293,9 @@ export function AuthProvider({
 
         const supabaseSession = data.session;
         if (supabaseSession && active) {
-          await applySupabaseSession(supabaseSession);
+          const entitled = await refreshMyopsEntitlement(client);
+          if (entitled) await applySupabaseSession(supabaseSession);
+          else await client.auth.signOut();
           setReady(true);
           return;
         }
@@ -394,9 +345,21 @@ export function AuthProvider({
         setReady(true);
       });
 
+      const linkListener = Linking.addEventListener('url', async ({ url }) => {
+        const ticket = extractMyopsLaunchTicket(url);
+        if (!ticket || !active) return;
+        const launchedSession = await redeemMyopsLaunchTicket(client, ticket);
+        if (!launchedSession || !active) return;
+        const entitled = await refreshMyopsEntitlement(client);
+        if (entitled) await applySupabaseSession(launchedSession);
+        else await client.auth.signOut();
+        setReady(true);
+      });
+
       return () => {
         active = false;
         authListener.subscription.unsubscribe();
+        linkListener.remove();
       };
     }
 
@@ -405,138 +368,45 @@ export function AuthProvider({
     };
   }, []);
 
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client || !session) return;
+
+    let lastInteractionAt = Date.now() - 60_000;
+    const markInteraction = () => { lastInteractionAt = Date.now(); };
+    const interactionEvents = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+    if (typeof document !== 'undefined') {
+      interactionEvents.forEach((eventName) => document.addEventListener(eventName, markInteraction, { passive: true }));
+    }
+    const refresh = async () => {
+      const recentActivity = Date.now() - lastInteractionAt < 10_000;
+      const active = await refreshMyopsEntitlement(client, false, recentActivity);
+      if (!active) await client.auth.signOut();
+    };
+    const interval = setInterval(() => { void refresh(); }, 10_000);
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        interactionEvents.forEach((eventName) => document.removeEventListener(eventName, markInteraction));
+      }
+    };
+  }, [session?.access_token]);
+
   /**
    * Register a new account.
    *
    * Every new Founder receives a unique and stable business scope.
    */
-  const register = async (
-    account: AuthAccount
-  ): Promise<AuthRegistrationResult> => {
-    const client = getSupabaseClient();
-    if (!client) {
-      return {
-        ok: false,
-        kind: 'auth_error',
-        message: 'Registration is temporarily unavailable. Please try again later.',
-      };
-    }
-
-    setLoading(true);
-    try {
-      const authRedirectUrl = getSupabaseAuthRedirectUrl();
-      const { data, error } = await client.auth.signUp({
-        email: account.email,
-        password: account.password,
-        options: {
-          emailRedirectTo: authRedirectUrl || undefined,
-          data: {
-            full_name: account.name,
-            role: account.role,
-            business_name: account.businessName ?? '',
-            phone: account.phone ?? '',
-            address: account.address ?? '',
-          },
-        },
-      });
-
-      if (error || !data.user) {
-        return classifySupabaseSignupError(error ?? { status: 0, message: 'Unable to create account.' });
-      }
-
-      const { data: sessionData } = await client.auth.getSession();
-      if (sessionData.session) {
-        await applySupabaseSession(sessionData.session);
-      }
-
-      if (!sessionData.session) {
-        return {
-          ok: true,
-          message: 'Registration successful. Please check your email to confirm your account before signing in.',
-        };
-      }
-
-      const profileReady = await ensureAuthenticatedProfileForRole(client, data.user, account.role);
-      if (!profileReady) {
-        return {
-          ok: false,
-          kind: 'auth_error',
-          message: 'Account created. Please confirm your email and sign in to complete your profile setup.',
-        };
-      }
-
-      return { ok: true, message: 'Registration successful.' };
-    } finally {
-      setLoading(false);
-    }
-  };
+  const register = async (_account: AuthAccount): Promise<AuthRegistrationResult> => ({
+    ok: false,
+    kind: 'auth_error',
+    message: 'Create your account and choose your package through MYOPS.',
+  });
 
   /**
    * Login.
    */
-  const login = async (
-    email: string,
-    password: string,
-    role: UserRole
-  ): Promise<boolean> => {
-    const client = getSupabaseClient();
-    if (!client) {
-      return false;
-    }
-
-    setLoading(true);
-    try {
-      const { data, error } = await client.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (error || !data.user) {
-        return false;
-      }
-
-      const profileReady = await ensureAuthenticatedProfileForRole(client, data.user, role);
-      if (!profileReady) {
-        return false;
-      }
-
-      const { data: profileData } = await client
-        .from('profiles')
-        .select('*')
-        .eq('auth_user_id', data.user.id)
-        .maybeSingle();
-
-      if (profileData && profileData.role !== role && role !== 'customer') {
-        return false;
-      }
-
-      const { data: membershipData } = await client
-        .from('business_memberships')
-        .select('*')
-        .eq('user_id', data.user.id)
-        .limit(1);
-
-      const membershipRow = membershipData?.[0] ?? null;
-      const normalizedRole = (profileData?.role as UserRole) || (membershipRow?.role as UserRole) || role;
-      const normalizedAccount: AuthAccount = {
-        email: data.user.email ?? email.trim(),
-        password,
-        role: normalizedRole,
-        name: profileData?.full_name ?? data.user.user_metadata?.full_name ?? email.trim(),
-        businessId: membershipRow?.business_id ?? undefined,
-        businessName: membershipRow?.business_id ? 'Supabase Business' : '',
-        phone: profileData?.phone ?? '',
-        address: profileData?.address ?? '',
-        sellerVerificationStatus: normalizeSellerVerificationStatus((profileData as { seller_verification_status?: string } | null | undefined)?.seller_verification_status ?? 'PENDING'),
-      };
-
-      setCurrentUser(normalizedAccount);
-      setRole(normalizedRole);
-      return true;
-    } finally {
-      setLoading(false);
-    }
-  };
+  const login = async (_email: string, _password: string, _role: UserRole): Promise<boolean> => false;
 
   /**
    * Logout.
@@ -545,7 +415,11 @@ export function AuthProvider({
     const client = getSupabaseClient();
 
     if (client) {
-      await client.auth.signOut();
+      try {
+        await endMyopsAppSession(client);
+      } finally {
+        await client.auth.signOut();
+      }
     }
 
     setCurrentUser(null);

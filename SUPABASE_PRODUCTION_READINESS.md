@@ -4,25 +4,28 @@
 
 ## Current decision
 
-OpsPS Web is buildable and its local checks pass, but it is **not ready for go-live**. This checkout has no `EXPO_PUBLIC_SUPABASE_URL` or `EXPO_PUBLIC_SUPABASE_ANON_KEY` configured. There has been no staging connection or live browser UAT in this run, and the app does not yet use MYOPS single sign-on or MYOPS subscription entitlements.
+OpsPS has a source implementation for MYOPS launch tickets, entitlement refresh, logout, and database session enforcement. It is **not ready for staging UAT or go-live**: this checkout has no Supabase URL/anon key, MYOPS signing key, Edge Function secrets, provisioned identity links, or staging connection. The SQL migration and Edge Function have not been deployed or tested against a Supabase project.
 
-## What is implemented
+## Implemented in this branch
 
-- `AuthContext` uses Supabase Auth for sign-up, login, session restore, and logout. When Supabase is missing, authentication operations fail closed; they do not create a local password login.
-- The default production data source in `services/repository.ts` is Supabase-backed and throws if Supabase is not configured. Mock data is a separate explicit mode used for local/demo flows and tests.
-- The repository contains migrations for auth membership, tenant-scoped RLS, founder bootstrap, payment/shipping hardening, and payment provider metadata (migrations `001`–`016`, with historical version gaps).
-- Local verification on 2026-10-25 passed: 126 tests, TypeScript check, lint, and Expo Web export.
+- Landing, login, registration, and password-reset entry points direct users to MYOPS. OpsPS no longer accepts a separate password login or registration.
+- `myops-app-access` validates the 60-second launch ticket through the signed MYOPS `/api/app/redeem` contract, then creates a Supabase Auth session for an operator-linked account.
+- The Edge Function signs MYOPS requests with an Ed25519 private key stored server-side. It refreshes the package entitlement and revokes the bound OpsPS session on denial.
+- Migration `017_opsps_myops_app_sessions.sql` adds trusted identity links, binds Supabase JWT session IDs to MYOPS sessions, and applies a restrictive RLS session gate to the app's business data and private payment proofs. The legacy `SECURITY DEFINER` founder-bootstrap RPC is revoked from client roles.
+- The browser client calls the Edge Function every 10 seconds. Only recent pointer, keyboard, touch, or scroll input is reported to MYOPS as activity; background heartbeats do not reset MYOPS idle time. Database access expires after 20 seconds without a successful entitlement check.
+- OpsPS keeps its own Supabase project, as intended; only MYOPS identity and package access are central.
 
-## Remaining go-live blockers
+## Required before staging UAT
 
-1. **MYOPS SSO and access:** Public landing-page access buttons now lead to MYOPS, and OpsPS no longer displays its own pricing or generated subscription status. The legacy `/login` and `/register` routes still exist; the app has no MYOPS ticket redemption, trusted identity mapping, app-session enforcement, or entitlement check. A web-compatible server endpoint/BFF must be chosen and implemented before users can enter directly from MYOPS without a second login.
-2. **Staging configuration:** configure the Supabase project URL and anon key in the Expo build environment. Keep any service-role key server-side; the static web client must never receive it.
-3. **Migration validation:** inspect the complete historical migration sequence and replay it on a disposable Supabase project. Verify RLS for every business-scoped table and confirm cross-business reads/writes are denied. The numbered gaps mean a clean replay cannot be assumed from the files currently present.
-4. **End-to-end UAT:** verify login/launch, expired or revoked access, logout, founder and customer workflows, payment and shipment callbacks, reporting/export, and desktop/mobile browser layouts against staging. `UAT_REPORT.md` records the earlier UI checklist as not executed; local unit tests do not replace this.
-5. **Billing ownership:** OpsPS still has its own plan/subscription UI and schema. Confirm the MYOPS package entitlement mapping and remove/disable any app-side billing gate before launch so package access is controlled centrally by MYOPS.
+1. Configure the staging Expo build with `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+2. Deploy the Edge Function with server-side secrets: `MYOPS_APP_API_ORIGIN`, `MYOPS_APP_ID=opsps`, `MYOPS_KEY_VERSION`, `MYOPS_APP_PRIVATE_KEY_CURRENT` (Ed25519 PKCS#8 PEM), and `OPSPS_ALLOWED_ORIGINS` (comma-separated exact HTTPS origins). Supabase's service-role/secret key must remain server-side.
+3. Confirm the MYOPS service uses the same signed request contract and returns `session_id`, opaque 43-character `user_ref`, and `product=opsps` for redeem; entitlement must return `entitled` and `session_active` booleans.
+4. Apply migration 017 to a disposable/staging database after replaying the repository's historical migrations. Seed `myops_identity_links` only for verified, pre-existing OpsPS Auth users; check every protected table and storage policy exists in that database.
+5. Configure the MYOPS OpsPS launch URL to return to the HTTPS OpsPS origin with the one-time ticket in the URL fragment (`#t=<ticket>`). Run browser UAT for valid, expired, replayed, and revoked tickets, package denial, network failure, logout, founder/customer workflows, payment proofs, and cross-business access.
 
-## Deployment guardrails
+## Verification and limits
 
-- Do not deploy the current state to production or claim go-live until staging migration replay, RLS checks, MYOPS SSO/entitlement checks, and browser UAT pass.
-- Do not apply guessed RLS changes to a production database. Use a disposable or staging Supabase project first.
-- Never put `SUPABASE_SERVICE_ROLE_KEY` in an `EXPO_PUBLIC_*` variable or static web bundle.
+- Previously verified UI/source checks: 126 tests, TypeScript, lint, and Expo Web export passed before this SSO change.
+- The new contract tests and the full local checks must pass before updating the draft PR.
+- This environment has no configured staging credentials and does not include the Supabase CLI or Deno runtime, so the SQL migration cannot be replayed here and the Edge Function cannot be runtime-tested here.
+- Keep the PR in draft. Do not merge or deploy to production until staging migration replay, RLS checks, MYOPS SSO/entitlement UAT, and browser workflows pass.

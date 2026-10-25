@@ -1,6 +1,5 @@
-import React from 'react';
 import { Redirect } from 'expo-router';
 
-export default function RegisterIndex() {
-  return <Redirect href="/register/founder" />;
+export default function RegisterRedirect() {
+  return <Redirect href="/" />;
 }
