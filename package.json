@@ -30,6 +30,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.11",
     "@eslint/js": "^8.57.1",
     "@react-native/jest-preset": "^0.86.2",
     "@testing-library/jest-native": "^5.4.3",
@@ -62,7 +63,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "build": "expo export --platform web --output-dir dist"
+    "build": "expo export --platform web --output-dir dist",
+    "test:database": "node scripts/test-myops-session-rls.mjs"
   },
   "expo": {
     "install": {
