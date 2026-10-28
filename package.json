@@ -64,7 +64,9 @@
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
     "build": "expo export --platform web --output-dir dist",
-    "test:database": "node scripts/test-myops-session-rls.mjs"
+    "test:database": "node scripts/test-myops-session-rls.mjs",
+    "test:provisioning": "node scripts/test-fresh-schema.mjs",
+    "schema:fresh": "node scripts/fresh-schema.mjs"
   },
   "expo": {
     "install": {
