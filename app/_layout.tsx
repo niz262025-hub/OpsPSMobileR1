@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Stack, usePathname, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Linking, Platform } from 'react-native';
 import { LanguageProvider } from '../context/LanguageContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { isAdminRole } from '../services/adminFoundation';
@@ -11,6 +12,10 @@ export function AuthRouteGuard() {
 
   useEffect(() => {
     if (!ready) return;
+    if (Platform.OS === 'web' && ['/login', '/register', '/forgot-password'].includes(pathname)) {
+      void Linking.openURL('https://www.myops.com.my/');
+      return;
+    }
 
     const publicRoutes = ['/login', '/register', '/forgot-password', '/', '/legal', '/product'];
     if (publicRoutes.includes(pathname) || publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
@@ -36,7 +41,8 @@ export function AuthRouteGuard() {
     );
 
     if (isProtectedAdminRoute && (!currentUser || !isAdminRole(currentUser.role))) {
-      router.replace('/login');
+      if (Platform.OS === 'web') void Linking.openURL('https://www.myops.com.my/');
+      else router.replace('/login');
       return;
     }
 

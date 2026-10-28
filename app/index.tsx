@@ -7,10 +7,12 @@ import {
   Pressable,
   ScrollView,
   Linking,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
 import {
   ArrowRight,
   Globe,
@@ -184,6 +186,17 @@ export default function LandingPage() {
 
   const t = content[language];
   const desktop = width >= 900;
+  const { currentUser, ready } = useAuth();
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !ready) return;
+    if (currentUser?.role === 'founder') {
+      router.replace('/(tabs)/dashboard');
+    } else {
+      void Linking.openURL('https://www.myops.com.my/');
+    }
+  }, [ready, currentUser]);
+  // Web entry is MYOPS-only: no local landing page or second login form.
+  if (Platform.OS === 'web') return null;
 
   const legalLinks = [
     {
