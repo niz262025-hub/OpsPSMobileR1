@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, Linking, Platform } from 'react-native';
 import { Redirect, Tabs, router } from 'expo-router';
 import {
   Home,
@@ -27,12 +27,16 @@ export default function TabsLayout() {
   useEffect(() => {
     if (!ready) return;
     if (!currentUser || currentUser.role !== 'founder') {
-      router.replace('/login');
+      if (Platform.OS === 'web') void Linking.openURL('https://www.myops.com.my/');
+      else router.replace('/login');
     }
   }, [currentUser, ready]);
 
   if (!ready) return null;
-  if (!currentUser || currentUser.role !== 'founder') return <Redirect href="/login" />;
+  if (!currentUser || currentUser.role !== 'founder') {
+    if (Platform.OS === 'web') return null;
+    return <Redirect href="/login" />;
+  }
 
   return (
     <Tabs
