@@ -18,6 +18,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run test:database
+      - run: npm run test:provisioning
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
