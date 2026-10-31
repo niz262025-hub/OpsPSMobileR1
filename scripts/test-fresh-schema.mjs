@@ -45,6 +45,42 @@ try {
   // Existing installations must be refused before any policy/schema changes.
   await assert.rejects(db.exec(freshSchema()), /requires an empty public schema/);
   await db.exec('ROLLBACK');
+  const shared = new PGlite();
+  try {
+    await shared.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
+      CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
+      CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+      CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;
+      CREATE SCHEMA storage;
+      CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+      CREATE TABLE storage.objects(id uuid DEFAULT gen_random_uuid(),bucket_id text,name text,owner uuid);
+      ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+      CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$ SELECT string_to_array($1,'/') $$;
+      GRANT USAGE ON SCHEMA public,auth,storage TO anon,authenticated,service_role;`);
+    await assert.rejects(shared.exec(freshSchema({sharedOpsflowStaging:true})), /verified OpsFlow-only staging schema/);
+    await shared.exec('ROLLBACK');
+    for (const name of ['app_sessions','companies','documents','memberships','onboarding_sessions','profiles']) {
+      await shared.exec(`CREATE TABLE opsflow_${name}(id int); ALTER TABLE opsflow_${name} ENABLE ROW LEVEL SECURITY;`);
+    }
+    await shared.exec(`INSERT INTO opsflow_documents VALUES(7);
+      GRANT SELECT ON opsflow_documents TO anon;
+      ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO anon;
+      CREATE FUNCTION opsflow_session_context() RETURNS int LANGUAGE sql AS $$ SELECT 42 $$;`);
+    const snapshot = async () => ({
+      rows: (await shared.query('SELECT * FROM opsflow_documents')).rows,
+      acl: (await shared.query("SELECT relname,relacl::text FROM pg_class WHERE relname LIKE 'opsflow_%' ORDER BY relname")).rows,
+      defaults: (await shared.query('SELECT defaclacl::text FROM pg_default_acl')).rows,
+      function: (await shared.query('SELECT opsflow_session_context() value')).rows,
+    });
+    const beforeShared = await snapshot();
+    await shared.exec(freshSchema({sharedOpsflowStaging:true}));
+    assert.deepEqual(await snapshot(), beforeShared);
+    assert.equal((await shared.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='public'")).rows[0].n,23);
+    assert.equal((await shared.query("SELECT has_table_privilege('anon','profiles','SELECT') allowed")).rows[0].allowed,false);
+    await assert.rejects(shared.exec(freshSchema({sharedOpsflowStaging:true})), /verified OpsFlow-only staging schema/);
+    await shared.exec('ROLLBACK');
+    console.log('PASS: shared staging preserves OpsFlow rows, ACLs, functions and default privileges; rejects unknown/existing schemas; OpsPS browser grants remain restricted');
+  } finally { await shared.close(); }
   console.log(`PASS: full historical OpsPS baseline (${tables.length} tables), RLS, bootstrap denial, existing-install guard`);
 } catch (error) {
   console.error('FAIL fresh provisioning:', error.message, 'position:', error.position);

@@ -30,7 +30,7 @@ export default function CustomerHomeScreen() {
               <Text style={styles.eyebrow}>MYOPS CUSTOMER</Text>
               <Text style={styles.title}>Welcome, {currentUser?.name ?? 'Customer'}</Text>
             </View>
-            <Pressable style={styles.logout} onPress={async () => { await logout(); router.replace('/'); }}>
+            <Pressable style={styles.logout} onPress={async () => { await logout(); }}>
               <Text style={styles.logoutText}>Log out</Text>
             </Pressable>
           </View>

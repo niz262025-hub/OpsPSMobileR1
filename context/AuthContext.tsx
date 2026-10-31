@@ -12,10 +12,10 @@ import {
   type SellerVerificationStatus,
 } from '../services/adminFoundation';
 import { getSupabaseClient } from '../services/supabaseClient';
+import { logoutToMyops } from '../services/myopsNavigation';
 import { getSupabaseAuthRedirectUrl } from '../services/supabaseSchema';
 import {
   clearMyopsLaunchTicketFromUrl,
-  endMyopsAppSession,
   extractMyopsLaunchTicket,
   refreshMyopsEntitlement,
   redeemMyopsLaunchTicket,
@@ -415,23 +415,15 @@ export function AuthProvider({
    * Logout.
    */
   const logout = async (): Promise<void> => {
-    const client = getSupabaseClient();
-
-    if (client) {
-      try {
-        await endMyopsAppSession(client);
-      } finally {
-        await client.auth.signOut();
-      }
-    }
-
-    setCurrentUser(null);
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setBusiness(null);
-    setMembership(null);
-    setRole(null);
+    await logoutToMyops(getSupabaseClient(), () => {
+      setCurrentUser(null);
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setBusiness(null);
+      setMembership(null);
+      setRole(null);
+    });
   };
 
   return (

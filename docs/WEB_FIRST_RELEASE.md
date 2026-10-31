@@ -34,3 +34,32 @@ Local schema and web checks do not certify a hosted release. Deploy the MYOPS
 Edge Function and identity links to isolated staging, then validate authenticated
 launch, entitlement denial/revocation, logout/expiry, tenant isolation, order and
 payment-proof workflows before production promotion. ToyyibPay is deferred.
+
+## Reuse the existing OpsFlow staging database
+
+The owner declined a paid Supabase branch. The verified shared staging target is
+`ojamkplflqafedmxbdxb` in the existing MYOPS organization; Production databases and
+OpsHub are excluded. No new project, organization or compute branch is required.
+
+Generate `node scripts/fresh-schema.mjs --shared-opsflow-staging` only for this
+OpsFlow-only staging installation. The guard requires exactly the six RLS-enabled
+`opsflow_*` tables and the known OpsFlow function names. It rejects an existing
+OpsPS install and unknown objects. Historical migrations remain unchanged.
+This mode scopes table revocations to OpsPS tables and preserves the shared
+schema's default privileges. PGlite checks that OpsFlow rows, ACLs, functions and
+default privileges survive byte-for-byte, while new OpsPS tables retain RLS and
+restricted browser privileges. The original empty-project mode remains unchanged.
+
+The generated baseline covers historical migrations through the policy-cleanup
+migration; record its installed migration version before future incremental work.
+Do not replay the legacy migration history over this baseline.
+
+## Single central login regression
+
+OpsPS legacy login/registration entry routes now hydrate an existing MYOPS-backed
+session and route to the role-specific dashboard, or return directly to MYOPS.
+Manual logout revokes the app session, signs out locally, clears local identity,
+and replaces the page with MYOPS. The failure paths also clear local identity.
+No auth, entitlement, RLS or inactivity checks are disabled. A preview may set the
+exact approved staging portal in EXPO_PUBLIC_MYOPS_PORTAL_ORIGIN; arbitrary
+redirect destinations are rejected. Production uses www.myops.com.my.
