@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { freshSchema } from './fresh-schema.mjs';
 import process from 'node:process';
@@ -44,6 +45,30 @@ try {
   assert.deepEqual((await db.query('SELECT business_id FROM business_memberships')).rows, [{business_id:businessA}]);
   await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userB]);
   assert.equal((await db.query('SELECT * FROM businesses')).rows.length, 0);
+  await db.exec('RESET ROLE');
+  // The first-launch RPC is service-only, atomic and idempotent; browser metadata cannot claim identities.
+  await db.exec(`ALTER TABLE auth.users ADD COLUMN email text, ADD COLUMN email_confirmed_at timestamptz,
+    ADD COLUMN raw_app_meta_data jsonb DEFAULT '{}'::jsonb;
+    -- Auth metadata is validated by the server Admin API, not through a broader SQL grant.
+    SELECT 1;`);
+  const newRef='C'.repeat(43);
+  const identityBytes=createHash('sha256').update('opsps-myops:https://ojamkplflqafedmxbdxb.supabase.co:'+newRef).digest();
+  identityBytes[6]=(identityBytes[6]&15)|80; identityBytes[8]=(identityBytes[8]&63)|128;
+  const hex=identityBytes.toString('hex');
+  const newUser=hex.slice(0,8)+'-'+hex.slice(8,12)+'-'+hex.slice(12,16)+'-'+hex.slice(16,20)+'-'+hex.slice(20,32);
+  await db.query("INSERT INTO auth.users(id,email,email_confirmed_at,raw_app_meta_data) VALUES($1,'myops-fixture@opsps.invalid',now(),$2)", [newUser,JSON.stringify({identity_provider:'myops',myops_user_ref:newRef})]);
+  await db.exec('SET ROLE authenticated');
+  await assert.rejects(db.query('SELECT public.opsps_provision_myops_identity($1,$2)',[newRef,newUser]), /permission denied/);
+  await db.exec('RESET ROLE; SET ROLE service_role');
+  await assert.rejects(db.query('SELECT public.opsps_provision_myops_identity($1,$2)', ['D'.repeat(43),newUser]), /Unverified/);
+  assert.equal((await db.query('SELECT public.opsps_provision_myops_identity($1,$2) id',[newRef,newUser])).rows[0].id,newUser);
+  assert.equal((await db.query('SELECT public.opsps_provision_myops_identity($1,$2) id',[newRef,newUser])).rows[0].id,newUser);
+  assert.equal((await db.query('SELECT count(*)::int n FROM profiles WHERE auth_user_id=$1',[newUser])).rows[0].n,1);
+  assert.equal((await db.query('SELECT count(*)::int n FROM business_memberships WHERE user_id=$1',[newUser])).rows[0].n,1);
+  await assert.rejects(db.query('SELECT public.opsps_provision_myops_identity($1,$2)', [newRef,userB]), /conflict/);
+  await db.exec('RESET ROLE');
+  assert.equal((await db.query('SELECT count(*)::int n FROM public.orders')).rows[0].n,0);
+  assert.equal((await db.query('SELECT count(*)::int n FROM public.subscriptions')).rows[0].n,0);
   await db.exec('RESET ROLE');
   // Existing installations must be refused before any policy/schema changes.
   await assert.rejects(db.exec(freshSchema()), /requires an empty public schema/);

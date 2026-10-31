@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { sendMyopsRequest } from './transport.ts';
+import { ensureVerifiedStagingIdentity } from './provisioning.ts';
 import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
@@ -166,18 +167,34 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     .select('opsps_user_id')
     .eq('myops_user_ref', redeemed.user_ref)
     .maybeSingle();
-  if (linkResult.error || !linkResult.data?.opsps_user_id) {
-    return json(403, { error: 'OpsPS account is not linked to MYOPS' }, headers);
-  }
+  if (linkResult.error) throw new Error('Unable to check OpsPS identity');
+  const opspsUserId = linkResult.data?.opsps_user_id ?? await ensureVerifiedStagingIdentity(
+    redeemed.user_ref, Deno.env.get('SUPABASE_URL') ?? '', {
+      async getUser(id) {
+        const result = await admin.auth.admin.getUserById(id);
+        if (result.error && result.error.status !== 404) throw new Error('Unable to check OpsPS identity');
+        return result.data.user;
+      },
+      async createUser(input) {
+        const result = await admin.auth.admin.createUser(input);
+        if (result.error) throw new Error('Unable to provision OpsPS identity');
+        return result.data.user;
+      },
+      async provision(userRef, userId) {
+        const result = await admin.rpc('opsps_provision_myops_identity', { p_user_ref: userRef, p_user_id: userId });
+        if (result.error || typeof result.data !== 'string') throw new Error('Unable to provision OpsPS tenant');
+        return result.data;
+      },
+    });
 
-  const userResult = await admin.auth.admin.getUserById(linkResult.data.opsps_user_id);
+  const userResult = await admin.auth.admin.getUserById(opspsUserId);
   const email = userResult.data.user?.email;
   if (userResult.error || !email || !userResult.data.user?.email_confirmed_at) {
     return json(403, { error: 'Linked OpsPS account is unavailable' }, headers);
   }
   const profile = await admin.from('profiles')
     .select('id')
-    .eq('auth_user_id', linkResult.data.opsps_user_id)
+    .eq('auth_user_id', opspsUserId)
     .maybeSingle();
   if (profile.error || !profile.data) {
     return json(403, { error: 'Linked OpsPS account is not provisioned' }, headers);
@@ -188,7 +205,7 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
   if (link.error || !tokenHash) throw new Error('Unable to create OpsPS session');
   const verified = await auth.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
   const session = verified.data.session;
-  if (verified.error || !session || verified.data.user?.id !== linkResult.data.opsps_user_id) {
+  if (verified.error || !session || verified.data.user?.id !== opspsUserId) {
     throw new Error('Unable to create OpsPS session');
   }
 
@@ -197,7 +214,7 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
   const validUntil = new Date(Date.now() + VALID_FOR_MS).toISOString();
   const stored = await admin.from('myops_app_sessions').insert({
     myops_user_ref: redeemed.user_ref,
-    opsps_user_id: linkResult.data.opsps_user_id,
+    opsps_user_id: opspsUserId,
     myops_session_id: redeemed.session_id,
     supabase_session_id: supabaseSessionId,
     valid_until: validUntil,

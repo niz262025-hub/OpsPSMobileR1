@@ -176,3 +176,60 @@ Remaining: real MYOPS staging login, verified identity mapping/provisioning for
 the empty OpsPS database, dashboard/workflow UAT and logout/revocation checks.
 OpsFlow real company onboarding UAT also remains pending. No full app PASS or
 Production release is claimed.
+
+## Browser continuation — 1 November 2026 Malaysia
+
+MYOPS staging signed-in UI was observed with My Account, Admin and Logout.
+The actual OpsPS Open App action reached the OpsPS launch denial screen;
+no authenticated OpsPS dashboard PASS is claimed. Read-only shared staging
+counts: identity_links=0, profiles=0, app_sessions=0. Verified identity
+provisioning remains required; no local Auth account or tenant was fabricated.
+
+A separate confirmed navigation bug was reproduced: Kembali ke MYOPS on the
+OpsPS launch denial opened www.myops.com.my in a new tab during staging UAT.
+The button now calls the existing strict returnToMyops helper, preserving the
+configured exact staging portal and replacing the same tab. Source commit
+518e5237fb16c1a4602b2bea303f502406e7a0c9 on fix/web-first-provisioning.
+Git-triggered preview dpl_2CPGQJZDQP5A5NdWTJHecoNa9s8P is READY; no duplicate
+deployment was created. Browser reload on the branch alias and button click
+confirmed same-tab navigation to the exact MYOPS staging root.
+
+Validation: 154 tests PASS, TypeScript PASS, lint PASS, Expo web export PASS.
+Prior commit 33969ff GitHub Actions run10 SUCCESS; current commit 518e523 run11 SUCCESS. OpsFlow preview dpl_C6KXShtcBnEVjF3pziDSwKJKv66J READY.
+Browser Open App for OpsFlow also reached its launch denial screen; company
+onboarding remains untested. No Production, timer, subscription or RLS changes.
+
+## SSO repairs and verified first launch — 1 November 2026 Malaysia
+
+OpsFlow's stable staging branch alias still referenced dpl_4To5R97zBGynwrUK1sucvVruQLnA
+(source f61772bd), while tested source f8eccc2f was READY at dpl_C6KXShtcBnEVjF3pziDSwKJKv66J.
+Reassigned only that existing staging branch alias to the tested deployment.
+No build, share-link creation, Production alias or Production environment change.
+Browser /api/sso-ready returned ready=true, signed_transport=verified and
+unknown_session=denied. Actual MYOPS Open App then reached OpsFlow /app with
+MYOPS Staging UAT admin, zero-value dashboard and Logout; no second login.
+This verifies SSO and dashboard, not full module acceptance.
+
+OpsPS previously rejected every new user because its empty database required an
+operator-created identity link. After a verified central redeem, staging-only
+first launch now derives a deterministic internal Auth UUID and reserved .invalid
+alias from the app-specific opaque reference. Admin API creates a passwordless
+internal identity, with confirmed internal alias and server-owned app_metadata.
+Existing linked accounts are unchanged; conflicting metadata fails closed.
+No user email is matched or trusted, no message/email is sent, and no central
+subscription/feature entitlement or platform-admin access is created.
+
+A service-only SECURITY INVOKER RPC atomically creates one empty My OpsPS tenant,
+its founder profile/membership and identity link. It locks by opaque reference,
+validates the deterministic staging identity, rejects attaching preexisting local
+profiles/tenants, and is idempotent. New tenant contains no products/orders/payments
+or subscriptions. Existing RLS, bound central session rechecks, expiry and server
+checks remain enforced. Automatic provisioning is refused on every other project.
+Production rollout remains subject to separate approval.
+
+Local validation: 161 tests PASS; TypeScript and lint PASS; full fresh/shared
+provisioning and session/RLS suites PASS. Tests include wrong-project/reference,
+metadata collision, failed-database retry, wrong returned identity, browser RPC
+denial, transaction/idempotence and zero business transaction/subscription rows.
+Migration installed on shared staging only; hosted authenticated acceptance pending
+Edge Function update and browser retest. Frontend is unchanged from 518e523.
