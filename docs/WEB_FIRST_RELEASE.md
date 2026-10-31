@@ -233,3 +233,60 @@ metadata collision, failed-database retry, wrong returned identity, browser RPC
 denial, transaction/idempotence and zero business transaction/subscription rows.
 Migration installed on shared staging only; hosted authenticated acceptance pending
 Edge Function update and browser retest. Frontend is unchanged from 518e523.
+
+## Hosted acceptance results — 1 November 2026 Malaysia
+
+Commit 0027f8e664c73cca13682b96ff165daf047ce43f pushed to existing
+fix/web-first-provisioning, PR #5 updated in place (draft, not merged).
+GitHub Actions run12 SUCCESS. Git-triggered preview dpl_3FBHi825tNANd4fSbcTR4i4BWv5s READY.
+Supabase myops-app-access v12 ACTIVE; additive provisioning migration applied.
+
+Browser MYOPS Open App → OpsPS /dashboard PASS, no second login. Exactly one
+identity link, profile, business and membership; zero products/orders/subscriptions.
+Manual Settings Logout → MYOPS staging root PASS without dialog/new tab. Hosted
+app session revoked_at and valid_until both 2026-10-31T19:36:32.483Z. Reopen
+MYOPS → OpsPS dashboard PASS: still one tenant/identity; two issued sessions,
+one revoked and one valid. No fresh 15-minute browser idle test was performed.
+
+Hosted RPC grant checks: anon=false, authenticated=false, service_role=true.
+Public tables without RLS=0. Security advisors unchanged from before provisioning:
+eight server-only no-policy informational findings, seven existing authenticated
+SECURITY DEFINER helper warnings. No new advisor findings.
+
+OpsFlow alias repair and actual central SSO/dashboard also PASS as above.
+Full app transaction/report/payment-proof acceptance remains pending; these
+results certify the repaired SSO flows, not overall Production readiness.
+
+## Transaction UAT continuation — 1 November 2026 Malaysia
+
+OpsFlow browser and read-only database acceptance PASS on existing tested staging:
+product UAT-NOV01-001, opening stock 10 at cost RM10/selling RM20; POS sale
+S76119109 for two units, subtotal RM40 + tax RM2.40 = RM42.40; stock 8 and
+cash ledger +RM42.40. Reports remain correct after protected-page reload.
+Purchase PO76175228 for five units at RM10 totals RM50. Receive6 was denied
+against outstanding5. Partial receipt GR76235845 (2 units/RM20), final receipt
+GR76261508 (3 units/RM30); status Fully Received, no receive action remains.
+Final stock13; Reports sales RM42.40/purchases RM50; Finance cash flow RM42.40.
+Logout returned directly to MYOPS staging. Data is clearly labelled disposable UAT.
+OpsFlow automated checks: 28 frontend and29 backend tests PASS; TypeScript, lint,
+web export, gateway/tenant/RLS/atomicity and onboarding suites PASS. No OpsFlow
+code change or deployment was needed. Core transaction paths passed; role/invite
+and full business acceptance remain separate gates.
+
+OpsPS new hosted UAT found an intermittent founder→customer misroute. Database
+profile and membership remained founder, while the auth listener hydrated a prior
+expired session in parallel with the new verified launch. Missing scoped rows
+fell back to role customer and made the route change before launch hydration ended.
+The listener no longer queries Supabase inside its synchronous auth callback;
+verified restore/launch owns scope hydration. Role resolution now requires matching
+server profile, membership, business and user; incomplete/mismatched scope fails
+closed instead of inventing customer role. Token notifications only update an
+existing matching local token; no entitlement/RLS/session duration is relaxed.
+
+The observed customer screen also showed hardcoded08/03/05 counts and fake
+Updated today statuses. It now loads only the current customer profile's actual
+orders, shows empty state, and returns non-customer roles through normal entry.
+Regression tests reproduce old INITIAL_SESSION arriving before redeem resolves,
+verify synchronous/no-query callbacks and incomplete-scope denial, validate
+identity mismatch denial, and test empty/owned customer counts and founder redirect.
+169 tests, TypeScript, lint and web export PASS. Hosted repair retest pending.
