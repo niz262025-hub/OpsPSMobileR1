@@ -135,3 +135,44 @@ deployed as ACTIVE version 3. Hosted POST refresh from the allowed OpsPS preview
 without an authenticated session, returns HTTP 401 Authentication required.
 SSO end-to-end remains blocked by missing signing/transport configuration and
 verified identity mapping; no dashboard or SSO PASS is claimed.
+
+## Signing transport verified — 1 November 2026
+
+The owner explicitly approved replacement of the expired staging link. Only the
+expired MYOPS staging Shareable Link was regenerated with ttl=82800 seconds;
+its new expiry is 1793555490. Other links and Production were not changed.
+The signing private key and renewed transport token are saved in Supabase Secrets
+without printing their values. Six custom settings are now configured. The
+matching Ed25519 public key is registered for app_id=opsp/product_slug=opsp and
+enabled only in MYOPS staging wengxxiqwtosirealghx. No production key was rotated.
+
+Runtime debugging identified the actual pre-network failure: WebCrypto sign()
+returns ArrayBuffer, while the old encoder iterated it as Uint8Array. The shared
+encoder now accepts both representations. A real Ed25519 sign/encode/decode/verify
+regression test verifies the signature and rejects changed payloads. Central
+401/403 JSON denial is now handled as denial, allowing session revocation, while
+503/non-JSON/array responses still fail closed.
+
+The temporary bootstrap avoids fetching the homepage once Vercel issues a
+same-origin protection cookie, and supports Edge Headers without getSetCookie.
+Cross-origin redirects, missing cookies, other project/origin combinations and
+loops remain denied. Diagnostics log only static categories; no request secrets.
+
+Validation PASS: 154 tests, TypeScript and lint. Supabase myops-app-access ACTIVE
+version 11. Hosted dummy redeem from the approved OpsPS preview returns HTTP 403
+MYOPS access denied. MYOPS staging records two verified app nonces for opsp,
+confirming actual Ed25519 authentication before invalid-ticket denial. This proves
+signed transport and unknown-ticket denial, not authenticated dashboard UAT.
+
+MYOPS preview environment now includes MYOPS_APP_URL_OPSP pointing at the
+existing OpsPS branch alias. Exact existing MYOPS source 13db24bebf6216d0ece589cb1b629858fb2f6793
+was rebuilt as staging dpl_APkdbjHTepwuweGoUMRZbbPLYDGU (READY).
+OpsPS web preview remains dpl_5f8jLtD1ZGJcnUANAfViXcNfuuq5.
+OpsFlow preview transport was renewed using the same approved temporary link;
+existing tested code f8eccc2fd06f6fae1d3cd1c1a4ec88a6e104bc6b is rebuilding as
+dpl_C6KXShtcBnEVjF3pziDSwKJKv66J. No inactivity timer changes.
+
+Remaining: real MYOPS staging login, verified identity mapping/provisioning for
+the empty OpsPS database, dashboard/workflow UAT and logout/revocation checks.
+OpsFlow real company onboarding UAT also remains pending. No full app PASS or
+Production release is claimed.

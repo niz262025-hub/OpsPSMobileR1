@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { sendMyopsRequest } from './transport.ts';
-import { canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
+import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
 const VALID_FOR_MS = 20_000;
@@ -40,12 +40,6 @@ function json(status: number, payload: JsonRecord, headers: HeadersInit): Respon
 
 function asObject(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 function base64UrlDecode(value: string): Uint8Array {
@@ -153,12 +147,6 @@ async function signMyopsRequest(
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-async function readMyopsJson(response: Response): Promise<JsonRecord> {
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok || !asObject(body)) throw new Error('MYOPS access check failed');
-  return body;
 }
 
 async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Response> {
@@ -332,7 +320,10 @@ Deno.serve(async (request) => {
       return await endSession(request, headers);
     }
     return json(400, { error: 'Invalid request' }, headers);
-  } catch {
+  } catch (error) {
+    const known = ['Staging transport is restricted', 'Invalid staging redirect', 'Staging redirect rejected', 'Staging access unavailable', 'MYOPS access check failed', 'MYOPS access is not configured', 'MYOPS signed transport failed'];
+    const kind = error instanceof Error ? (known.includes(error.message) ? error.message : error.name) : 'UnknownError';
+    console.warn('opsps_app_access_failure', kind);
     return json(503, { error: 'MYOPS access is unavailable' }, headers);
   }
 });

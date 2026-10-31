@@ -17,7 +17,12 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
       const cookie = [...cookies.values()].join('; ');
       const response = await send(url, { method: 'GET', redirect: 'manual', cache: 'no-store', signal: init.signal,
         headers: cookie ? { Cookie: cookie } : {} });
-      for (const setCookie of response.headers.getSetCookie()) {
+      // Some Edge runtimes expose Set-Cookie only through get().
+      const combined = response.headers.get('set-cookie');
+      const setCookies = typeof response.headers.getSetCookie === 'function'
+        ? response.headers.getSetCookie()
+        : (combined ? combined.split(/,(?=\s*[^;,=]+=)/) : []);
+      for (const setCookie of setCookies) {
         const pair = setCookie.split(';', 1)[0];
         cookies.set(pair.split('=', 1)[0], pair);
       }
@@ -26,6 +31,13 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
         if (!location) throw new Error('Invalid staging redirect');
         url = new URL(location, url);
         if (url.origin !== origin) throw new Error('Staging redirect rejected');
+        // Vercel already issued the protection cookie. Avoid an unnecessary
+        // homepage fetch before the signed API request.
+        if (cookies.size > 0) {
+          await response.body?.cancel();
+          complete = true;
+          break;
+        }
       } else {
         if (!response.ok) throw new Error('Staging access unavailable');
         complete = true;
@@ -35,5 +47,9 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
     if (!complete || cookies.size === 0) throw new Error('Staging access unavailable');
     headers.set('Cookie', [...cookies.values()].join('; '));
   }
-  return send(new URL(path, origin), { ...init, headers, redirect: 'error' });
+  try {
+    return await send(new URL(path, origin), { ...init, headers, redirect: 'error' });
+  } catch {
+    throw new Error('MYOPS signed transport failed');
+  }
 }
