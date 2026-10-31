@@ -980,7 +980,7 @@ class MockDataSource implements DataSource {
       if (!items.length || items.some((item) => (item.packedQuantity ?? 0) < item.quantity)) {
         return null;
       }
-      const updated: Order = { ...order, status: 'packing', requestStatus: 'PACKING', packedAt: new Date().toISOString() };
+      const updated: Order = { ...order, status: 'ready', requestStatus: 'READY_TO_SHIP', packedAt: new Date().toISOString() };
       snapshot.orders = snapshot.orders.map((entry) => entry.id === orderId ? updated : entry);
       return {
         id: updated.id,
@@ -2649,56 +2649,10 @@ class SupabaseDataSource implements DataSource {
     },
     async markOrderPacked(businessId: string, orderId: string) {
       const client = getSupabaseClient();
-      if (!client) {
-        return null;
-      }
-
-      if (!(await hasMembership(client, businessId))) {
-        return null;
-      }
-
-      const { data: orderData, error: orderError } = await client
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .eq('business_id', businessId)
-        .maybeSingle();
-
-      if (orderError || !orderData) {
-        return null;
-      }
-
-      const { data: items, error: itemsError } = await client
-        .from('order_items')
-        .select('*')
-        .eq('order_id', orderId)
-        .eq('business_id', businessId);
-
-      if (itemsError || !items || items.length === 0) {
-        return null;
-      }
-
-      const allPacked = (items as any[]).every((item) => Number(item.packed_quantity ?? 0) >= Number(item.quantity ?? 0));
-      if (!allPacked) {
-        return null;
-      }
-
-      const { data: updated, error: updateError } = await client
-        .from('orders')
-        .update({
-          order_status: 'packing',
-          request_status: 'PACKING',
-        })
-        .eq('id', orderId)
-        .eq('business_id', businessId)
-        .select('*')
-        .single();
-
-      if (updateError || !updated) {
-        return null;
-      }
-
-      return mapOrderRow(updated as any);
+      if (!client) return null;
+      const { data, error } = await client.rpc('opsps_finish_packing', { p_business_id: businessId, p_order_id: orderId });
+      if (error || !data) return null;
+      return mapOrderRow(data);
     },
     async create(input) {
       const client = getSupabaseClient();

@@ -44,9 +44,24 @@ try{
  assert.deepEqual((await db.query('SELECT payment_status,order_status,request_status FROM orders WHERE id=$1',[order])).rows,[{payment_status:'paid',order_status:'payment_received',request_status:'PAYMENT_RECEIVED'}]);
  await db.query('SELECT opsps_verify_manual_payment($1,$2)',[business,payment]);
  assert.deepEqual((await db.query("SELECT amount::text,trip_id,order_id FROM finance_transactions WHERE reference_id=$1",[payment])).rows,[{amount:'60.00',trip_id:trip,order_id:order}]);
+ // Packing is scoped, paid-only and cannot rewrite ordered quantity or tenant.
+ await db.exec('RESET ROLE');
+ const product='70000000-0000-4000-8000-000000000001',variant='80000000-0000-4000-8000-000000000001';
+ await db.query("INSERT INTO products(id,business_id,trip_id,name,category) VALUES($1,$2,$3,'Dummy','Clothing')",[product,business,trip]);
+ await db.query("INSERT INTO product_variants(id,business_id,product_id,size,stock) VALUES($1,$2,$3,'M',5)",[variant,business,product]);
+ await db.query('INSERT INTO order_items(business_id,order_id,product_variant_id,quantity) VALUES($1,$2,$3,2)',[business,order,variant]);
+ await asUser(owner);
+ await assert.rejects(db.query('SELECT opsps_finish_packing($1,$2)',[business,order]),/Paid packing order required/);
+ assert.equal((await db.query('UPDATE order_items SET packed_quantity=2 WHERE order_id=$1 RETURNING id',[order])).rows.length,0);
+ await db.query("UPDATE orders SET order_status='packing' WHERE id=$1",[order]);
+ await assert.rejects(db.query('UPDATE order_items SET quantity=3 WHERE order_id=$1',[order]),/Only valid packed/);
+ await assert.rejects(db.query('UPDATE order_items SET packed_quantity=3 WHERE order_id=$1',[order]),/Only valid packed/);
+ await assert.rejects(db.query('SELECT opsps_finish_packing($1,$2)',[business,order]),/Packing incomplete/);
+ assert.equal((await db.query('UPDATE order_items SET packed_quantity=2 WHERE order_id=$1 RETURNING packed_quantity',[order])).rows[0].packed_quantity,2);
+ assert.equal((await db.query('SELECT opsps_finish_packing($1,$2) result',[business,order])).rows[0].result.order_status,'ready');
  await asUser(other);await assert.rejects(db.query('SELECT opsps_verify_manual_payment($1,$2)',[business,payment]),/Authorized active/);
  await db.exec("RESET ROLE;UPDATE myops_app_sessions SET valid_until=now()-interval '1 second'");await asUser(owner);
  await assert.rejects(db.query('SELECT opsps_verify_manual_payment($1,$2)',[business,payment]),/Authorized active/);
  await db.exec('RESET ROLE;SET ROLE anon');await assert.rejects(db.query('SELECT opsps_verify_manual_payment($1,$2)',[business,payment]),/permission denied/);
- log('PASS: real payment checks, legacy direct-paid denial, atomic owner verification, order transition, trip-linked Finance exactly once, cross-user/expiry/anonymous denial');
+ log('PASS: real payment checks, legacy direct-paid denial, atomic owner verification, order transition, trip-linked Finance exactly once; paid-only immutable packing, incomplete denial and ready transition; cross-user/expiry/anonymous denial');
 }catch(error){logError(error.message);process.exitCode=1;}finally{await db.close();}

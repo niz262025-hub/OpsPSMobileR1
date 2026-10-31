@@ -347,3 +347,12 @@ Hosted dummy order RM60: private PNG proof upload succeeded; submit failed with 
 The migration reconciles the obsolete check with the validated direct-payment check, replaces recursive order UPDATE lookups with an immutable scope trigger, and removes the superseded recursive payment UPDATE policy. Existing membership policies, private proof storage and MYOPS active-session RLS remain in force. A SECURITY INVOKER RPC verifies the evidence/amount and atomically changes payment, order and trip-linked income; authenticated founder/admin only, verifier derived from auth.uid().
 
 Local verification: 187 unit/component tests passed; real PostgreSQL-compatible payment integration passed owner verification, repeat/idempotence, immutable scope, full rollback on ledger failure, and other-user/expired/anonymous denials. Database session and fresh/shared provisioning suites passed. Hosted migration and browser verification must be confirmed separately; this section does not certify those or Production.
+
+
+### Hosted payment PASS; packing repair — 2026-10-31
+
+Migration `reconcile_opsps_payment_verification` applied only to shared staging. All 23 public tables retain RLS; new functions are SECURITY INVOKER. Security-advisor counts unchanged (8 server-only no-policy info, 7 legacy helper warnings, 1 existing leaked-password setting). Preview a3ee47c READY; GitHub Actions web job 124649778534 succeeded including the payment integration suite.
+
+Browser resubmitted the existing dummy proof: payment 20cb20b5-7100-44ea-99ed-86b8801dafc2 was submitted/unverified, then owner verification set paid/verified, order PAYMENT_RECEIVED and exactly one RM60 income with trip/order links. No actual money moved.
+
+Packing failed because order_items lacked an UPDATE policy; staging now permits founder/admin changes only to packed_quantity on paid packing orders, with immutable item scope and quantity bounds. Browser retest stored 2/2 packed. Mark Ready then exposed an existing client bug saving packing again; SECURITY INVOKER finish-packing RPC now checks all items under locks before ready. Local integration passes incomplete-order denial and correct ready transition; hosted final retest pending deployment. Shipping and stock effects remain untested.
