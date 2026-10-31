@@ -290,3 +290,19 @@ Regression tests reproduce old INITIAL_SESSION arriving before redeem resolves,
 verify synchronous/no-query callbacks and incomplete-scope denial, validate
 identity mismatch denial, and test empty/owned customer counts and founder redirect.
 169 tests, TypeScript, lint and web export PASS. Hosted repair retest pending.
+
+OpsPS c166d818 staging dpl_2ibRmz3rnKfrV6iHw5Ley6e2Pe6c READY, GitHub CI run13
+SUCCESS. Browser reopen now reached founder /dashboard; Trips and trip creation
+worked with real staging RLS. Product 05ff76fd-efdc-4fc9-847a-35dcef57a036
+(UAT OpsPS Dummy Tee), cost RM15/selling RM30, sizeM/stock5, was stored with the
+selected trip. No production or entitlement change.
+
+Trip date UAT found two confirmed failures: native date-picker control did not
+open on Web, and the displayed01Nov2026 was stored as31Oct2026 in trip
+0bd0c707-008c-4133-854e-bafd5f97d835 because toISOString converted the local
+after-midnight date to UTC. Keep that dummy row as failure evidence; do not
+silently change it. Trip creation now stores YYYY-MM-DD directly, uses a native
+HTML date input on Web and keeps the existing native picker for Phase2. Tests
+cover Asia/Kuala_Lumpur after-midnight, selected-day round trip, malformed dates
+and leap days. 177 tests, TypeScript, lint and web export PASS. Hosted selected
+future-day save/reload acceptance remains pending deployment.
