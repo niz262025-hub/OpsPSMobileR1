@@ -25,6 +25,9 @@ try {
   const unprotected = (await db.query("SELECT relname FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r' AND NOT relrowsecurity")).rows;
   assert.deepEqual(unprotected, []);
   assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.bootstrap_founder_business(text,text,text,text,text,text)','EXECUTE') AS allowed")).rows[0].allowed, false);
+  assert.equal((await db.query("SELECT has_function_privilege('anon','public.user_is_business_member(uuid,uuid)','EXECUTE') allowed")).rows[0].allowed,false);
+  assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.direct_qr_payment_verified_gate()','EXECUTE') allowed")).rows[0].allowed,false);
+  assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.user_is_business_member(uuid,uuid)','EXECUTE') allowed")).rows[0].allowed,true);
   const userA = '10000000-0000-4000-8000-000000000001';
   const userB = '10000000-0000-4000-8000-000000000002';
   const businessA = '20000000-0000-4000-8000-000000000001';

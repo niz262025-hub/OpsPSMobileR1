@@ -45,6 +45,7 @@ DO $opsps_empty$ BEGIN
   ${guard}
 END $opsps_empty$;
 ${migrations.join('\n')}
+${readFileSync(new URL('../supabase/provisioning/function-hardening.sql', import.meta.url), 'utf8')}
 COMMIT;\n`;
 }
 

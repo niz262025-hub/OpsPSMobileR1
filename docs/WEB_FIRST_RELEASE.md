@@ -63,3 +63,29 @@ and replaces the page with MYOPS. The failure paths also clear local identity.
 No auth, entitlement, RLS or inactivity checks are disabled. A preview may set the
 exact approved staging portal in EXPO_PUBLIC_MYOPS_PORTAL_ORIGIN; arbitrary
 redirect destinations are rejected. Production uses www.myops.com.my.
+
+## Hosted staging verification — 1 November 2026 Malaysia
+
+- Existing shared project: ojamkplflqafedmxbdxb. No compute branch or organization was created.
+- Installed baseline ledger: 20261031174059_opsps_shared_staging_foundation.
+- Installed additive function hardening: 20261031174440_opsps_function_privilege_hardening.
+- Read-only checks: 23 public tables, all RLS enabled; 17 OpsPS tables added;
+  six OpsFlow table ACLs and seven OpsFlow function hashes unchanged;
+  zero OpsPS business rows and zero OpsFlow document rows.
+- Hosted advisors: mutable function search paths and anonymous SECURITY DEFINER
+  execution warnings resolved. Seven authenticated helper warnings remain because
+  RLS needs these owner-check helpers; review their explicit caller binding before
+  release. Eight server-only tables intentionally have RLS with no browser policy.
+- Source/tests commit: 51bb6279d6913c55c1a917385d7eea825147581d.
+- Vercel staging: dpl_5f8jLtD1ZGJcnUANAfViXcNfuuq5, READY,
+  https://opsp-mobile-r1-bs29pvyqf-mohd-syaiful-nizam1.vercel.app.
+- Existing Vercel project reused, preview-only variables configured with shared
+  staging URL, publishable key and the exact MYOPS staging portal; Production env unchanged.
+- Supabase myops-app-access v1 ACTIVE, own ticket/JWT authorization retained;
+  platform verify_jwt=false as in the reviewed source config. No payment functions deployed.
+- Local PASS: 144 tests, TypeScript, lint, web build, session-RLS and fresh/shared
+  provisioning suites. Hosted SSO is not yet PASS: Edge Function signing secrets,
+  exact allowed origins, central app registration and verified user identity mapping
+  remain to be configured. No MYOPS session or subscription was fabricated.
+- Production was not deployed or altered. Existing OpsFlow production onboarding
+  fix still awaits authenticated staging UAT and release verification.
