@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { sendMyopsRequest } from './transport.ts';
 import { canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
@@ -135,7 +136,7 @@ async function signMyopsRequest(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8_000);
   try {
-    return await fetch(new URL(path, origin), {
+    return await sendMyopsRequest(origin.origin, path, {
       method: 'POST',
       cache: 'no-store',
       signal: controller.signal,
@@ -148,7 +149,7 @@ async function signMyopsRequest(
         'X-Myops-Signature': signature,
       },
       body: JSON.stringify(body),
-    });
+    }, { projectUrl: Deno.env.get('SUPABASE_URL') ?? '', shareToken: Deno.env.get('MYOPS_STAGING_SHARE_TOKEN') });
   } finally {
     clearTimeout(timeoutId);
   }

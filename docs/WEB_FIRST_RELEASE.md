@@ -89,3 +89,26 @@ redirect destinations are rejected. Production uses www.myops.com.my.
   remain to be configured. No MYOPS session or subscription was fabricated.
 - Production was not deployed or altered. Existing OpsFlow production onboarding
   fix still awaits authenticated staging UAT and release verification.
+
+## SSO configuration continuation — 1 November 2026
+
+Supabase dashboard login is verified on the existing shared staging project's
+Edge Function Secrets page. No custom secrets exist yet. Central MYOPS staging
+wengxxiqwtosirealghx has no registered app_id=opsp client. Its staging portal
+alias currently resolves to dpl_4MewkENNveBiHhNFoCX449nSUn41 and has an expired
+shareable link. No existing signing keys or Production configuration were changed.
+
+The Edge Function source now supports a restricted staging cookie bootstrap:
+only shared project ojamkplflqafedmxbdxb and the exact existing MYOPS staging
+origin may receive the temporary share transport. Bootstrap requests contain no
+application signature; cookies remain on the same origin; cross-origin redirects,
+missing cookies and redirect loops fail closed. Signed POSTs keep all Ed25519
+headers and reject redirects. Five transport tests pass.
+
+Automatic approval review rejected creation of a new 23-hour shareable link for
+this MYOPS staging alias because specific bypass approval was not recognized.
+No alternate access path was attempted. Obtain explicit approval for this exact
+temporary deployment-layer access before setting the staging transport secret.
+User login, signed application requests and entitlement checks remain mandatory.
+Signing secret creation/registration, origin configuration and verified identity
+linking still await completion. Do not claim hosted OpsPS SSO PASS.
