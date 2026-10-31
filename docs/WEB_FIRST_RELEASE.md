@@ -112,3 +112,26 @@ temporary deployment-layer access before setting the staging transport secret.
 User login, signed application requests and entitlement checks remain mandatory.
 Signing secret creation/registration, origin configuration and verified identity
 linking still await completion. Do not claim hosted OpsPS SSO PASS.
+
+## Configuration saved and deployed — 1 November 2026
+
+Four custom settings are visibly saved in the shared staging Supabase dashboard:
+MYOPS_APP_API_ORIGIN (exact existing MYOPS staging alias), MYOPS_APP_ID=opsp,
+MYOPS_KEY_VERSION=current, and OPSPS_ALLOWED_ORIGINS limited to the verified OpsPS
+preview URL and feature-branch alias. No signing private key or transport token
+has been entered; central OpsPS registration remains absent.
+
+The owner approved 23-hour staging access. Creating the link on either the alias
+or its existing deployment returned 409 protection_bypass_conflict: a shareable
+link already exists. Read-only alias inspection confirmed its expiry is
+1793396292 and its deployment remains dpl_4MewkENNveBiHhNFoCX449nSUn41.
+No existing link was revoked/regenerated because the owner's original execution
+rules require explicit approval before changing existing Shareable Links.
+Request approval to replace only this expired staging link with one expiring in
+23 hours; leave other links and Production unchanged.
+
+Supabase myops-app-access transport code 3cc3f3180b9f852f3c32acd7fe8165b7f88446ab
+deployed as ACTIVE version 3. Hosted POST refresh from the allowed OpsPS preview,
+without an authenticated session, returns HTTP 401 Authentication required.
+SSO end-to-end remains blocked by missing signing/transport configuration and
+verified identity mapping; no dashboard or SSO PASS is claimed.
