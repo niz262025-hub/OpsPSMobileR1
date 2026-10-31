@@ -91,6 +91,15 @@ function buildPaymentClient(input: { orders?: Array<Record<string, unknown>>; pa
 
   return {
     fixtureOrders: orders,
+    rpc: vi.fn(async (name: string, args: Record<string,string>) => {
+      if (name !== 'opsps_verify_manual_payment') return {data:null,error:new Error('Unsupported RPC')};
+      const payment=payments.find(row=>row.id===args.p_payment_id && row.business_id===args.p_business_id);
+      const order=orders.find(row=>row.id===payment?.order_id && row.business_id===args.p_business_id);
+      if (!payment || !order || payment.amount!==order.total) return {data:null,error:new Error('Denied')};
+      Object.assign(payment,{payment_status:'paid',verified:true,verified_by:userId});
+      Object.assign(order,{payment_status:'paid',order_status:'payment_received',request_status:'PAYMENT_RECEIVED'});
+      return {data:payment,error:null};
+    }),
     auth: {
       getUser: vi.fn(async () => ({ data: { user: { id: userId } }, error: null })),
     },

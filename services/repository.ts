@@ -3331,83 +3331,16 @@ class SupabaseDataSource implements DataSource {
         idempotencyKey: input.idempotencyKey ?? `${input.businessId}:${input.orderId}:direct_qr`,
       });
     },
-    async verifyDirectQrPayment(paymentId, businessId, verifiedBy, overrides = {}) {
+    async verifyDirectQrPayment(paymentId, businessId, _verifiedBy, _overrides = {}) {
       const client = getSupabaseClient();
-      if (!client || !(await hasMembership(client, businessId))) {
-        return null;
-      }
-
-      const payment = await this.getById(paymentId, businessId);
-      if (!payment) {
-        return null;
-      }
-
-      const orderQuery = await client
-        .from('orders')
-        .select('id, business_id, total, order_status, payment_status')
-        .eq('id', payment.order_id)
-        .eq('business_id', businessId)
-        .maybeSingle();
-
-      if (orderQuery.error || !orderQuery.data) {
-        return null;
-      }
-
-      const order = orderQuery.data as any;
-      const orderStatus = String(order.order_status ?? '').toLowerCase();
-      if (orderStatus === 'cancelled') {
-        return null;
-      }
-
-      const paymentMethod = String(payment.payment_method ?? '').toUpperCase();
-      if (paymentMethod !== 'DIRECT_QR') {
-        return null;
-      }
-
-      if (payment.payment_status && !['submitted', 'pending_verification', 'rejected'].includes(payment.payment_status.toLowerCase())) {
-        return null;
-      }
-
-      const normalizedAmount = Number(payment.amount ?? 0);
-      const orderAmount = Number(order.total ?? 0);
-      if (orderAmount > 0 && Math.abs(normalizedAmount - orderAmount) > 0.01) {
-        return null;
-      }
-
-      const verifiedUserId = verifiedBy || (await getUserIdFromAuth(client)) || undefined;
-      if (!verifiedUserId) {
-        return null;
-      }
-
-      const pendingVerification = await this.transition(paymentId, businessId, 'pending_verification', {
-        verified: false,
-        customerPaymentReference: payment.customer_payment_reference ?? undefined,
-        receiptUri: payment.receipt_uri ?? undefined,
+      if (!client) return null;
+      // The database derives the verifier from auth.uid(), checks active MYOPS
+      // scope and commits payment, order and Finance together under RLS.
+      const { data, error } = await client.rpc('opsps_verify_manual_payment', {
+        p_business_id: businessId, p_payment_id: paymentId,
       });
-
-      if (!pendingVerification) {
-        return null;
-      }
-
-      const updated = await this.transition(paymentId, businessId, 'paid', {
-        verified: true,
-        verifiedBy: verifiedUserId,
-        verificationEventId: overrides.verificationEventId ?? `verify-${paymentId}`,
-      });
-
-      if (!updated) {
-        return null;
-      }
-
-      await client.from('orders').update({
-        payment_status: 'paid',
-        order_status: 'payment_received',
-        request_status: 'PAYMENT_RECEIVED',
-        payment_verified_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', payment.order_id).eq('business_id', businessId);
-
-      return updated;
+      if (error || !data) return null;
+      return mapPaymentRow(data);
     },
     async rejectDirectQrPayment(paymentId, businessId, rejectionReason, verifiedBy) {
       const client = getSupabaseClient();

@@ -338,3 +338,12 @@ handles onInput directly. The ordinary/native and tracked event tests both
 require02Nov in the submitted payload. Hosted selected-date retest remains a gate.
 187 tests, TypeScript, lint and Expo web export PASS. Hosted payment and date
 acceptance pending the next preview, not certified by these automated results.
+
+
+### Payment verification UAT repair — 2026-10-31
+
+Hosted dummy order RM60: private PNG proof upload succeeded; submit failed with PostgreSQL `payments_payment_status_check`, which still rejected the existing `submitted` lifecycle. No payment or income was created by that failed submit.
+
+The migration reconciles the obsolete check with the validated direct-payment check, replaces recursive order UPDATE lookups with an immutable scope trigger, and removes the superseded recursive payment UPDATE policy. Existing membership policies, private proof storage and MYOPS active-session RLS remain in force. A SECURITY INVOKER RPC verifies the evidence/amount and atomically changes payment, order and trip-linked income; authenticated founder/admin only, verifier derived from auth.uid().
+
+Local verification: 187 unit/component tests passed; real PostgreSQL-compatible payment integration passed owner verification, repeat/idempotence, immutable scope, full rollback on ledger failure, and other-user/expired/anonymous denials. Database session and fresh/shared provisioning suites passed. Hosted migration and browser verification must be confirmed separately; this section does not certify those or Production.
