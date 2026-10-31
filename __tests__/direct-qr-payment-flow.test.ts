@@ -45,7 +45,7 @@ function buildPaymentClient(input: { orders?: Array<Record<string, unknown>>; pa
   const buildTableQuery = (table: string, source: Array<Record<string, unknown>>) => {
     const filters: Array<[string, unknown]> = [];
     const builder: any = {
-      select() { return builder; },
+      select(columns?: string) { if (table === 'orders' && /(^|,)\s*customer_id\s*(,|$)/.test(columns ?? '')) throw new Error('column customer_id does not exist'); return builder; },
       eq(field: string, value: unknown) {
         filters.push([field, value]);
         return builder;
@@ -90,6 +90,7 @@ function buildPaymentClient(input: { orders?: Array<Record<string, unknown>>; pa
   };
 
   return {
+    fixtureOrders: orders,
     auth: {
       getUser: vi.fn(async () => ({ data: { user: { id: userId } }, error: null })),
     },
@@ -168,6 +169,7 @@ describe('direct qr payment flow', () => {
     const verified = await repo.payments.verifyDirectQrPayment('pay-direct', 'biz-1', 'founder-1');
     expect(verified?.status).toBe('paid');
     expect(verified?.verified).toBe(true);
+    expect(verifyClient.fixtureOrders.find((row: any) => row.id === verified?.order_id)?.request_status).toBe('PAYMENT_RECEIVED');
 
     const rejectClient = buildPaymentClient({
       orders: [{

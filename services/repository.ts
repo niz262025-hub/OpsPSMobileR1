@@ -3162,7 +3162,7 @@ class SupabaseDataSource implements DataSource {
 
       const orderQuery = await client
         .from('orders')
-        .select('id, business_id, total, payment_status, customer_id, customer_profile_id')
+        .select('id, business_id, total, payment_status, customer_profile_id')
         .eq('id', input.orderId)
         .eq('business_id', input.businessId)
         .maybeSingle();
@@ -3279,7 +3279,7 @@ class SupabaseDataSource implements DataSource {
 
       const orderQuery = await client
         .from('orders')
-        .select('id, business_id, total, payment_status, order_status, customer_id, customer_profile_id')
+        .select('id, business_id, total, payment_status, order_status, customer_profile_id')
         .eq('id', input.orderId)
         .eq('business_id', input.businessId)
         .maybeSingle();
@@ -3402,6 +3402,7 @@ class SupabaseDataSource implements DataSource {
       await client.from('orders').update({
         payment_status: 'paid',
         order_status: 'payment_received',
+        request_status: 'PAYMENT_RECEIVED',
         payment_verified_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', payment.order_id).eq('business_id', businessId);

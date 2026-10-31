@@ -306,3 +306,35 @@ HTML date input on Web and keeps the existing native picker for Phase2. Tests
 cover Asia/Kuala_Lumpur after-midnight, selected-day round trip, malformed dates
 and leap days. 177 tests, TypeScript, lint and web export PASS. Hosted selected
 future-day save/reload acceptance remains pending deployment.
+
+## OpsPS payment workflow UAT repair
+
+Hosted order52380acd-abee-4025-9aa6-2a4913f40977 created from the actual product
+page for two units/RM60 after invalid-phone denial. Database confirms subtotal60,
+total60, pending payment and PENDING_AVAILABILITY. Order view resolves stock
+availability but exposed no payment evidence or packing actions, blocking the
+rest of UAT. Added a panel using existing private payment-proofs storage and
+existing repository submission/verification functions. Submission remains
+unverified; only owner/admin UI can explicitly verify, with database RLS intact.
+Files accept PNG/JPEG/WebP/PDF <=5MB; scoped private paths follow existing
+tenant/user policies and previews are short-lived. PDF inline preview remains
+unavailable in this panel; PNG is used for hosted proof UAT. No transfer, checkout
+or external payment provider is invoked. Existing packing/shipping routes are
+linked from the order's permitted stage; no duplicate transaction system.
+
+Schema inspection confirms orders.customer_id does not exist. Removed that
+legacy field from the two payment reads; tests now reject any such select. A
+regression test also proved verification left request_status unchanged, so
+verification now records PAYMENT_RECEIVED alongside payment_received. Order
+availability preview is limited to pending orders to preserve later stages.
+Tests cover explicit owner verification, no customer verification, missing
+evidence refusal, rejected-repository results, private file MIME/size/scope and
+non-public previews. All changes are staging source only; no DB/RLS change.
+
+The first browser future-date fill changed the DOM value but reset on another
+field edit (rowd732198a-19e5-4174-a51e-3e332fdcc3cf remained01Nov). A component
+regression reproduced this tracked input event; the date control now also
+handles onInput directly. The ordinary/native and tracked event tests both
+require02Nov in the submitted payload. Hosted selected-date retest remains a gate.
+187 tests, TypeScript, lint and Expo web export PASS. Hosted payment and date
+acceptance pending the next preview, not certified by these automated results.

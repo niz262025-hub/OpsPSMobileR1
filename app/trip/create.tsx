@@ -73,7 +73,7 @@ export default function CreateTripScreen() {
             <Field label="Shopping Destination / Mall / Event" value={destination} onChangeText={setDestination} placeholder="e.g. ION Orchard" />
             <Text style={styles.label}>Trip Date</Text>
             {Platform.OS === 'web' ? (
-              <input type="date" aria-label="Trip Date" value={tripDate} onChange={event => setTripDate(event.target.value)}
+              <input type="date" aria-label="Trip Date" value={tripDate} onChange={event => setTripDate(event.target.value)} onInput={event => setTripDate(event.currentTarget.value)}
                 style={{ width: '100%', boxSizing: 'border-box', padding: 14, marginBottom: 16, borderRadius: 10, border: `1px solid ${THEME.border}`, color: THEME.text.primary, backgroundColor: '#FCFCFD', font: 'inherit' }} />
             ) : (
               <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
