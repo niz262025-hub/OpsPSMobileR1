@@ -305,11 +305,24 @@ export async function exportPdf(type: ReportType, result: { rows: ReportRow[]; s
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   let y = 560;
   const write = (text: string, size = 10) => {
-    page.drawText(text.slice(0, 130), { x: 28, y, size, font, color: rgb(0.12, 0.16, 0.22) });
-    y -= size + 8;
-    if (y < 30) {
-      page = pdf.addPage([842, 595]);
-      y = 560;
+    const maxWidth = 786;
+    const lines: string[] = [];
+    let line = '';
+    for (const word of text.split(/\s+/)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) { line = candidate; continue; }
+      if (line) lines.push(line);
+      line = '';
+      for (const character of word) {
+        if (line && font.widthOfTextAtSize(line + character, size) > maxWidth) { lines.push(line); line = ''; }
+        line += character;
+      }
+    }
+    if (line || !lines.length) lines.push(line);
+    for (const nextLine of lines) {
+      if (y - size < 30) { page = pdf.addPage([842, 595]); y = 560; }
+      page.drawText(nextLine, { x: 28, y, size, font, color: rgb(0.12, 0.16, 0.22) });
+      y -= size + 8;
     }
   };
 
@@ -317,7 +330,10 @@ export async function exportPdf(type: ReportType, result: { rows: ReportRow[]; s
   write(`Date Range: ${from} to ${to}`);
   write(`Generated: ${reportDate(new Date())}`);
   write(`Summary: ${Object.entries(result.summary).map(([key, value]) => `${key}: ${value}`).join(' | ')}`);
-  result.rows.forEach((row) => write(Object.entries(row).map(([key, value]) => `${key}: ${value}`).join(' | '), 7));
+  result.rows.forEach((row, index) => {
+    write(`Record ${index + 1}`, 10);
+    Object.entries(row).forEach(([key, value]) => write(`${key}: ${value}`, 9));
+  });
   const bytes = await pdf.save();
   download(new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' }), fileName(type, from, to, 'pdf'));
 }

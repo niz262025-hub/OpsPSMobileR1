@@ -378,3 +378,10 @@ CI run 41296738993 succeeded; preview 2b2dca0 READY. Fresh central MYOPS login â
 Hosted expense test added RM10 dummy transport through trip UI. Finance displayed income60/outgoing10 but trip profit40: confirmed double expense deduction. Fixed netProfit to sales minus total expense once; trip expenses no longer classified as product costs. Direct QR and other methods retain honest method labels, with other-method net shown separately from bank/cash.
 
 Reports hosted sales total60/one order/two units matched, but date displayed Oct31 and month started Oct31 for a Malaysia Nov1 order. Added Malaysia business-date conversion for range filters, row dates and defaults. Regression tests cover UTC Oct31 16:00 boundary, unchanged date-only fields and November-vs-October inclusion. 190 tests passed. New Finance/report browser retest pending preview; no Production changes.
+
+
+### Hosted Finance/report PASS; PDF completeness repair â€” 2026-11-01
+
+Preview bab50c3 READY and CI run 41297407827 SUCCESS. Hosted Finance now shows income60/outgoing10/profit50 with correct Direct QR/Transport labels. Hosted reports PASS: Sales60/one order/two items dated Nov1 Malaysia, Customer Payments60/one verified, Expenses10, Inventory3 at cost15/value45, Trip Profit50 over the range including the fixture trip. Browser Excel download parsed successfully with summary and detail values 60/10/50.
+
+Browser PDF download returned a path but no readable file was available, so that alone is not a PDF pass. A direct test of the actual exporter confirmed its old 130-character truncation omitted final financial fields. Replaced truncation with measured line wrapping and multipage detail blocks. Actual generated PDF with 20 long dummy records parsed successfully: final record and all 20 Net Profit values retained; rendered first page reviewed. Full suite 191 tests PASS; final preview browser PDF retry pending. No new database changes for this PDF fix; Production unchanged.
