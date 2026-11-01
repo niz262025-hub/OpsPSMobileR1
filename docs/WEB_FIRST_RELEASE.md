@@ -369,3 +369,12 @@ UI now says Manual dispatch, shows real order contact details and unavailable tr
 Validation: 187 unit tests, typecheck, lint, web export and fresh/shared provisioning PASS. Payment/packing/dispatch SQL suite PASS including rollback when shipment insertion fails, repeat dispatch exactly-once stock, legacy record completion and unauthorized/expired/anonymous denials. Migration `atomic_opsps_manual_dispatch` applied to shared staging only. All public RLS remains enabled; security advisor counts unchanged (8 info, 7 legacy helper warnings, 1 existing leaked-password setting).
 
 Browser session was reset; hosted dispatch retest and financial-report UI validation remain pending central MYOPS login. Dummy stock remains 5 until that authorized UI action runs. Production untouched; do not mark OpsPS overall PASS or promote this draft PR yet.
+
+
+### Hosted dispatch PASS; Finance/report regression repair — 2026-11-01
+
+CI run 41296738993 succeeded; preview 2b2dca0 READY. Fresh central MYOPS login → OpsPS dashboard passed without a second login. Browser completed the existing dummy shipment; SQL confirmed same shipment ID, correct phone/address, shipped, stock 5→3 and one -2 manual_dispatch movement. Browser repeated dispatch: stock stayed 3, one shipment/movement, income stayed RM60. Screenshot captured separately.
+
+Hosted expense test added RM10 dummy transport through trip UI. Finance displayed income60/outgoing10 but trip profit40: confirmed double expense deduction. Fixed netProfit to sales minus total expense once; trip expenses no longer classified as product costs. Direct QR and other methods retain honest method labels, with other-method net shown separately from bank/cash.
+
+Reports hosted sales total60/one order/two units matched, but date displayed Oct31 and month started Oct31 for a Malaysia Nov1 order. Added Malaysia business-date conversion for range filters, row dates and defaults. Regression tests cover UTC Oct31 16:00 boundary, unchanged date-only fields and November-vs-October inclusion. 190 tests passed. New Finance/report browser retest pending preview; no Production changes.

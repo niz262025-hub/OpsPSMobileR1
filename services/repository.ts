@@ -3013,7 +3013,7 @@ class SupabaseDataSource implements DataSource {
           moneyOut += amount;
         }
         const category = String(row.category ?? '').toLowerCase();
-        if (row.type === 'expense' && (category.includes('cogs') || category.includes('product cost') || category.includes('purchase') || category.includes('trip expense') || category.includes('cost'))) {
+        if (row.type === 'expense' && (category.includes('cogs') || category.includes('product cost') || category.includes('purchase') || category.includes('cost'))) {
           costOfGoods += amount;
         }
       }
@@ -3026,7 +3026,7 @@ class SupabaseDataSource implements DataSource {
         moneyIn,
         moneyOut,
         outstandingRevenue: Math.max(0, salesRevenue - moneyIn),
-        netProfit: salesRevenue - costOfGoods - moneyOut,
+        netProfit: salesRevenue - moneyOut,
       };
     },
   };

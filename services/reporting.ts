@@ -1,3 +1,4 @@
+import { reportDate } from './reportDate';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib/dist/pdf-lib.esm.js';
 import * as XLSX from 'xlsx';
 
@@ -56,7 +57,7 @@ export type ReportDataset = {
 const title = (type: ReportType) => type.replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const money = (value: number) => Number(value.toFixed(2));
 const inRange = (value: string | null | undefined, from: string, to: string) => {
-  const nextValue = (value ?? '').slice(0, 10);
+  const nextValue = reportDate(value);
   if (!nextValue) {
     return true;
   }
@@ -154,7 +155,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
         const payment = scopedPayments.find((entry) => entry.order_id === order.id && (entry.payment_status === 'paid' || entry.status === 'paid' || entry.verified));
 
         const base = {
-          Date: (order.orderDate ?? '').slice(0, 10),
+          Date: reportDate(order.orderDate),
           'Order ID': order.id,
           Customer: order.customerName,
           Phone: order.customerPhone ?? '',
@@ -173,7 +174,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
 
         if (type === 'customer_payments') {
           return {
-            'Payment Date': payment?.created_at ? payment.created_at.slice(0, 10) : (order.orderDate ?? '').slice(0, 10),
+            'Payment Date': payment?.created_at ? reportDate(payment.created_at) : reportDate(order.orderDate),
             'Order ID': order.id,
             Customer: order.customerName,
             Trip: order.tripName ?? trip?.name ?? order.tripId ?? '',
@@ -181,7 +182,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
             'Payment Mode': order.paymentMode ?? payment?.payment_method ?? '',
             'Payment Status': payment?.payment_status ?? order.paymentStatus ?? '',
             Receipt: payment?.id ? 'Attached' : 'None',
-            'Verified Date': payment?.verified ? (payment.created_at ?? '').slice(0, 10) : '',
+            'Verified Date': payment?.verified ? reportDate(payment.created_at) : '',
           } satisfies ReportRow;
         }
 
@@ -212,7 +213,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
         const variant = entry.product_id ? Array.from(variantMap.values()).find((item) => item.productId === entry.product_id) : undefined;
         return {
           'Purchase ID': entry.id,
-          Date: (entry.created_at ?? '').slice(0, 10),
+          Date: reportDate(entry.created_at),
           Trip: trip?.name ?? entry.trip_id ?? '',
           'Order ID': entry.order_id ?? '',
           Customer: '',
@@ -235,7 +236,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
     rows = scopedFinance
       .filter((entry) => entry.type === 'expense' && inRange(entry.created_at ?? '', from, to))
       .map((entry): ReportRow => ({
-        Date: (entry.created_at ?? '').slice(0, 10),
+        Date: reportDate(entry.created_at),
         Description: entry.description,
         Category: entry.category ?? 'General',
         'Payment Method': entry.payment_method ?? '',
@@ -314,7 +315,7 @@ export async function exportPdf(type: ReportType, result: { rows: ReportRow[]; s
 
   write(`OpsPS - ${title(type)} Report`, 18);
   write(`Date Range: ${from} to ${to}`);
-  write(`Generated: ${new Date().toISOString().slice(0, 10)}`);
+  write(`Generated: ${reportDate(new Date())}`);
   write(`Summary: ${Object.entries(result.summary).map(([key, value]) => `${key}: ${value}`).join(' | ')}`);
   result.rows.forEach((row) => write(Object.entries(row).map(([key, value]) => `${key}: ${value}`).join(' | '), 7));
   const bytes = await pdf.save();
