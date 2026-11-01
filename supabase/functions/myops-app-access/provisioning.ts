@@ -1,5 +1,15 @@
 // Only verified central redeem responses may call this server-side adapter.
 const STAGING_PROJECT = 'https://ojamkplflqafedmxbdxb.supabase.co';
+const PRODUCTION_PROJECT = 'https://wrsigjhhbkbomtkaqlpw.supabase.co';
+const STAGING_MYOPS = 'https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-nizam1.vercel.app';
+
+export function validateMyopsAuthority(projectUrl: string, origin: string): void {
+  if (!((projectUrl === STAGING_PROJECT && origin === STAGING_MYOPS)
+    || (projectUrl === PRODUCTION_PROJECT && origin === 'https://www.myops.com.my'))) {
+    throw new Error('OpsPS identity provisioning is unavailable');
+  }
+}
+
 type IdentityUser = { id: string; email?: string; email_confirmed_at?: string; app_metadata: Record<string, unknown> };
 type NewIdentity = { id: string; email: string; email_confirm: true; app_metadata: Record<string, string> };
 export type IdentityStore = {
@@ -8,8 +18,9 @@ export type IdentityStore = {
   provision(userRef: string, userId: string): Promise<string>;
 };
 
-export async function ensureVerifiedStagingIdentity(userRef: string, projectUrl: string, store: IdentityStore): Promise<string> {
-  if (projectUrl !== STAGING_PROJECT || !/^[A-Za-z0-9_-]{43}$/.test(userRef)) {
+export async function ensureVerifiedMyopsIdentity(userRef: string, projectUrl: string, store: IdentityStore, origin: string): Promise<string> {
+  validateMyopsAuthority(projectUrl, origin);
+  if ( !/^[A-Za-z0-9_-]{43}$/.test(userRef)) {
     throw new Error('OpsPS identity provisioning is unavailable');
   }
   const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`opsps-myops:${projectUrl}:${userRef}`)));
@@ -35,4 +46,9 @@ export async function ensureVerifiedStagingIdentity(userRef: string, projectUrl:
   const linkedId = await store.provision(userRef, id);
   if (linkedId !== id) throw new Error('OpsPS identity conflict');
   return id;
+}
+
+// Retain the existing staging adapter for callers pinned to that environment.
+export function ensureVerifiedStagingIdentity(userRef: string, projectUrl: string, store: IdentityStore): Promise<string> {
+  return ensureVerifiedMyopsIdentity(userRef, projectUrl, store, STAGING_MYOPS);
 }

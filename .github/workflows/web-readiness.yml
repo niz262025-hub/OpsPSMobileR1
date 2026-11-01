@@ -19,6 +19,7 @@ jobs:
       - run: npm test
       - run: npm run test:database
       - run: npm run test:provisioning
+      - run: node scripts/test-production-upgrade.mjs
       - run: npm run test:payments
       - run: npm run typecheck
       - run: npm run lint

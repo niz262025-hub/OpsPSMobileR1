@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { sendMyopsRequest } from './transport.ts';
-import { ensureVerifiedStagingIdentity } from './provisioning.ts';
+import { ensureVerifiedMyopsIdentity, validateMyopsAuthority } from './provisioning.ts';
 import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
@@ -74,6 +74,7 @@ function signingConfig() {
   ) {
     throw new Error('MYOPS access is not configured');
   }
+  validateMyopsAuthority(Deno.env.get('SUPABASE_URL') ?? '', parsedOrigin.origin);
   return { origin: parsedOrigin, appId, version, privateKey };
 }
 
@@ -168,7 +169,7 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     .eq('myops_user_ref', redeemed.user_ref)
     .maybeSingle();
   if (linkResult.error) throw new Error('Unable to check OpsPS identity');
-  const opspsUserId = linkResult.data?.opsps_user_id ?? await ensureVerifiedStagingIdentity(
+  const opspsUserId = linkResult.data?.opsps_user_id ?? await ensureVerifiedMyopsIdentity(
     redeemed.user_ref, Deno.env.get('SUPABASE_URL') ?? '', {
       async getUser(id) {
         const result = await admin.auth.admin.getUserById(id);
@@ -181,11 +182,11 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
         return result.data.user;
       },
       async provision(userRef, userId) {
-        const result = await admin.rpc('opsps_provision_myops_identity', { p_user_ref: userRef, p_user_id: userId });
+        const result = await admin.rpc('opsps_provision_myops_identity_v2', { p_user_ref: userRef, p_user_id: userId, p_project_url: Deno.env.get('SUPABASE_URL') ?? '' });
         if (result.error || typeof result.data !== 'string') throw new Error('Unable to provision OpsPS tenant');
         return result.data;
       },
-    });
+    }, signingConfig().origin.origin);
 
   const userResult = await admin.auth.admin.getUserById(opspsUserId);
   const email = userResult.data.user?.email;

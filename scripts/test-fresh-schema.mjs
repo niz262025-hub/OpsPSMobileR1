@@ -70,6 +70,31 @@ try {
   assert.equal((await db.query('SELECT count(*)::int n FROM public.orders')).rows[0].n,0);
   assert.equal((await db.query('SELECT count(*)::int n FROM public.subscriptions')).rows[0].n,0);
   await db.exec('RESET ROLE');
+  // Production v2 must preserve existing tenants, isolate environment identities and be service-only.
+  const productionProject = 'https://wrsigjhhbkbomtkaqlpw.supabase.co';
+  const prodBytes = createHash('sha256').update('opsps-myops:'+productionProject+':'+newRef).digest();
+  prodBytes[6]=(prodBytes[6]&15)|80; prodBytes[8]=(prodBytes[8]&63)|128;
+  const prodHex=prodBytes.toString('hex');
+  const prodUser=prodHex.slice(0,8)+'-'+prodHex.slice(8,12)+'-'+prodHex.slice(12,16)+'-'+prodHex.slice(16,20)+'-'+prodHex.slice(20,32);
+  await db.query('INSERT INTO auth.users(id) VALUES ($1)', [prodUser]);
+  await db.exec('SET ROLE authenticated');
+  await assert.rejects(db.query('SELECT opsps_provision_myops_identity_v2($1,$2,$3)',[newRef,prodUser,productionProject]), /permission denied/);
+  await db.exec('RESET ROLE; SET ROLE service_role');
+  await assert.rejects(db.query('SELECT opsps_provision_myops_identity_v2($1,$2,$3)',[newRef,newUser,productionProject]), /Unverified/);
+  await assert.rejects(db.query('SELECT opsps_provision_myops_identity_v2($1,$2,$3)',[newRef,prodUser,'https://evil.test']), /Unapproved/);
+  await assert.rejects(db.query('SELECT opsps_provision_myops_identity_v2($1,$2,$3)',[newRef,prodUser,productionProject]), /conflict/);
+  // A separate reference simulates a fresh production tenant without claiming an existing link.
+  await db.exec('RESET ROLE');
+  await db.query('DELETE FROM myops_identity_links WHERE myops_user_ref=$1',[newRef]);
+  const tenantCount=(await db.query('SELECT count(*)::int n FROM businesses')).rows[0].n;
+  await db.exec('SET ROLE service_role');
+  assert.equal((await db.query('SELECT opsps_provision_myops_identity_v2($1,$2,$3) id',[newRef,prodUser,productionProject])).rows[0].id,prodUser);
+  assert.equal((await db.query('SELECT opsps_provision_myops_identity_v2($1,$2,$3) id',[newRef,prodUser,productionProject])).rows[0].id,prodUser);
+  await db.exec('RESET ROLE');
+  assert.equal((await db.query('SELECT count(*)::int n FROM businesses')).rows[0].n,tenantCount+1);
+  assert.equal((await db.query('SELECT count(*)::int n FROM profiles WHERE auth_user_id=$1',[newUser])).rows[0].n,1);
+  assert.equal((await db.query('SELECT count(*)::int n FROM orders')).rows[0].n,0);
+  console.log('PASS: production identity RPC, environment binding, browser denial, tenant preservation, idempotence');
   // Existing installations must be refused before any policy/schema changes.
   await assert.rejects(db.exec(freshSchema()), /requires an empty public schema/);
   await db.exec('ROLLBACK');

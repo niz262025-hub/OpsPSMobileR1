@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ensureVerifiedStagingIdentity, type IdentityStore } from '../supabase/functions/myops-app-access/provisioning';
+import { ensureVerifiedStagingIdentity, ensureVerifiedMyopsIdentity, validateMyopsAuthority, type IdentityStore } from '../supabase/functions/myops-app-access/provisioning';
 const project = 'https://ojamkplflqafedmxbdxb.supabase.co';
 function fixture() {
   let saved: Awaited<ReturnType<IdentityStore['getUser']>> = null;
@@ -40,5 +40,28 @@ describe('verified MYOPS first-launch identity', () => {
   });
   it('never accepts a database mapping to another local user',async()=>{
     const store=fixture();vi.mocked(store.provision).mockResolvedValue('other');await expect(ensureVerifiedStagingIdentity('A'.repeat(43),project,store)).rejects.toThrow('conflict');
+  });
+});
+
+const productionProject = 'https://wrsigjhhbkbomtkaqlpw.supabase.co';
+const stagingPortal = 'https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-nizam1.vercel.app';
+describe('production identity environment binding', () => {
+  it('creates separate deterministic identities for staging and production', async () => {
+    const staging = fixture(), production = fixture();
+    const stageId = await ensureVerifiedStagingIdentity('A'.repeat(43), project, staging);
+    const prodId = await ensureVerifiedMyopsIdentity('A'.repeat(43), productionProject, production, 'https://www.myops.com.my');
+    expect(prodId).not.toBe(stageId);
+    expect(await ensureVerifiedMyopsIdentity('A'.repeat(43), productionProject, production, 'https://www.myops.com.my')).toBe(prodId);
+    expect(production.createUser).toHaveBeenCalledOnce();
+  });
+  it.each([
+    [project, 'https://www.myops.com.my'], [productionProject, stagingPortal],
+    [productionProject, 'https://www.myops.com.my.evil.test'],
+    ['https://unknown.supabase.co', 'https://www.myops.com.my'],
+  ])('denies mixed or unknown authorities before touching Auth: %s %s', async (db, portal) => {
+    const store = fixture();
+    await expect(ensureVerifiedMyopsIdentity('A'.repeat(43), db, store, portal)).rejects.toThrow('unavailable');
+    expect(store.getUser).not.toHaveBeenCalled();
+    expect(() => validateMyopsAuthority(db, portal)).toThrow('unavailable');
   });
 });
