@@ -2843,85 +2843,13 @@ class SupabaseDataSource implements DataSource {
   shipments: ShippingRepository = {
     async create(input) {
       const client = getSupabaseClient();
-      if (!client) {
-        return null;
-      }
-
-      if (!(await hasMembership(client, input.businessId))) {
-        return null;
-      }
-
-      const { data: orderData, error: orderError } = await client
-        .from('orders')
-        .select('id, business_id, payment_status, order_status, request_status')
-        .eq('id', input.orderId)
-        .eq('business_id', input.businessId)
-        .maybeSingle();
-
-      if (orderError || !orderData) {
-        return null;
-      }
-
-      const paymentStatus = String((orderData as any).payment_status ?? '').toLowerCase();
-      const orderStatus = String((orderData as any).order_status ?? '').toLowerCase();
-      const requestStatus = String((orderData as any).request_status ?? '').toUpperCase();
-      const paymentApproved = ['success', 'paid', 'payment_received'].includes(paymentStatus) || requestStatus === 'PAYMENT_RECEIVED';
-      const isShipmentEligible = ['packing', 'ready', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(orderStatus);
-      if (!paymentApproved || !isShipmentEligible) {
-        return null;
-      }
-
-      const { data: existingShipment, error: existingError } = await client
-        .from('shipments')
-        .select('*')
-        .eq('order_id', input.orderId)
-        .eq('business_id', input.businessId)
-        .maybeSingle();
-
-      if (!existingError && existingShipment) {
-        return mapShipmentRow(existingShipment as any);
-      }
-
-      const shipmentPayload = {
-        business_id: input.businessId,
-        order_id: input.orderId,
-        courier: input.courier || 'J&T',
-        tracking_number: null,
-        shipment_id: null,
-        status: 'created',
-        recipient_name: input.recipientName ?? null,
-        recipient_phone: input.recipientPhone ?? null,
-        delivery_address: input.deliveryAddress ?? null,
-        postcode: input.postcode ?? null,
-        city: input.city ?? null,
-        state: input.state ?? null,
-        parcel_weight: input.parcelWeight ?? null,
-        quantity: input.quantity ?? 1,
-        parcel_type: input.parcelType ?? 'Parcel',
-        shipping_cost: input.shippingCost ?? 0,
-      };
-
-      const { data, error } = await client
-        .from('shipments')
-        .insert(shipmentPayload)
-        .select('*')
-        .single();
-
-      if (error || !data) {
-        return null;
-      }
-
-      await client
-        .from('orders')
-        .update({
-          order_status: 'shipped',
-          request_status: 'SHIPPED',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', input.orderId)
-        .eq('business_id', input.businessId);
-
-      return mapShipmentRow(data as any);
+      if (!client) return null;
+      const { data, error } = await client.rpc('opsps_dispatch_manual_order', {
+        p_business_id: input.businessId, p_order_id: input.orderId,
+        p_courier: input.courier, p_weight: input.parcelWeight,
+      });
+      if (error || !data) return null;
+      return mapShipmentRow(data);
     },
     async getForOrder(businessId: string, orderId: string) {
       const client = getSupabaseClient();

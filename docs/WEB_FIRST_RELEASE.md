@@ -356,3 +356,16 @@ Migration `reconcile_opsps_payment_verification` applied only to shared staging.
 Browser resubmitted the existing dummy proof: payment 20cb20b5-7100-44ea-99ed-86b8801dafc2 was submitted/unverified, then owner verification set paid/verified, order PAYMENT_RECEIVED and exactly one RM60 income with trip/order links. No actual money moved.
 
 Packing failed because order_items lacked an UPDATE policy; staging now permits founder/admin changes only to packed_quantity on paid packing orders, with immutable item scope and quantity bounds. Browser retest stored 2/2 packed. Mark Ready then exposed an existing client bug saving packing again; SECURITY INVOKER finish-packing RPC now checks all items under locks before ready. Local integration passes incomplete-order denial and correct ready transition; hosted final retest pending deployment. Shipping and stock effects remain untested.
+
+
+### Manual dispatch repair — 2026-11-01
+
+Hosted UAT exposed a shipped order with unchanged stock (5), no inventory movement and placeholder phone/address. UI showed generated internal IDs as tracking/AWB despite no courier booking. This is a confirmed failure, not a completed shipping test.
+
+Added SECURITY INVOKER `opsps_dispatch_manual_order`: active MYOPS founder/admin only, paid ready order, complete packing, recipient details from the order, locked variants, sufficient stock and atomic shipment/order/inventory changes. Repeated dispatch returns the existing record without a second stock deduction. Existing unbooked legacy created records can be completed without duplication. Recursive variant UPDATE policy now uses a scope-immutability trigger, retaining admin membership and session gates.
+
+UI now says Manual dispatch, shows real order contact details and unavailable tracking/AWB instead of inventing courier identifiers. No courier API, booking or charge is performed. Two repository unit tests now verify the server-RPC boundary and failure handling; server security/transaction behavior is tested against the fresh real SQL schema.
+
+Validation: 187 unit tests, typecheck, lint, web export and fresh/shared provisioning PASS. Payment/packing/dispatch SQL suite PASS including rollback when shipment insertion fails, repeat dispatch exactly-once stock, legacy record completion and unauthorized/expired/anonymous denials. Migration `atomic_opsps_manual_dispatch` applied to shared staging only. All public RLS remains enabled; security advisor counts unchanged (8 info, 7 legacy helper warnings, 1 existing leaked-password setting).
+
+Browser session was reset; hosted dispatch retest and financial-report UI validation remain pending central MYOPS login. Dummy stock remains 5 until that authorized UI action runs. Production untouched; do not mark OpsPS overall PASS or promote this draft PR yet.
