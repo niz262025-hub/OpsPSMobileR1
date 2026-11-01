@@ -4,6 +4,8 @@ import { freshSchema } from './fresh-schema.mjs';
 import { productionUpgrade } from './production-upgrade.mjs';
 import { log, error as logError } from 'node:console';
 import process from 'node:process';
+import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 const db = new PGlite();
 try {
   await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role BYPASSRLS;
@@ -17,6 +19,9 @@ try {
     CREATE SCHEMA supabase_migrations;CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]);
     INSERT INTO supabase_migrations.schema_migrations(version) VALUES('001'),('002'),('003'),('009'),('011');`);
   await db.exec(freshSchema().split('-- Source: 012_opsps_seller_verification.sql')[0]+'COMMIT;');
+  if (process.argv.includes('--existing-seller-verification')) {
+    await db.exec(readFileSync(new URL('../supabase/migrations/012_opsps_seller_verification.sql', import.meta.url),'utf8'));
+  }
   const user='10000000-0000-4000-8000-000000000001', business='20000000-0000-4000-8000-000000000001', order='40000000-0000-4000-8000-000000000001';
   await db.query('INSERT INTO auth.users(id) VALUES($1)',[user]);
   await db.query("INSERT INTO businesses(id,name) VALUES($1,'Existing company')",[business]);

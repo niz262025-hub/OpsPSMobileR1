@@ -14,6 +14,26 @@ export function productionUpgrade() {
   const migrations = pending.map(name => {
     const version = name.split('_')[0];
     let sql = readFileSync(`${directory}/${name}`, 'utf8');
+    if (name === '012_opsps_seller_verification.sql') {
+      // Production already contains seller verification without ledger entry 012.
+      // Accept only the reviewed check; reject incompatible constraint drift.
+      sql = sql.replace(/ALTER TABLE IF EXISTS public\.businesses\s+ADD CONSTRAINT businesses_seller_verification_status_check[\s\S]*?;/,
+        `DO $seller_check$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='public.businesses'::regclass AND conname='businesses_seller_verification_status_check') THEN
+            IF (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='public.businesses'::regclass AND conname='businesses_seller_verification_status_check') IS DISTINCT FROM
+              'CHECK ((seller_verification_status = ANY (ARRAY[''PENDING''::text, ''APPROVED''::text, ''REJECTED''::text])))' THEN
+              RAISE EXCEPTION 'Unexpected seller verification constraint';
+            END IF;
+          ELSE
+            ALTER TABLE public.businesses ADD CONSTRAINT businesses_seller_verification_status_check CHECK (seller_verification_status IN ('PENDING','APPROVED','REJECTED'));
+          END IF;
+        END $seller_check$;`);
+      // Recreate only these reviewed migration objects inside the transaction.
+      sql = sql.replace(/CREATE POLICY "([^"]+)"\s+ON public\.businesses/g,
+        (_, policy) => `DROP POLICY IF EXISTS "${policy}" ON public.businesses;\nCREATE POLICY "${policy}" ON public.businesses`);
+      sql = sql.replace('CREATE TRIGGER businesses_seller_verification_default_pending',
+        'DROP TRIGGER IF EXISTS businesses_seller_verification_default_pending ON public.businesses;\nCREATE TRIGGER businesses_seller_verification_default_pending');
+    }
     if (name === '016_opsps_direct_qr_payment.sql') sql = sql.replaceAll('o.customer_id = auth.uid()',
       'EXISTS (SELECT 1 FROM public.profiles customer_profile WHERE customer_profile.id = o.customer_profile_id AND customer_profile.auth_user_id = auth.uid())');
     sql = sql.replace(/CREATE (POLICY|TRIGGER) IF NOT EXISTS\b[\s\S]*?;/g, statement =>
