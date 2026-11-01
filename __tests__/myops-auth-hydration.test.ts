@@ -19,6 +19,17 @@ function setup(){
  return {node,Consumer,session};
 }
 describe('MYOPS launch hydration race',()=>{
+ it('keeps loading when INITIAL_SESSION is null while launch redemption is pending',async()=>{
+  const {node,Consumer}=setup();
+  await act(async()=>root!.render(React.createElement(AuthProvider,null,React.createElement(Consumer))));
+  await act(async()=>{m.callback('INITIAL_SESSION',null);});
+  expect(node.textContent).toBe('false:none');
+  await act(async()=>m.release());
+  expect(node.textContent).toBe('true:founder');
+  await act(async()=>{m.callback('SIGNED_OUT',null);});
+  expect(node.textContent).toBe('true:none');
+ });
+
  it('ignores the expired INITIAL_SESSION notification until verified launch has loaded its actual scope',async()=>{
   const {node,Consumer,session}=setup();await act(async()=>root!.render(React.createElement(AuthProvider,null,React.createElement(Consumer))));
   expect(node.textContent).toBe('false:none');

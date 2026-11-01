@@ -332,6 +332,10 @@ export function AuthProvider({
     const client = getSupabaseClient();
     if (client) {
       const { data: authListener } = client.auth.onAuthStateChange((event, nextSession) => {
+        // restoreAuth owns the initial session (including null) and verified ticket.
+        // A null notification can arrive before ticket redemption finishes; it is
+        // not a completed access check. Real SIGNED_OUT events still clear access.
+        if (event === 'INITIAL_SESSION') return;
         if (!nextSession) {
           setSession(null);
           setUser(null);
