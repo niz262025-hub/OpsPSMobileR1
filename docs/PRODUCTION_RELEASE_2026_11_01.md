@@ -39,3 +39,22 @@ OpsFlow production `dpl_2UYmjzLpEZu29MUgLeJ9zWsUckfj`, commit `c328691987c0607b8
 ## Staging deployment and security review
 
 The additive v2 migration was applied to staging `ojamkplflqafedmxbdxb` only. Edge Function `myops-app-access` version 13 is ACTIVE. SQL verified SECURITY INVOKER, no anon/authenticated EXECUTE, and service_role-only EXECUTE. Before/after security advisors showed the same existing notices: intentional deny-by-default RLS tables without browser policies, existing authenticated SECURITY DEFINER helper warnings, and leaked-password protection disabled. No new advisory finding was introduced. Remediation references: https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable and https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection . Review existing helper warnings separately; do not remove helpers needed by current RLS as an unrelated release change.
+
+## Windows setup without clipboard
+
+The connected tools cannot set Edge Function secrets. Browser creation of new credentials requires the owner to enter and submit them; the earlier browser clipboard handoff did not populate the form. Do not retry that clipboard or reuse its pending key. A CLI login requires its verification code in the owner's terminal; never send that code or a CLI token through chat.
+
+Run the following in Windows PowerShell on the owner's computer (Node.js/npm and Git required). The new local folder avoids altering any existing checkout; it does not create another hosted project, branch or database.
+
+```powershell
+git clone --single-branch --branch fix/web-first-provisioning https://github.com/niz262025-hub/OpsPSMobileR1.git OpsPS-SSO
+cd OpsPS-SSO
+npx.cmd --yes supabase@2.81.3 login
+node .\scripts\configure-production-sso.mjs
+```
+
+Complete Supabase CLI login in the browser/terminal on your own computer. The script uses that CLI login and sends five settings to the exact existing production project only. It generates a new Ed25519 key; never prints the private key or passes it as a process argument; writes its short-lived env file with owner-only permissions and removes it on success/failure. Windows invokes npm's JS launcher directly without shell interpolation. It retains only a public-key receipt (already ignored by the existing *.pem rule), refuses existing signing/staging configuration, and refuses an existing receipt instead of rotating a key blindly. If upload outcome is unknown, keep the public receipt and check metadata rather than rerunning.
+
+On PASS, send only the printed PUBLIC key (BEGIN PUBLIC KEY) or its public receipt for central app registration. Never send a PRIVATE KEY, CLI token, password or verification code. The operator script does not apply migrations, deploy code, alter entitlement or touch existing business rows.
+
+Validation of this helper uses a mock CLI only: exact project scope, actual Ed25519 signing/verification, private temp-file permissions and cleanup on both success/failure, retained public receipt, refusal to overwrite an existing signer and safe suppression of arbitrary CLI output. It has not been used to write production secrets yet.
