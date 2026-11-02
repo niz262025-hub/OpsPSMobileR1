@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ensureVerifiedStagingIdentity, ensureVerifiedMyopsIdentity, validateMyopsAuthority, type IdentityStore } from '../supabase/functions/myops-app-access/provisioning';
+import {centralCompanyLabels, ensureVerifiedStagingIdentity, ensureVerifiedMyopsIdentity, validateMyopsAuthority, type IdentityStore } from '../supabase/functions/myops-app-access/provisioning';
 const project = 'https://ojamkplflqafedmxbdxb.supabase.co';
+it('accepts central descriptive labels only, without authorizing client roles or company ids',()=>{
+ expect(centralCompanyLabels({display_name:' Owner ',company_name:' Company ',role:'admin',business_id:'forged'})).toEqual({name:'Owner',company:'Company'});
+ for(const value of [null,{},[],{display_name:'Owner',company_name:'x'.repeat(201)}])expect(()=>centralCompanyLabels(value)).toThrow();
+});
 function fixture() {
   let saved: Awaited<ReturnType<IdentityStore['getUser']>> = null;
   const store: IdentityStore = {

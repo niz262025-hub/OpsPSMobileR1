@@ -1,0 +1,64 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+import {URL} from 'node:url';
+import {log} from 'node:console';
+import assert from 'node:assert/strict';
+const db=new PGlite();
+const user='11111111-1111-4111-8111-111111111111',business='22222222-2222-4222-8222-222222222222';
+const session='33333333-3333-4333-8333-333333333333',trial='44444444-4444-4444-8444-444444444444';
+const scalar=async(sql,args=[]) => (await db.query(sql,args)).rows[0]?.value;
+const asUser=async()=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({session_id:session})]);await db.exec('set role authenticated');};
+try {
+ await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
+ create schema auth;create table auth.users(id uuid primary key);
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
+ grant usage on schema public,auth to authenticated,service_role;
+ create schema storage;create table storage.objects(id uuid,bucket_id text,owner uuid);alter table storage.objects enable row level security;
+ create function public.bootstrap_founder_business(text,text,text,text,text,text) returns uuid language sql as $$select gen_random_uuid()$$;`);
+ const tables=['businesses','profiles','business_memberships','trips','products','product_variants','orders','order_items','payments','shipments','inventory_movements','finance_transactions','subscriptions','admin_users','business_payment_profiles'];
+ for(const t of tables){
+  await db.exec(`create table public.${t}(id uuid primary key default gen_random_uuid(),business_id uuid,owner uuid,user_id uuid,auth_user_id uuid,role text,business_role text,full_name text,phone text,address text,updated_at timestamptz,order_id uuid,amount numeric not null default 0 check(amount>=0));
+   alter table public.${t} enable row level security;
+   create policy fixture_owner on public.${t} for all to authenticated using(owner=auth.uid()) with check(owner=auth.uid());
+   grant select,insert,update,delete on public.${t} to authenticated;`);
+ }
+ await db.exec(readFileSync(new URL('../supabase/migrations/017_opsps_myops_app_sessions.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261102082657_opsps_central_trial_enforcement.sql',import.meta.url),'utf8'));
+ await db.query('insert into auth.users values($1)',[user]);
+ await db.query('insert into businesses(id,business_id,owner) values($1,$1,$2)',[business,user]);
+ await db.query("insert into business_memberships(business_id,owner,user_id,role) values($1,$2,$2,'founder')",[business,user]);
+ await db.query("insert into profiles(business_id,owner,auth_user_id,role,business_role) values($1,$2,$2,'founder','founder')",[business,user]);
+ await db.query('insert into myops_identity_links(myops_user_ref,opsps_user_id) values($1,$2)',['u'.repeat(43),user]);
+ await db.query("insert into myops_app_sessions(myops_user_ref,opsps_user_id,myops_session_id,supabase_session_id,valid_until,access_mode,trial_id,trial_expires_at,trial_policy_version) values($1,$2,gen_random_uuid(),$3,now()+interval '1 hour','trial',$4,now()+interval '1 hour',1)",['u'.repeat(43),user,session,trial]);
+ await asUser();
+ const insert=(t,amount=0,order=null)=>scalar(`insert into public.${t}(business_id,owner,amount,order_id) values($1,$2,$3,$4) returning id as value`,[business,user,amount,order]);
+ const firstTrip=await insert('trips');await insert('trips');await assert.rejects(insert('trips'),/projects limit reached/);
+ await db.query('delete from trips where id=$1',[firstTrip]);await assert.rejects(insert('trips'),/projects limit reached/);
+ await assert.rejects(insert('orders',-1),/check constraint/);
+ await assert.rejects(db.query('select * from opsps_trial_usage'),/permission denied/);
+ await assert.rejects(db.query("insert into business_memberships(business_id,owner,user_id,role) values($1,$2,gen_random_uuid(),'admin')",[business,user]),/Multi-user/);
+ await assert.rejects(db.query("update profiles set role='admin' where auth_user_id=$1",[user]),/role changes/);
+ const firstOrder=await insert('orders',1);
+ await insert('finance_transactions',1,firstOrder);
+ for(let i=2;i<=29;i++)await insert('orders',1);
+ await insert('finance_transactions',1);
+ await assert.rejects(insert('orders',1),/transactions limit reached/);
+ // An order's financial details remain usable at the limit without double charging.
+ await insert('finance_transactions',1,firstOrder);
+ await assert.rejects(db.query('update orders set id=gen_random_uuid() where id=$1',[firstOrder]),/identity cannot be reassigned/);
+ await assert.rejects(db.query('update orders set business_id=gen_random_uuid() where id=$1',[firstOrder]),/Trial requires one user and one company|company cannot be reassigned/);
+ assert.equal(await scalar('select count(*)::int as value from orders'),29);
+ await db.exec('reset role');
+ assert.equal(await scalar("select count(*)::int as value from opsps_trial_usage where feature='projects'"),2);
+ assert.equal(await scalar("select count(*)::int as value from opsps_trial_usage where feature='transactions'"),30);
+ await db.exec("update myops_app_sessions set trial_expires_at=now()");await asUser();
+ assert.equal(await scalar('select public.myops_app_session_active() as value'),false);
+ await assert.rejects(insert('orders'),/expired/);
+ await db.exec("reset role;update myops_app_sessions set access_mode='paid',trial_id=null,trial_expires_at=null,trial_policy_version=null");await asUser();
+ await insert('trips');await insert('orders',1);
+ assert.equal(await scalar('select count(*)::int as value from orders'),30);
+ await db.exec('reset role');
+ assert.equal(await scalar("select count(*)::int as value from opsps_trial_usage where feature='transactions'"),30);
+ log('PASS: two projects; combined 30 primary order/manual-finance transactions; linked financial rows not double charged; rollback; delete/id/company bypass denial; multi-user/role denial; exact expiry; paid upgrade retains data and counters; browser counter denial');
+}finally{await db.close();}

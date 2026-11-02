@@ -4,6 +4,7 @@ import {Blob as NodeBlob, Buffer} from 'node:buffer';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {PDFDocument,PDFArray,decodePDFRawStream,type PDFRawStream} from 'pdf-lib';
 import {exportPdf} from '../services/reporting';
+vi.mock('../services/myopsFeatures',()=>({requireMyopsFeature:vi.fn().mockResolvedValue(undefined)}));
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
 describe('PDF financial report completeness',()=>{
  it('preserves the final financial fields of a long detail row',async()=>{

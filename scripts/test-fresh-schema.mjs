@@ -59,7 +59,7 @@ try {
   await db.query("INSERT INTO auth.users(id,email,email_confirmed_at,raw_app_meta_data) VALUES($1,'myops-fixture@opsps.invalid',now(),$2)", [newUser,JSON.stringify({identity_provider:'myops',myops_user_ref:newRef})]);
   await db.exec('SET ROLE authenticated');
   await assert.rejects(db.query('SELECT public.opsps_provision_myops_identity($1,$2)',[newRef,newUser]), /permission denied/);
-  await db.exec('RESET ROLE; SET ROLE service_role');
+  await db.exec("RESET ROLE; SELECT set_config('request.jwt.claim.sub','',false); SET ROLE service_role");
   await assert.rejects(db.query('SELECT public.opsps_provision_myops_identity($1,$2)', ['D'.repeat(43),newUser]), /Unverified/);
   assert.equal((await db.query('SELECT public.opsps_provision_myops_identity($1,$2) id',[newRef,newUser])).rows[0].id,newUser);
   assert.equal((await db.query('SELECT public.opsps_provision_myops_identity($1,$2) id',[newRef,newUser])).rows[0].id,newUser);
@@ -95,6 +95,19 @@ try {
   assert.equal((await db.query('SELECT count(*)::int n FROM profiles WHERE auth_user_id=$1',[newUser])).rows[0].n,1);
   assert.equal((await db.query('SELECT count(*)::int n FROM orders')).rows[0].n,0);
   console.log('PASS: production identity RPC, environment binding, browser denial, tenant preservation, idempotence');
+  const labelsRef='E'.repeat(43),labelsProject='https://ojamkplflqafedmxbdxb.supabase.co';
+  const labelBytes=createHash('sha256').update('opsps-myops:'+labelsProject+':'+labelsRef).digest();
+  labelBytes[6]=(labelBytes[6]&15)|80;labelBytes[8]=(labelBytes[8]&63)|128;
+  const labelHex=labelBytes.toString('hex');
+  const labelUser=`${labelHex.slice(0,8)}-${labelHex.slice(8,12)}-${labelHex.slice(12,16)}-${labelHex.slice(16,20)}-${labelHex.slice(20,32)}`;
+  await db.query('insert into auth.users(id) values($1)',[labelUser]);await db.exec('set role service_role');
+  await db.query('select opsps_provision_myops_identity_v3($1,$2,$3,$4,$5)',[labelsRef,labelUser,labelsProject,'Central Owner','Central Company']);
+  await db.query('select opsps_provision_myops_identity_v3($1,$2,$3,$4,$5)',[labelsRef,labelUser,labelsProject,'Changed Owner','Changed Company']);
+  assert.equal((await db.query('select b.name from businesses b join profiles p on p.business_id=b.id where p.auth_user_id=$1',[labelUser])).rows[0].name,'Central Company');
+  assert.equal((await db.query('select full_name from profiles where auth_user_id=$1',[labelUser])).rows[0].full_name,'Central Owner');
+  await assert.rejects(db.query('select opsps_provision_myops_identity_v3($1,$2,$3,$4,$5)',[labelsRef,labelUser,productionProject,'Owner','Company']),/staging company/);
+  await db.exec('reset role');
+  console.log('PASS: central descriptive company labels, retry preserves tenant names, staging-only v3');
   // Existing installations must be refused before any policy/schema changes.
   await assert.rejects(db.exec(freshSchema()), /requires an empty public schema/);
   await db.exec('ROLLBACK');
@@ -128,7 +141,7 @@ try {
     const beforeShared = await snapshot();
     await shared.exec(freshSchema({sharedOpsflowStaging:true}));
     assert.deepEqual(await snapshot(), beforeShared);
-    assert.equal((await shared.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='public'")).rows[0].n,23);
+    assert.equal((await shared.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='public'")).rows[0].n,25);
     assert.equal((await shared.query("SELECT has_table_privilege('anon','profiles','SELECT') allowed")).rows[0].allowed,false);
     await assert.rejects(shared.exec(freshSchema({sharedOpsflowStaging:true})), /verified OpsFlow-only staging schema/);
     await shared.exec('ROLLBACK');

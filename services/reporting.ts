@@ -1,4 +1,5 @@
 import { reportDate } from './reportDate';
+import {requireMyopsFeature} from './myopsFeatures';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib/dist/pdf-lib.esm.js';
 import * as XLSX from 'xlsx';
 
@@ -291,7 +292,8 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
   return { rows, summary: summarize(rows, type) };
 }
 
-export function exportExcel(type: ReportType, result: { rows: ReportRow[]; summary: ReportRow }, from: string, to: string) {
+export async function exportExcel(type: ReportType, result: { rows: ReportRow[]; summary: ReportRow }, from: string, to: string) {
+  await requireMyopsFeature('export');
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([result.summary]), `${title(type)} Summary`);
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(result.rows), `${title(type)} Details`);
@@ -300,6 +302,7 @@ export function exportExcel(type: ReportType, result: { rows: ReportRow[]; summa
 }
 
 export async function exportPdf(type: ReportType, result: { rows: ReportRow[]; summary: ReportRow }, from: string, to: string) {
+  await requireMyopsFeature('export');
   const pdf = await PDFDocument.create();
   let page = pdf.addPage([842, 595]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);

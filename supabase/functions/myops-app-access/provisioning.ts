@@ -2,6 +2,13 @@
 const STAGING_PROJECT = 'https://ojamkplflqafedmxbdxb.supabase.co';
 const PRODUCTION_PROJECT = 'https://wrsigjhhbkbomtkaqlpw.supabase.co';
 const STAGING_MYOPS = 'https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-nizam1.vercel.app';
+export function centralCompanyLabels(value:unknown):{name:string;company:string} {
+  const profile=value as Record<string,unknown>|null;
+  const name=typeof profile?.display_name==='string'?profile.display_name.trim():'';
+  const company=typeof profile?.company_name==='string'?profile.company_name.trim():'';
+  if(!name||name.length>100||!company||company.length>200)throw new Error('Complete your company profile in MYOPS.');
+  return {name,company};
+}
 
 export function validateMyopsAuthority(projectUrl: string, origin: string): void {
   if (!((projectUrl === STAGING_PROJECT && origin === STAGING_MYOPS)
