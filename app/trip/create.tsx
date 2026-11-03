@@ -31,6 +31,7 @@ export default function CreateTripScreen() {
     }
 
     const repo = getDataSource('production');
+    try {
     const created = await repo.trips.create({
       businessId,
       name,
@@ -45,6 +46,9 @@ export default function CreateTripScreen() {
     }
 
     router.replace('/(tabs)/trips');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Trip could not be created. Please try again.');
+    }
   };
 
   return (
