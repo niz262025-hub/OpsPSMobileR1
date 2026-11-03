@@ -13,6 +13,7 @@ export default function FinanceScreen() {
   const { business, membership } = useAuth();
   const { width } = useWindowDimensions();
   const [showExpense, setShowExpense] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -118,12 +119,13 @@ export default function FinanceScreen() {
   const cashBalance = transactions.filter((item) => item.payment_method === 'cash').reduce((total, item) => total + (item.type === 'income' ? Number(item.amount ?? 0) : -Number(item.amount ?? 0)), 0);
   const monthlyExpenses = transactions.filter((item) => Boolean(item.is_monthly_expense) || item.category === 'Monthly Expense');
 
-  const reset = () => { setName(''); setAmount(''); setCategory('Others'); setMethod('bank'); setNotes(''); setEditing(null); setShowExpense(false); };
+  const reset = () => { setSaveError(''); setName(''); setAmount(''); setCategory('Others'); setMethod('bank'); setNotes(''); setEditing(null); setShowExpense(false); };
   const saveExpense = async () => {
     if (!businessId || !name.trim() || !Number(amount)) {
       return;
     }
 
+    setSaveError('');
     const repo = getDataSource('production');
     const payload = {
       businessId,
@@ -134,18 +136,24 @@ export default function FinanceScreen() {
       category: 'Monthly Expense',
     };
 
+    try {
+    let saved;
     if (editing) {
-      await repo.finance.update(editing, businessId, {
+      saved = await repo.finance.update(editing, businessId, {
         ...payload,
         category: 'Monthly Expense',
         paymentMethod: method,
       });
     } else {
-      await repo.finance.create(payload);
+      saved = await repo.finance.create(payload);
     }
 
+    if (!saved) { setSaveError('Transaction could not be saved. Please try again.'); return; }
     reset();
     await refreshData();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Transaction could not be saved. Please try again.');
+    }
   };
 
   const editExpense = (id: string) => {
@@ -193,7 +201,7 @@ export default function FinanceScreen() {
     {transactions.slice(0, 10).map((item) => <View key={item.id} style={styles.transactionRow}><View style={styles.rowInfo}><Text style={styles.rowTitle}>{item.description}</Text><Text style={styles.rowMeta}>{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Today'} · {methodLabel(item.payment_method)}</Text></View><View><Text style={[styles.transactionAmount, { color: item.type === 'income' ? THEME.status.success : THEME.status.error }]}>{item.type === 'income' ? '+' : '-'} RM{Number(item.amount ?? 0).toFixed(2)}</Text><Text style={styles.typeText}>{item.type === 'income' ? 'Money In' : 'Money Out'}</Text></View></View>)}
     <Pressable style={styles.viewAll}><Text style={styles.viewAllText}>View All Transactions</Text></Pressable>
   </ScrollView>
-  <Modal visible={showExpense} transparent animationType="slide" onRequestClose={reset}><Pressable style={styles.backdrop} onPress={reset}><View style={styles.modal}><Text style={styles.modalTitle}>{editing ? 'Edit Monthly Expense' : 'Add Monthly Expense'}</Text><Field label="Expense Name" value={name} onChangeText={setName} placeholder="e.g. Rent" /><Field label="Amount" value={amount} onChangeText={setAmount} placeholder="0.00" numeric /><Field label="Category" value={category} onChangeText={setCategory} placeholder="e.g. Phone" /><Field label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional notes" /><Text style={styles.label}>Payment Method</Text><View style={styles.methodRow}>{(['bank', 'cash'] as FinancePaymentMethod[]).map((value) => <Pressable key={value} style={[styles.method, method === value && styles.methodActive]} onPress={() => setMethod(value)}><Text style={[styles.methodText, method === value && styles.methodTextActive]}>{value === 'bank' ? 'Bank' : 'Cash'}</Text></Pressable>)}</View><Pressable style={styles.saveButton} onPress={() => { void saveExpense(); }}><Text style={styles.saveText}>{editing ? 'Save Changes' : 'Add Expense'}</Text></Pressable></View></Pressable></Modal>
+  <Modal visible={showExpense} transparent animationType="slide" onRequestClose={reset}><Pressable style={styles.backdrop} onPress={reset}><View style={styles.modal}><Text style={styles.modalTitle}>{editing ? 'Edit Monthly Expense' : 'Add Monthly Expense'}</Text><Field label="Expense Name" value={name} onChangeText={setName} placeholder="e.g. Rent" /><Field label="Amount" value={amount} onChangeText={setAmount} placeholder="0.00" numeric /><Field label="Category" value={category} onChangeText={setCategory} placeholder="e.g. Phone" /><Field label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional notes" />{!!saveError && <Text accessibilityRole="alert" style={{ color: THEME.status.error, marginBottom: SPACING.md }}>{saveError}</Text>}<Text style={styles.label}>Payment Method</Text><View style={styles.methodRow}>{(['bank', 'cash'] as FinancePaymentMethod[]).map((value) => <Pressable key={value} style={[styles.method, method === value && styles.methodActive]} onPress={() => setMethod(value)}><Text style={[styles.methodText, method === value && styles.methodTextActive]}>{value === 'bank' ? 'Bank' : 'Cash'}</Text></Pressable>)}</View><Pressable style={styles.saveButton} onPress={() => { void saveExpense(); }}><Text style={styles.saveText}>{editing ? 'Save Changes' : 'Add Expense'}</Text></Pressable></View></Pressable></Modal>
   </SafeAreaView>;
 }
 function Field({ label, value, onChangeText, placeholder, numeric = false }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; numeric?: boolean }) { return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={THEME.text.light} keyboardType={numeric ? 'decimal-pad' : 'default'} style={styles.input} /></View>; }

@@ -1,3 +1,4 @@
+import { trialWriteMessage } from './trialWriteMessage';
 import { getSupabaseClient } from './supabaseClient';
 import {
   addFinanceTransaction,
@@ -1854,6 +1855,8 @@ class SupabaseDataSource implements DataSource {
         .select('*')
         .single();
 
+      const trialMessage = trialWriteMessage(error);
+      if (trialMessage) throw new Error(trialMessage);
       if (error || !data) {
         return null;
       }
@@ -2931,6 +2934,8 @@ class SupabaseDataSource implements DataSource {
         .select('*')
         .single();
 
+      const trialMessage = trialWriteMessage(error);
+      if (trialMessage) throw new Error(trialMessage);
       if (error || !data) {
         return null;
       }
