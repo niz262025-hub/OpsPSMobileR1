@@ -1280,99 +1280,16 @@ describe('phase 4a production repository', () => {
     expect(result).toBeNull();
   });
 
-  it('creates shipment records only for paid, business-scoped orders', async () => {
-    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
-      orders: [{
-        id: 'order-shipment-1',
-        business_id: 'biz-1',
-        trip_id: 'trip-1',
-        product_id: 'product-1',
-        customer_profile_id: 'profile-10',
-        customer_name: 'Zoey',
-        customer_phone: '0123456789',
-        delivery_address: 'Kuala Lumpur',
-        order_date: '2026-09-10T08:00:00.000Z',
-        subtotal: 25,
-        shipping_fee: 7,
-        total: 32,
-        payment_status: 'paid',
-        order_status: 'packing',
-        request_status: 'PACKING',
-        payment_option: 'bank',
-        payment_mode: 'bank',
-        availability_status: 'confirmed',
-      }],
-      orderItems: [{
-        id: 'order-item-ship',
-        business_id: 'biz-1',
-        order_id: 'order-shipment-1',
-        product_variant_id: 'variant-1',
-        quantity: 1,
-        packed_quantity: 1,
-      }],
-      shipments: [],
-    }) as any);
-
-    const repo = getDataSource('production');
-    const shipment = await repo.shipments.create({
-      businessId: 'biz-1',
-      orderId: 'order-shipment-1',
-      courier: 'J&T',
-      recipientName: 'Zoey',
-      recipientPhone: '0123456789',
-      deliveryAddress: 'Kuala Lumpur',
-      postcode: '50000',
-      city: 'Kuala Lumpur',
-      parcelWeight: 1.2,
-      quantity: 1,
-      parcelType: 'Parcel',
-      shippingCost: 7,
-    });
-
-    expect(shipment).not.toBeNull();
-    expect(shipment?.businessId).toBe('biz-1');
-    expect(shipment?.orderId).toBe('order-shipment-1');
-    expect(await repo.shipments.getForOrder('biz-1', 'order-shipment-1')).not.toBeNull();
-    expect(await repo.shipments.listForBusiness('biz-1')).toHaveLength(1);
+  it('delegates dispatch to the atomic server operation without trusting client recipient data', async () => {
+    const rpc=vi.fn().mockResolvedValue({data:{id:'shipment-1',business_id:'biz-1',order_id:'order-1',courier:'Pos Laju',status:'shipped',recipient_phone:'server-phone'},error:null});
+    vi.mocked(getSupabaseClient).mockReturnValue({rpc} as any);
+    const result=await getDataSource('production').shipments.create({businessId:'biz-1',orderId:'order-1',courier:'Pos Laju',parcelWeight:0.5,recipientPhone:'forged'});
+    expect(rpc).toHaveBeenCalledWith('opsps_dispatch_manual_order',{p_business_id:'biz-1',p_order_id:'order-1',p_courier:'Pos Laju',p_weight:0.5});
+    expect(result?.recipientPhone).toBe('server-phone');
   });
-
-  it('rejects shipment creation outside the authenticated business scope', async () => {
-    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
-      memberships: [{ business_id: 'biz-1', user_id: 'user-1', role: 'founder' }],
-      orders: [{
-        id: 'order-shipment-2',
-        business_id: 'biz-2',
-        trip_id: 'trip-2',
-        product_id: 'product-2',
-        customer_profile_id: 'profile-11',
-        customer_name: 'Mira',
-        customer_phone: '0123456788',
-        delivery_address: 'Penang',
-        order_date: '2026-09-10T08:00:00.000Z',
-        subtotal: 30,
-        shipping_fee: 9,
-        total: 39,
-        payment_status: 'paid',
-        order_status: 'packing',
-        request_status: 'PACKING',
-        payment_option: 'bank',
-        payment_mode: 'bank',
-        availability_status: 'confirmed',
-      }],
-      shipments: [],
-    }) as any);
-
-    const repo = getDataSource('production');
-    await expect(repo.shipments.create({
-      businessId: 'biz-1',
-      orderId: 'order-shipment-2',
-      courier: 'J&T',
-      recipientName: 'Mira',
-      deliveryAddress: 'Penang',
-      parcelWeight: 1,
-      quantity: 1,
-      shippingCost: 9,
-    })).resolves.toBeNull();
+  it('does not report success when server dispatch is denied', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue({rpc:vi.fn().mockResolvedValue({data:null,error:{message:'Denied'}})} as any);
+    expect(await getDataSource('production').shipments.create({businessId:'biz-1',orderId:'other-order',courier:'Pos Laju',parcelWeight:1})).toBeNull();
   });
 
   it('allows anonymous customer ordering for a published product with available stock', async () => {

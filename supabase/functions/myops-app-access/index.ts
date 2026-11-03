@@ -1,13 +1,20 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
+import { sendMyopsRequest } from './transport.ts';
+import {assertOpspsPremiumFeature,opspsAccessFromEntitlement,opspsSessionAccessFields,opspsTrialReady} from './trial-policy.ts';
+import { centralCompanyLabels,ensureVerifiedMyopsIdentity, validateMyopsAuthority } from './provisioning.ts';
+import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
 const VALID_FOR_MS = 20_000;
 const APP_ID = /^[a-z][a-z0-9_-]{1,31}$/;
 const USER_REF = /^[A-Za-z0-9_-]{43}$/;
+// This build contains the tested staging database adapters. Central MYOPS still
+// controls app admission; Production can never enable trials through this gate.
+const trialReady=()=>opspsTrialReady(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('OPSPS_TRIAL_ENFORCEMENT')??'true');
 
 type JsonRecord = Record<string, unknown>;
 type MyopsAppSession = {
+  onboarding_profile?: unknown;
   session_id: string;
   user_ref: string;
   product: string;
@@ -41,12 +48,6 @@ function asObject(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
 function base64UrlDecode(value: string): Uint8Array {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const binary = atob(normalized + '='.repeat((4 - normalized.length % 4) % 4));
@@ -78,6 +79,7 @@ function signingConfig() {
   ) {
     throw new Error('MYOPS access is not configured');
   }
+  validateMyopsAuthority(Deno.env.get('SUPABASE_URL') ?? '', parsedOrigin.origin);
   return { origin: parsedOrigin, appId, version, privateKey };
 }
 
@@ -135,7 +137,7 @@ async function signMyopsRequest(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8_000);
   try {
-    return await fetch(new URL(path, origin), {
+    return await sendMyopsRequest(origin.origin, path, {
       method: 'POST',
       cache: 'no-store',
       signal: controller.signal,
@@ -148,16 +150,10 @@ async function signMyopsRequest(
         'X-Myops-Signature': signature,
       },
       body: JSON.stringify(body),
-    });
+    }, { projectUrl: Deno.env.get('SUPABASE_URL') ?? '', shareToken: Deno.env.get('MYOPS_STAGING_SHARE_TOKEN') });
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-async function readMyopsJson(response: Response): Promise<JsonRecord> {
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok || !asObject(body)) throw new Error('MYOPS access check failed');
-  return body;
 }
 
 async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Response> {
@@ -172,23 +168,46 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     return json(403, { error: 'MYOPS access denied' }, headers);
   }
 
+  // Fresh central admission before provisioning or issuing a local session.
+  const checked=await readMyopsJson(await signMyopsRequest('/api/app/entitlement',{
+    session_id:redeemed.session_id,product:PRODUCT,activity:true,sensitive:true,
+  }));
+  const access=opspsAccessFromEntitlement(checked,trialReady());
   const { admin, auth } = makeClients();
   const linkResult = await admin.from('myops_identity_links')
     .select('opsps_user_id')
     .eq('myops_user_ref', redeemed.user_ref)
     .maybeSingle();
-  if (linkResult.error || !linkResult.data?.opsps_user_id) {
-    return json(403, { error: 'OpsPS account is not linked to MYOPS' }, headers);
-  }
+  if (linkResult.error) throw new Error('Unable to check OpsPS identity');
+  const opspsUserId = linkResult.data?.opsps_user_id ?? await ensureVerifiedMyopsIdentity(
+    redeemed.user_ref, Deno.env.get('SUPABASE_URL') ?? '', {
+      async getUser(id) {
+        const result = await admin.auth.admin.getUserById(id);
+        if (result.error && result.error.status !== 404) throw new Error('Unable to check OpsPS identity');
+        return result.data.user;
+      },
+      async createUser(input) {
+        const result = await admin.auth.admin.createUser(input);
+        if (result.error) throw new Error('Unable to provision OpsPS identity');
+        return result.data.user;
+      },
+      async provision(userRef, userId) {
+        const labels=trialReady()?centralCompanyLabels(redeemed.onboarding_profile):null;
+        const result = await admin.rpc(labels?'opsps_provision_myops_identity_v3':'opsps_provision_myops_identity_v2', { p_user_ref: userRef, p_user_id: userId, p_project_url: Deno.env.get('SUPABASE_URL') ?? '',
+          ...(labels?{p_display_name:labels.name,p_company_name:labels.company}:{}) });
+        if (result.error || typeof result.data !== 'string') throw new Error('Unable to provision OpsPS tenant');
+        return result.data;
+      },
+    }, signingConfig().origin.origin);
 
-  const userResult = await admin.auth.admin.getUserById(linkResult.data.opsps_user_id);
+  const userResult = await admin.auth.admin.getUserById(opspsUserId);
   const email = userResult.data.user?.email;
   if (userResult.error || !email || !userResult.data.user?.email_confirmed_at) {
     return json(403, { error: 'Linked OpsPS account is unavailable' }, headers);
   }
   const profile = await admin.from('profiles')
     .select('id')
-    .eq('auth_user_id', linkResult.data.opsps_user_id)
+    .eq('auth_user_id', opspsUserId)
     .maybeSingle();
   if (profile.error || !profile.data) {
     return json(403, { error: 'Linked OpsPS account is not provisioned' }, headers);
@@ -199,7 +218,7 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
   if (link.error || !tokenHash) throw new Error('Unable to create OpsPS session');
   const verified = await auth.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
   const session = verified.data.session;
-  if (verified.error || !session || verified.data.user?.id !== linkResult.data.opsps_user_id) {
+  if (verified.error || !session || verified.data.user?.id !== opspsUserId) {
     throw new Error('Unable to create OpsPS session');
   }
 
@@ -208,10 +227,11 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
   const validUntil = new Date(Date.now() + VALID_FOR_MS).toISOString();
   const stored = await admin.from('myops_app_sessions').insert({
     myops_user_ref: redeemed.user_ref,
-    opsps_user_id: linkResult.data.opsps_user_id,
+    opsps_user_id: opspsUserId,
     myops_session_id: redeemed.session_id,
     supabase_session_id: supabaseSessionId,
     valid_until: validUntil,
+    ...opspsSessionAccessFields(access,trialReady()),
   });
   if (stored.error) throw new Error('Unable to bind OpsPS session');
 
@@ -262,19 +282,21 @@ async function refreshEntitlement(request: Request, sensitive: boolean, activity
   } catch {
     return json(503, { error: 'MYOPS access could not be verified' }, headers);
   }
-  if (checked.entitled !== true || checked.session_active !== true) {
+  let access;
+  try {access=opspsAccessFromEntitlement(checked,trialReady());} catch {
     await current.admin.from('myops_app_sessions')
       .update({ revoked_at: new Date().toISOString(), valid_until: new Date().toISOString() })
       .eq('id', current.session.id);
     return json(403, { error: 'MYOPS access is not active' }, headers);
   }
-  const validUntil = new Date(Date.now() + VALID_FOR_MS).toISOString();
+  const validUntil = new Date(Math.min(Date.now() + VALID_FOR_MS,access.mode==='trial'?Date.parse(access.expiresAt):Infinity)).toISOString();
   const updated = await current.admin.from('myops_app_sessions')
-    .update({ valid_until: validUntil, updated_at: new Date().toISOString() })
+    .update({ valid_until: validUntil, updated_at: new Date().toISOString(),...opspsSessionAccessFields(access,trialReady()) })
     .eq('id', current.session.id)
     .is('revoked_at', null);
   if (updated.error) return json(503, { error: 'MYOPS access could not be stored' }, headers);
-  return json(200, { entitled: true, valid_until: validUntil }, headers);
+  return json(200, { entitled: true, valid_until: validUntil,access_mode:access.mode,
+    ...(access.mode==='trial'?{trial:{id:access.trialId,expires_at:access.expiresAt,policy_version:1}}:{}) }, headers);
 }
 
 async function endSession(request: Request, headers: HeadersInit): Promise<Response> {
@@ -286,6 +308,16 @@ async function endSession(request: Request, headers: HeadersInit): Promise<Respo
     .eq('id', current.session.id);
   if (result.error) return json(503, { error: 'Unable to end OpsPS session' }, headers);
   return json(200, { signed_out: true }, headers);
+}
+
+async function checkPremiumFeature(request:Request,feature:string,headers:HeadersInit):Promise<Response> {
+  const refreshed=await refreshEntitlement(request,true,true,headers);
+  if(!refreshed.ok)return refreshed;
+  const checked=await refreshed.json();
+  // Only the fresh signed central response can authorize premium operations.
+  if(checked.access_mode!=='paid')return json(403,{error:'Upgrade in MYOPS to use this feature.',code:'premium_required'},headers);
+  assertOpspsPremiumFeature({mode:'paid'},feature);
+  return json(200,{entitled:true,allowed:true,feature,access_mode:'paid'},headers);
 }
 
 Deno.serve(async (request) => {
@@ -313,6 +345,18 @@ Deno.serve(async (request) => {
   }
 
   try {
+    if(body.action==='staging_status'&&Object.keys(body).length===1) {
+      if(Deno.env.get('SUPABASE_URL')!=='https://ojamkplflqafedmxbdxb.supabase.co')return json(404,{error:'Not found'},headers);
+      try {
+        const probe=await readMyopsJson(await signMyopsRequest('/api/app/entitlement',{session_id:crypto.randomUUID(),product:PRODUCT,activity:false}));
+        const ready=probe.entitled===false&&probe.session_active===false;
+        return json(ready?200:503,{ready,signed_transport:ready?'verified':'unavailable',unknown_session:ready?'denied':'unverified'},headers);
+      }catch(error){
+        const message=error instanceof Error?error.message:'';
+        const reason=['Staging access unavailable','Invalid staging redirect','Staging redirect rejected'].includes(message)?'deployment_protection':message==='MYOPS access is not configured'?'configuration':'transport_unavailable';
+        return json(503,{ready:false,reason},headers);
+      }
+    }
     if (body.action === 'redeem') {
       if (Object.keys(body).length !== 2 || !Object.hasOwn(body, 'ticket')) {
         return json(400, { error: 'Invalid request' }, headers);
@@ -327,11 +371,18 @@ Deno.serve(async (request) => {
       }
       return await refreshEntitlement(request, body.sensitive === true, body.activity === true, headers);
     }
+    if(body.action==='feature') {
+      if(Object.keys(body).length!==2||typeof body.feature!=='string'||!['advanced_reporting','export','multi_user'].includes(body.feature))return json(400,{error:'Invalid feature request'},headers);
+      return await checkPremiumFeature(request,body.feature,headers);
+    }
     if (body.action === 'logout' && Object.keys(body).length === 1) {
       return await endSession(request, headers);
     }
     return json(400, { error: 'Invalid request' }, headers);
-  } catch {
+  } catch (error) {
+    const known = ['Staging transport is restricted', 'Invalid staging redirect', 'Staging redirect rejected', 'Staging access unavailable', 'MYOPS access check failed', 'MYOPS access is not configured', 'MYOPS signed transport failed'];
+    const kind = error instanceof Error ? (known.includes(error.message) ? error.message : error.name) : 'UnknownError';
+    console.warn('opsps_app_access_failure', kind);
     return json(503, { error: 'MYOPS access is unavailable' }, headers);
   }
 });
