@@ -111,7 +111,7 @@ export default function AdminDashboardScreen() {
             <Text style={styles.title}>Platform overview</Text>
           </View>
           <Pressable style={styles.secondary} onPress={async () => { await logout(); }}>
-            <Text style={styles.secondaryText}>Log out</Text>
+            <Text style={styles.secondaryText}>Kembali ke MYOPS</Text>
           </Pressable>
         </View>
 

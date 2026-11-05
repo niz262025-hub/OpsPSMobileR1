@@ -45,7 +45,7 @@ export default function CustomerHomeScreen() {
               <Text style={styles.title}>Welcome, {currentUser?.name ?? 'Customer'}</Text>
             </View>
             <Pressable style={styles.logout} onPress={async () => { await logout(); }}>
-              <Text style={styles.logoutText}>Log out</Text>
+              <Text style={styles.logoutText}>Kembali ke MYOPS</Text>
             </Pressable>
           </View>
 
