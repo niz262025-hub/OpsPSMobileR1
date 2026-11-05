@@ -30,7 +30,7 @@ const isReasonableMalaysianPhone = (value: string) => {
 
 export default function ProductDetailScreen() {
   const { id, businessId } = useLocalSearchParams<{ id?: string; businessId?: string }>();
-  const { membership, business, profile, user } = useAuth();
+  const { membership, business, profile, user, ready } = useAuth();
   const routeBusinessId = typeof businessId === 'string' && businessId.trim() ? businessId.trim() : undefined;
   const resolvedBusinessId = routeBusinessId ?? membership?.business_id ?? business?.id ?? undefined;
 
@@ -47,6 +47,7 @@ export default function ProductDetailScreen() {
   const [requestStatus, setRequestStatus] = useState<string>('PENDING_AVAILABILITY');
 
   useEffect(() => {
+    if (!ready) return;
     let active = true;
     setDetailLoading(true);
     setProduct(null);
@@ -88,7 +89,7 @@ export default function ProductDetailScreen() {
     return () => {
       active = false;
     };
-  }, [id, resolvedBusinessId]);
+  }, [id, resolvedBusinessId, ready]);
 
   const activeVariant = useMemo(
     () => variants.find((variant) => variant.size === selectedSize) ?? variants[0] ?? null,
@@ -150,7 +151,7 @@ export default function ProductDetailScreen() {
     setFormError('');
   };
 
-  if (detailLoading) {
+  if (!ready || detailLoading) {
     return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading product…</Text></View></SafeAreaView>;
   }
 
