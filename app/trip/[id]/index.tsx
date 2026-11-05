@@ -55,7 +55,7 @@ function createTripExpenseDraft(): TripExpenseDraft {
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
-  const { membership, business } = useAuth();
+  const { membership, business, ready } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [detailLoading, setDetailLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('products');
@@ -79,6 +79,7 @@ export default function TripDetailScreen() {
   ]);
 
   useEffect(() => {
+    if (!ready) return;
     let active = true;
     setDetailLoading(true);
     setTrip(null);
@@ -178,7 +179,7 @@ export default function TripDetailScreen() {
     return () => {
       active = false;
     };
-  }, [businessId, id]);
+  }, [businessId, id, ready]);
 
   useEffect(() => {
     let active = true;
@@ -372,7 +373,7 @@ export default function TripDetailScreen() {
     setExpenseError('');
   };
 
-  if (detailLoading) {
+  if (!ready || detailLoading) {
     return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading trip…</Text></View></SafeAreaView>;
   }
 
