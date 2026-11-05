@@ -10,7 +10,7 @@ import OrderPaymentPanel from '../../../components/OrderPaymentPanel';
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { user, profile, membership, business, role } = useAuth();
+  const { user, profile, membership, business, role, ready } = useAuth();
   const [detailLoading, setDetailLoading] = useState(true);
   const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; orderStatus?: string; availabilityStatus?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
   const [items, setItems] = useState<Array<{ id: string; quantity: number; productVariantId: string }>>([]);
@@ -19,6 +19,7 @@ export default function OrderDetailScreen() {
   const [packingBusy,setPackingBusy]=useState(false),[actionError,setActionError]=useState('');
 
   useEffect(() => {
+    if (!ready) return;
     let active = true;
     setDetailLoading(true);
     setOrder(null);
@@ -81,9 +82,9 @@ export default function OrderDetailScreen() {
     return () => {
       active = false;
     };
-  }, [business?.id, id, membership?.business_id, profile?.id, role, user?.id, revision]);
+  }, [business?.id, id, membership?.business_id, profile?.id, role, user?.id, revision, ready]);
 
-  if (detailLoading) {
+  if (!ready || detailLoading) {
     return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading order…</Text></View></SafeAreaView>;
   }
 
