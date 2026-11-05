@@ -11,6 +11,7 @@ import OrderPaymentPanel from '../../../components/OrderPaymentPanel';
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { user, profile, membership, business, role } = useAuth();
+  const [detailLoading, setDetailLoading] = useState(true);
   const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; orderStatus?: string; availabilityStatus?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
   const [items, setItems] = useState<Array<{ id: string; quantity: number; productVariantId: string }>>([]);
   const [productName, setProductName] = useState('Product');
@@ -19,6 +20,8 @@ export default function OrderDetailScreen() {
 
   useEffect(() => {
     let active = true;
+    setDetailLoading(true);
+    setOrder(null);
 
     const load = async () => {
       if (!id) {
@@ -74,11 +77,15 @@ export default function OrderDetailScreen() {
       }
     };
 
-    void load();
+    void load().finally(() => { if (active) setDetailLoading(false); });
     return () => {
       active = false;
     };
   }, [business?.id, id, membership?.business_id, profile?.id, role, user?.id, revision]);
+
+  if (detailLoading) {
+    return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading order…</Text></View></SafeAreaView>;
+  }
 
   if (!order) {
     return (
