@@ -47,3 +47,22 @@ export function readSessionIdFromJwt(token: string): string | null {
     return null;
   }
 }
+
+// WebCrypto sign() returns ArrayBuffer; nonces are Uint8Array.
+export function base64UrlEncode(value: Uint8Array | ArrayBuffer): string {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+// A central denial is a valid response, not a transport outage. Callers still
+// require an authorized ticket or entitled=true AND session_active=true.
+export async function readMyopsJson(response: Response): Promise<Record<string, unknown>> {
+  const body: unknown = await response.json().catch(() => null);
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+    || (!response.ok && ![401, 403].includes(response.status))) {
+    throw new Error('MYOPS access check failed');
+  }
+  return body as Record<string, unknown>;
+}

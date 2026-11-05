@@ -21,6 +21,7 @@ function getDashboardOrderStatusLabel(order: { requestStatus?: string; orderStat
     PAYMENT_REQUIRED: 'Pending to Pay',
     PAYMENT_RECEIVED: 'Pending to Pack',
     PACKING: 'Pending to Ship',
+    READY_TO_SHIP: 'Ready to ship',
     SHIPPED: 'Pending to Deliver',
     DELIVERED: 'Delivered',
     PAID: 'Delivered',

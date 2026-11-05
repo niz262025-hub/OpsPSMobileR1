@@ -12,10 +12,11 @@ import {
   type SellerVerificationStatus,
 } from '../services/adminFoundation';
 import { getSupabaseClient } from '../services/supabaseClient';
+import { logoutToMyops } from '../services/myopsNavigation';
+import { verifiedIdentityRole } from '../services/myopsIdentity';
 import { getSupabaseAuthRedirectUrl } from '../services/supabaseSchema';
 import {
   clearMyopsLaunchTicketFromUrl,
-  endMyopsAppSession,
   extractMyopsLaunchTicket,
   refreshMyopsEntitlement,
   redeemMyopsLaunchTicket,
@@ -232,7 +233,7 @@ export function AuthProvider({
       businessRow = businessData ?? null;
     }
 
-    const normalizedRole = (profileData?.role as UserRole) || (membershipRow?.role as UserRole) || 'customer';
+    const normalizedRole = verifiedIdentityRole(authUser.id, profileData, membershipRow, businessRow);
     const normalizedUser: AuthAccount = {
       email: authUser.email ?? '',
       password: '',
@@ -330,7 +331,11 @@ export function AuthProvider({
 
     const client = getSupabaseClient();
     if (client) {
-      const { data: authListener } = client.auth.onAuthStateChange(async (_event, nextSession) => {
+      const { data: authListener } = client.auth.onAuthStateChange((event, nextSession) => {
+        // restoreAuth owns the initial session (including null) and verified ticket.
+        // A null notification can arrive before ticket redemption finishes; it is
+        // not a completed access check. Real SIGNED_OUT events still clear access.
+        if (event === 'INITIAL_SESSION') return;
         if (!nextSession) {
           setSession(null);
           setUser(null);
@@ -343,8 +348,12 @@ export function AuthProvider({
           return;
         }
 
-        await applySupabaseSession(nextSession);
-        setReady(true);
+        // restoreAuth / verified launch own identity hydration. Auth notifications
+        // may arrive with an expired previous session before the new ticket is redeemed.
+        // Never query Supabase from its synchronous auth callback or invent a role.
+        if (event === 'TOKEN_REFRESHED') {
+          setSession(current => current?.user.id === nextSession.user.id ? nextSession : current);
+        }
       });
 
       const linkListener = Linking.addEventListener('url', async ({ url }) => {
@@ -415,23 +424,15 @@ export function AuthProvider({
    * Logout.
    */
   const logout = async (): Promise<void> => {
-    const client = getSupabaseClient();
-
-    if (client) {
-      try {
-        await endMyopsAppSession(client);
-      } finally {
-        await client.auth.signOut();
-      }
-    }
-
-    setCurrentUser(null);
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setBusiness(null);
-    setMembership(null);
-    setRole(null);
+    await logoutToMyops(getSupabaseClient(), () => {
+      setCurrentUser(null);
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setBusiness(null);
+      setMembership(null);
+      setRole(null);
+    });
   };
 
   return (

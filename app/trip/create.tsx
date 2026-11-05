@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar } from 'lucide-react-native';
 
 import { useAuth } from '../../context/AuthContext';
 import { getDataSource } from '../../services/repository';
+import { calendarDateForPicker, isCalendarDate, localCalendarDate } from '../../services/calendarDate';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 export default function CreateTripScreen() {
@@ -13,13 +14,13 @@ export default function CreateTripScreen() {
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [name, setName] = useState('');
   const [destination, setDestination] = useState('');
-  const [tripDate, setTripDate] = useState(new Date());
+  const [tripDate, setTripDate] = useState(() => localCalendarDate(new Date()));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
   const submit = async () => {
-    if (!name.trim() || !destination.trim()) {
+    if (!name.trim() || !destination.trim() || !isCalendarDate(tripDate)) {
       setError('Please complete the trip name, destination and date.');
       return;
     }
@@ -30,11 +31,12 @@ export default function CreateTripScreen() {
     }
 
     const repo = getDataSource('production');
+    try {
     const created = await repo.trips.create({
       businessId,
       name,
       destination,
-      tripDate: tripDate.toISOString().slice(0, 10),
+      tripDate,
       notes,
     });
 
@@ -44,6 +46,9 @@ export default function CreateTripScreen() {
     }
 
     router.replace('/(tabs)/trips');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Trip could not be created. Please try again.');
+    }
   };
 
   return (
@@ -71,18 +76,23 @@ export default function CreateTripScreen() {
             <Field label="Trip Name" value={name} onChangeText={setName} placeholder="e.g. Bangkok Shopping" />
             <Field label="Shopping Destination / Mall / Event" value={destination} onChangeText={setDestination} placeholder="e.g. ION Orchard" />
             <Text style={styles.label}>Trip Date</Text>
-            <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-              <Text style={styles.dateText}>{tripDate.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-              <Calendar size={19} color={THEME.primary} />
-            </Pressable>
-            {showDatePicker && (
+            {Platform.OS === 'web' ? (
+              <input type="date" aria-label="Trip Date" value={tripDate} onChange={event => setTripDate(event.target.value)} onInput={event => setTripDate(event.currentTarget.value)}
+                style={{ width: '100%', boxSizing: 'border-box', padding: 14, marginBottom: 16, borderRadius: 10, border: `1px solid ${THEME.border}`, color: THEME.text.primary, backgroundColor: '#FCFCFD', font: 'inherit' }} />
+            ) : (
+              <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
+                <Text style={styles.dateText}>{calendarDateForPicker(tripDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                <Calendar size={19} color={THEME.primary} />
+              </Pressable>
+            )}
+            {Platform.OS !== 'web' && showDatePicker && (
               <DateTimePicker
-                value={tripDate}
+                value={calendarDateForPicker(tripDate)}
                 mode="date"
                 display="default"
                 onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
                   setShowDatePicker(false);
-                  if (event.type === 'set' && selectedDate) setTripDate(selectedDate);
+                  if (event.type === 'set' && selectedDate) setTripDate(localCalendarDate(selectedDate));
                 }}
               />
             )}

@@ -1,3 +1,4 @@
+import { trialWriteMessage } from './trialWriteMessage';
 import { getSupabaseClient } from './supabaseClient';
 import {
   addFinanceTransaction,
@@ -980,7 +981,7 @@ class MockDataSource implements DataSource {
       if (!items.length || items.some((item) => (item.packedQuantity ?? 0) < item.quantity)) {
         return null;
       }
-      const updated: Order = { ...order, status: 'packing', requestStatus: 'PACKING', packedAt: new Date().toISOString() };
+      const updated: Order = { ...order, status: 'ready', requestStatus: 'READY_TO_SHIP', packedAt: new Date().toISOString() };
       snapshot.orders = snapshot.orders.map((entry) => entry.id === orderId ? updated : entry);
       return {
         id: updated.id,
@@ -1854,6 +1855,8 @@ class SupabaseDataSource implements DataSource {
         .select('*')
         .single();
 
+      const trialMessage = trialWriteMessage(error);
+      if (trialMessage) throw new Error(trialMessage);
       if (error || !data) {
         return null;
       }
@@ -2649,56 +2652,10 @@ class SupabaseDataSource implements DataSource {
     },
     async markOrderPacked(businessId: string, orderId: string) {
       const client = getSupabaseClient();
-      if (!client) {
-        return null;
-      }
-
-      if (!(await hasMembership(client, businessId))) {
-        return null;
-      }
-
-      const { data: orderData, error: orderError } = await client
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .eq('business_id', businessId)
-        .maybeSingle();
-
-      if (orderError || !orderData) {
-        return null;
-      }
-
-      const { data: items, error: itemsError } = await client
-        .from('order_items')
-        .select('*')
-        .eq('order_id', orderId)
-        .eq('business_id', businessId);
-
-      if (itemsError || !items || items.length === 0) {
-        return null;
-      }
-
-      const allPacked = (items as any[]).every((item) => Number(item.packed_quantity ?? 0) >= Number(item.quantity ?? 0));
-      if (!allPacked) {
-        return null;
-      }
-
-      const { data: updated, error: updateError } = await client
-        .from('orders')
-        .update({
-          order_status: 'packing',
-          request_status: 'PACKING',
-        })
-        .eq('id', orderId)
-        .eq('business_id', businessId)
-        .select('*')
-        .single();
-
-      if (updateError || !updated) {
-        return null;
-      }
-
-      return mapOrderRow(updated as any);
+      if (!client) return null;
+      const { data, error } = await client.rpc('opsps_finish_packing', { p_business_id: businessId, p_order_id: orderId });
+      if (error || !data) return null;
+      return mapOrderRow(data);
     },
     async create(input) {
       const client = getSupabaseClient();
@@ -2889,85 +2846,13 @@ class SupabaseDataSource implements DataSource {
   shipments: ShippingRepository = {
     async create(input) {
       const client = getSupabaseClient();
-      if (!client) {
-        return null;
-      }
-
-      if (!(await hasMembership(client, input.businessId))) {
-        return null;
-      }
-
-      const { data: orderData, error: orderError } = await client
-        .from('orders')
-        .select('id, business_id, payment_status, order_status, request_status')
-        .eq('id', input.orderId)
-        .eq('business_id', input.businessId)
-        .maybeSingle();
-
-      if (orderError || !orderData) {
-        return null;
-      }
-
-      const paymentStatus = String((orderData as any).payment_status ?? '').toLowerCase();
-      const orderStatus = String((orderData as any).order_status ?? '').toLowerCase();
-      const requestStatus = String((orderData as any).request_status ?? '').toUpperCase();
-      const paymentApproved = ['success', 'paid', 'payment_received'].includes(paymentStatus) || requestStatus === 'PAYMENT_RECEIVED';
-      const isShipmentEligible = ['packing', 'ready', 'shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(orderStatus);
-      if (!paymentApproved || !isShipmentEligible) {
-        return null;
-      }
-
-      const { data: existingShipment, error: existingError } = await client
-        .from('shipments')
-        .select('*')
-        .eq('order_id', input.orderId)
-        .eq('business_id', input.businessId)
-        .maybeSingle();
-
-      if (!existingError && existingShipment) {
-        return mapShipmentRow(existingShipment as any);
-      }
-
-      const shipmentPayload = {
-        business_id: input.businessId,
-        order_id: input.orderId,
-        courier: input.courier || 'J&T',
-        tracking_number: null,
-        shipment_id: null,
-        status: 'created',
-        recipient_name: input.recipientName ?? null,
-        recipient_phone: input.recipientPhone ?? null,
-        delivery_address: input.deliveryAddress ?? null,
-        postcode: input.postcode ?? null,
-        city: input.city ?? null,
-        state: input.state ?? null,
-        parcel_weight: input.parcelWeight ?? null,
-        quantity: input.quantity ?? 1,
-        parcel_type: input.parcelType ?? 'Parcel',
-        shipping_cost: input.shippingCost ?? 0,
-      };
-
-      const { data, error } = await client
-        .from('shipments')
-        .insert(shipmentPayload)
-        .select('*')
-        .single();
-
-      if (error || !data) {
-        return null;
-      }
-
-      await client
-        .from('orders')
-        .update({
-          order_status: 'shipped',
-          request_status: 'SHIPPED',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', input.orderId)
-        .eq('business_id', input.businessId);
-
-      return mapShipmentRow(data as any);
+      if (!client) return null;
+      const { data, error } = await client.rpc('opsps_dispatch_manual_order', {
+        p_business_id: input.businessId, p_order_id: input.orderId,
+        p_courier: input.courier, p_weight: input.parcelWeight,
+      });
+      if (error || !data) return null;
+      return mapShipmentRow(data);
     },
     async getForOrder(businessId: string, orderId: string) {
       const client = getSupabaseClient();
@@ -3049,6 +2934,8 @@ class SupabaseDataSource implements DataSource {
         .select('*')
         .single();
 
+      const trialMessage = trialWriteMessage(error);
+      if (trialMessage) throw new Error(trialMessage);
       if (error || !data) {
         return null;
       }
@@ -3131,7 +3018,7 @@ class SupabaseDataSource implements DataSource {
           moneyOut += amount;
         }
         const category = String(row.category ?? '').toLowerCase();
-        if (row.type === 'expense' && (category.includes('cogs') || category.includes('product cost') || category.includes('purchase') || category.includes('trip expense') || category.includes('cost'))) {
+        if (row.type === 'expense' && (category.includes('cogs') || category.includes('product cost') || category.includes('purchase') || category.includes('cost'))) {
           costOfGoods += amount;
         }
       }
@@ -3144,7 +3031,7 @@ class SupabaseDataSource implements DataSource {
         moneyIn,
         moneyOut,
         outstandingRevenue: Math.max(0, salesRevenue - moneyIn),
-        netProfit: salesRevenue - costOfGoods - moneyOut,
+        netProfit: salesRevenue - moneyOut,
       };
     },
   };
@@ -3162,7 +3049,7 @@ class SupabaseDataSource implements DataSource {
 
       const orderQuery = await client
         .from('orders')
-        .select('id, business_id, total, payment_status, customer_id, customer_profile_id')
+        .select('id, business_id, total, payment_status, customer_profile_id')
         .eq('id', input.orderId)
         .eq('business_id', input.businessId)
         .maybeSingle();
@@ -3279,7 +3166,7 @@ class SupabaseDataSource implements DataSource {
 
       const orderQuery = await client
         .from('orders')
-        .select('id, business_id, total, payment_status, order_status, customer_id, customer_profile_id')
+        .select('id, business_id, total, payment_status, order_status, customer_profile_id')
         .eq('id', input.orderId)
         .eq('business_id', input.businessId)
         .maybeSingle();
@@ -3331,82 +3218,16 @@ class SupabaseDataSource implements DataSource {
         idempotencyKey: input.idempotencyKey ?? `${input.businessId}:${input.orderId}:direct_qr`,
       });
     },
-    async verifyDirectQrPayment(paymentId, businessId, verifiedBy, overrides = {}) {
+    async verifyDirectQrPayment(paymentId, businessId, _verifiedBy, _overrides = {}) {
       const client = getSupabaseClient();
-      if (!client || !(await hasMembership(client, businessId))) {
-        return null;
-      }
-
-      const payment = await this.getById(paymentId, businessId);
-      if (!payment) {
-        return null;
-      }
-
-      const orderQuery = await client
-        .from('orders')
-        .select('id, business_id, total, order_status, payment_status')
-        .eq('id', payment.order_id)
-        .eq('business_id', businessId)
-        .maybeSingle();
-
-      if (orderQuery.error || !orderQuery.data) {
-        return null;
-      }
-
-      const order = orderQuery.data as any;
-      const orderStatus = String(order.order_status ?? '').toLowerCase();
-      if (orderStatus === 'cancelled') {
-        return null;
-      }
-
-      const paymentMethod = String(payment.payment_method ?? '').toUpperCase();
-      if (paymentMethod !== 'DIRECT_QR') {
-        return null;
-      }
-
-      if (payment.payment_status && !['submitted', 'pending_verification', 'rejected'].includes(payment.payment_status.toLowerCase())) {
-        return null;
-      }
-
-      const normalizedAmount = Number(payment.amount ?? 0);
-      const orderAmount = Number(order.total ?? 0);
-      if (orderAmount > 0 && Math.abs(normalizedAmount - orderAmount) > 0.01) {
-        return null;
-      }
-
-      const verifiedUserId = verifiedBy || (await getUserIdFromAuth(client)) || undefined;
-      if (!verifiedUserId) {
-        return null;
-      }
-
-      const pendingVerification = await this.transition(paymentId, businessId, 'pending_verification', {
-        verified: false,
-        customerPaymentReference: payment.customer_payment_reference ?? undefined,
-        receiptUri: payment.receipt_uri ?? undefined,
+      if (!client) return null;
+      // The database derives the verifier from auth.uid(), checks active MYOPS
+      // scope and commits payment, order and Finance together under RLS.
+      const { data, error } = await client.rpc('opsps_verify_manual_payment', {
+        p_business_id: businessId, p_payment_id: paymentId,
       });
-
-      if (!pendingVerification) {
-        return null;
-      }
-
-      const updated = await this.transition(paymentId, businessId, 'paid', {
-        verified: true,
-        verifiedBy: verifiedUserId,
-        verificationEventId: overrides.verificationEventId ?? `verify-${paymentId}`,
-      });
-
-      if (!updated) {
-        return null;
-      }
-
-      await client.from('orders').update({
-        payment_status: 'paid',
-        order_status: 'payment_received',
-        payment_verified_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', payment.order_id).eq('business_id', businessId);
-
-      return updated;
+      if (error || !data) return null;
+      return mapPaymentRow(data);
     },
     async rejectDirectQrPayment(paymentId, businessId, rejectionReason, verifiedBy) {
       const client = getSupabaseClient();

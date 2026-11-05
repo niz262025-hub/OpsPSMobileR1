@@ -110,7 +110,7 @@ export default function AdminDashboardScreen() {
             <Text style={styles.eyebrow}>OpsPS Admin</Text>
             <Text style={styles.title}>Platform overview</Text>
           </View>
-          <Pressable style={styles.secondary} onPress={async () => { await logout(); router.replace('/'); }}>
+          <Pressable style={styles.secondary} onPress={async () => { await logout(); }}>
             <Text style={styles.secondaryText}>Log out</Text>
           </Pressable>
         </View>

@@ -45,7 +45,7 @@ function buildPaymentClient(input: { orders?: Array<Record<string, unknown>>; pa
   const buildTableQuery = (table: string, source: Array<Record<string, unknown>>) => {
     const filters: Array<[string, unknown]> = [];
     const builder: any = {
-      select() { return builder; },
+      select(columns?: string) { if (table === 'orders' && /(^|,)\s*customer_id\s*(,|$)/.test(columns ?? '')) throw new Error('column customer_id does not exist'); return builder; },
       eq(field: string, value: unknown) {
         filters.push([field, value]);
         return builder;
@@ -90,6 +90,16 @@ function buildPaymentClient(input: { orders?: Array<Record<string, unknown>>; pa
   };
 
   return {
+    fixtureOrders: orders,
+    rpc: vi.fn(async (name: string, args: Record<string,string>) => {
+      if (name !== 'opsps_verify_manual_payment') return {data:null,error:new Error('Unsupported RPC')};
+      const payment=payments.find(row=>row.id===args.p_payment_id && row.business_id===args.p_business_id);
+      const order=orders.find(row=>row.id===payment?.order_id && row.business_id===args.p_business_id);
+      if (!payment || !order || payment.amount!==order.total) return {data:null,error:new Error('Denied')};
+      Object.assign(payment,{payment_status:'paid',verified:true,verified_by:userId});
+      Object.assign(order,{payment_status:'paid',order_status:'payment_received',request_status:'PAYMENT_RECEIVED'});
+      return {data:payment,error:null};
+    }),
     auth: {
       getUser: vi.fn(async () => ({ data: { user: { id: userId } }, error: null })),
     },
@@ -168,6 +178,7 @@ describe('direct qr payment flow', () => {
     const verified = await repo.payments.verifyDirectQrPayment('pay-direct', 'biz-1', 'founder-1');
     expect(verified?.status).toBe('paid');
     expect(verified?.verified).toBe(true);
+    expect(verifyClient.fixtureOrders.find((row: any) => row.id === verified?.order_id)?.request_status).toBe('PAYMENT_RECEIVED');
 
     const rejectClient = buildPaymentClient({
       orders: [{

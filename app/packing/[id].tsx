@@ -22,6 +22,7 @@ export default function PackingScreen() {
   const [order, setOrder] = useState<{ id: string; businessId?: string; tripId?: string; customerName: string; customerPhone?: string | null; deliveryAddress?: string | null; orderStatus: string; requestStatus?: string; } | null>(null);
   const [items, setItems] = useState<PackingItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -124,7 +125,8 @@ export default function PackingScreen() {
     setLoading(true);
     try {
       const repo = getDataSource('production');
-      await repo.orders.setItemPacked(businessId, order.id, item.id, (item.packedQuantity ?? 0) < item.quantity);
+      const updated = await repo.orders.setItemPacked(businessId, order.id, item.id, (item.packedQuantity ?? 0) < item.quantity);
+      setMessage(updated ? '' : 'Packing update failed. Please retry.');
       await reload();
     } catch {
       Alert.alert('Packing update failed', 'This item could not be updated.');
@@ -143,10 +145,12 @@ export default function PackingScreen() {
       const repo = getDataSource('production');
       const updated = await repo.orders.markOrderPacked(businessId, order.id);
       if (!updated) {
+        setMessage('Packing incomplete. Confirm all items are packed and retry.');
         Alert.alert('Packing incomplete', 'All items must be packed before marking this order ready.');
         return;
       }
       await reload();
+      setMessage('All items packed. Order is ready to ship.');
       Alert.alert('Ready to Ship', 'All items are packed.');
     } catch {
       Alert.alert('Packing update failed', 'The order could not be marked ready.');
@@ -167,6 +171,7 @@ export default function PackingScreen() {
         <View style={styles.itemInfo}><Text style={styles.product}>{item.productVariantId}</Text><Text style={styles.meta}>Qty {item.quantity}</Text><Text style={[styles.packed, isPacked && styles.done]}>{isPacked ? '[x] Packed' : '[ ] Packed'}</Text></View>
       </Pressable>;
     })}
+    {message ? <Text accessibilityRole="alert">{message}</Text> : null}
     <Text style={styles.progress}>{packed} / {total} Packed</Text>
     <Pressable disabled={!ready || order.orderStatus !== 'packing' || loading} style={[styles.primary, (!ready || order.orderStatus !== 'packing' || loading) && styles.disabled]} onPress={() => void markReady()}><Text style={styles.primaryText}>Mark Ready to Ship</Text></Pressable>
   </ScrollView></SafeAreaView>;

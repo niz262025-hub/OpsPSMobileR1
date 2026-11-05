@@ -6,16 +6,23 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '../../../context/AuthContext';
 import { getDataSource } from '../../../services/repository';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../../theme';
+import OrderPaymentPanel from '../../../components/OrderPaymentPanel';
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { user, profile, membership, business, role } = useAuth();
-  const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; availabilityStatus?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
+  const { user, profile, membership, business, role, ready } = useAuth();
+  const [detailLoading, setDetailLoading] = useState(true);
+  const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; orderStatus?: string; availabilityStatus?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
   const [items, setItems] = useState<Array<{ id: string; quantity: number; productVariantId: string }>>([]);
   const [productName, setProductName] = useState('Product');
+  const [revision,setRevision]=useState(0);
+  const [packingBusy,setPackingBusy]=useState(false),[actionError,setActionError]=useState('');
 
   useEffect(() => {
+    if (!ready) return;
     let active = true;
+    setDetailLoading(true);
+    setOrder(null);
 
     const load = async () => {
       if (!id) {
@@ -43,7 +50,7 @@ export default function OrderDetailScreen() {
           return;
         }
 
-        const stockCheck = nextOrder.businessId ? await repo.orders.checkStockAvailability(nextOrder.businessId, nextOrder.id) : null;
+        const stockCheck = nextOrder.businessId && nextOrder.orderStatus === 'pending' ? await repo.orders.checkStockAvailability(nextOrder.businessId, nextOrder.id) : null;
         if (stockCheck && active) {
           nextOrder = {
             ...nextOrder,
@@ -71,11 +78,15 @@ export default function OrderDetailScreen() {
       }
     };
 
-    void load();
+    void load().finally(() => { if (active) setDetailLoading(false); });
     return () => {
       active = false;
     };
-  }, [business?.id, id, membership?.business_id, profile?.id, role, user?.id]);
+  }, [business?.id, id, membership?.business_id, profile?.id, role, user?.id, revision, ready]);
+
+  if (!ready || detailLoading) {
+    return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading order…</Text></View></SafeAreaView>;
+  }
 
   if (!order) {
     return (
@@ -90,7 +101,17 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const statusLabel = order.requestStatus ?? order.status ?? order.paymentStatus ?? 'PENDING_AVAILABILITY';
+  const statusLabel = order.requestStatus ?? order.orderStatus ?? order.status ?? order.paymentStatus ?? 'PENDING_AVAILABILITY';
+  const startPacking = async () => {
+    if (packingBusy || !order.businessId || role !== 'founder') return;
+    setPackingBusy(true); setActionError('');
+    try {
+      const updated=await getDataSource('production').orders.startPacking(order.businessId,order.id);
+      if (!updated) throw new Error('Packing could not be started.');
+      router.push(`/packing/${order.id}`);
+    } catch(error) { setActionError(error instanceof Error?error.message:'Packing could not be started.'); }
+    finally { setPackingBusy(false); }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -119,6 +140,12 @@ export default function OrderDetailScreen() {
             <Text key={item.id} style={styles.meta}>Variant {item.productVariantId} × {item.quantity}</Text>
           ))}
         </View>
+        <Pressable accessibilityRole="button" style={styles.backButton} onPress={()=>setRevision(value=>value+1)}><Text style={styles.backText}>Refresh order</Text></Pressable>
+        {role==='founder' && ['paid','success'].includes(order.paymentStatus??'') && order.orderStatus==='payment_received' ? <Pressable accessibilityRole="button" disabled={packingBusy} style={styles.primaryButton} onPress={()=>void startPacking()}><Text style={styles.primaryButtonText}>{packingBusy?'Starting…':'Start packing'}</Text></Pressable> : null}
+        {role==='founder' && order.orderStatus==='packing' ? <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={()=>router.push(`/packing/${order.id}`)}><Text style={styles.primaryButtonText}>Continue packing</Text></Pressable>:null}
+        {role==='founder' && order.orderStatus==='ready' ? <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={()=>router.push({pathname:'/shipping/generate',params:{orderId:order.id,businessId:order.businessId??''}})}><Text style={styles.primaryButtonText}>Create shipment</Text></Pressable>:null}
+        {actionError?<Text accessibilityRole="alert">{actionError}</Text>:null}
+        {order.businessId ? <OrderPaymentPanel businessId={order.businessId} orderId={order.id} total={Number(order.total)} onChanged={()=>setRevision(value=>value+1)}/> : null}
       </ScrollView>
     </SafeAreaView>
   );

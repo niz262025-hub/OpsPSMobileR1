@@ -1,18 +1,32 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRight, Package, ShoppingBag, Sparkles, WalletCards } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { THEME } from '../../theme';
+import MyopsEntry from '../../components/MyopsEntry';
+import { getDataSource, type OrderRecord } from '../../services/repository';
 
 export default function CustomerHomeScreen() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, ready, profile } = useAuth();
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [loadError, setLoadError] = useState('');
+  useEffect(() => {
+    let active = true;
+    if (currentUser?.role !== 'customer' || !profile?.id) return;
+    void getDataSource('production').orders.listForCustomer(profile.id).then(rows => {
+      if (active) { setOrders(rows); setLoadError(''); }
+    }).catch(() => { if (active) { setOrders([]); setLoadError('Orders could not be loaded. Please try again.'); } });
+    return () => { active = false; };
+  }, [currentUser?.role, profile?.id]);
+  if (!ready || !currentUser || currentUser.role !== 'customer') return <MyopsEntry />;
+  const status = (order: OrderRecord) => String(order.requestStatus ?? order.orderStatus ?? '').toUpperCase();
 
   const quickStats = [
-    { label: 'Orders', value: '08', tint: '#5B2BD9' },
-    { label: 'Open', value: '03', tint: '#EC4C99' },
-    { label: 'Paid', value: '05', tint: '#16A34A' },
+    { label: 'Orders', value: String(orders.length), tint: '#5B2BD9' },
+    { label: 'Open', value: String(orders.filter(order => !['DELIVERED','CANCELLED'].includes(status(order))).length), tint: '#EC4C99' },
+    { label: 'Paid', value: String(orders.filter(order => ['success','paid'].includes(String(order.paymentStatus).toLowerCase()) || ['PAID','PAYMENT_RECEIVED','RECEIPT_GENERATED'].includes(status(order))).length), tint: '#16A34A' },
   ];
 
   const shortcuts = [
@@ -30,7 +44,7 @@ export default function CustomerHomeScreen() {
               <Text style={styles.eyebrow}>MYOPS CUSTOMER</Text>
               <Text style={styles.title}>Welcome, {currentUser?.name ?? 'Customer'}</Text>
             </View>
-            <Pressable style={styles.logout} onPress={async () => { await logout(); router.replace('/'); }}>
+            <Pressable style={styles.logout} onPress={async () => { await logout(); }}>
               <Text style={styles.logoutText}>Log out</Text>
             </Pressable>
           </View>
@@ -76,12 +90,13 @@ export default function CustomerHomeScreen() {
 
         <View style={styles.cardPanel}>
           <Text style={styles.sectionTitle}>Order status</Text>
-          {['Waiting for payment', 'Payment verified', 'Packed & ready'].map((status, index) => (
-            <View key={status} style={styles.orderRow}>
+          {loadError ? <Text>{loadError}</Text> : orders.length === 0 ? <Text>No orders yet.</Text> : null}
+          {orders.map((order, index) => (
+            <View key={order.id} style={styles.orderRow}>
               <View style={[styles.dot, { backgroundColor: index === 0 ? THEME.accent : index === 1 ? '#16A34A' : THEME.primary }]} />
               <View style={styles.orderMeta}>
-                <Text style={styles.orderText}>{status}</Text>
-                <Text style={styles.orderSub}>Updated today</Text>
+                <Text style={styles.orderText}>{status(order).replaceAll('_', ' ')}</Text>
+                <Text style={styles.orderSub}>{order.id}</Text>
               </View>
             </View>
           ))}

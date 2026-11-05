@@ -1,3 +1,4 @@
+import { reportMonthRange } from '../../services/reportDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
@@ -8,16 +9,11 @@ import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 const types: ReportType[] = ['sales', 'orders', 'trip_profit', 'purchases', 'expenses', 'customer_payments', 'inventory'];
 const labels: Record<ReportType, string> = { sales: 'Sales', orders: 'Orders', trip_profit: 'Trip Profit', purchases: 'Purchases', expenses: 'Expenses', customer_payments: 'Customer Payments', inventory: 'Inventory' };
 
-function monthRange() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  return { from, to: now.toISOString().slice(0, 10) };
-}
 
 export default function ReportsScreen() {
   const { business, membership } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
-  const defaults = useMemo(() => monthRange(), []);
+  const defaults = useMemo(() => reportMonthRange(), []);
   const [type, setType] = useState<ReportType>('sales');
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
