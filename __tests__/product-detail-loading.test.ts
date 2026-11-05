@@ -1,0 +1,25 @@
+import React, { act } from 'react';
+const { createRoot } = require('react-dom/client') as { createRoot: (node: Element) => { render: (node: React.ReactNode) => void; unmount: () => void } };
+import { afterEach, expect, it, vi } from 'vitest';
+const m = vi.hoisted(() => ({ get: vi.fn(), variants: vi.fn() }));
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ membership: { business_id: 'business' } }) }));
+vi.mock('../services/repository', () => ({ getDataSource: () => ({ products: { getProduct: m.get, listVariantsForProduct: m.variants } }) }));
+vi.mock('expo-router', () => ({ router: { back: vi.fn() }, useLocalSearchParams: () => ({ id: 'product', businessId: 'business' }) }));
+vi.mock('lucide-react-native', () => ({ ArrowLeft: () => null, ShoppingBag: () => null }));
+vi.mock('expo-linear-gradient', () => ({ LinearGradient: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children) }));
+import ProductDetail from '../app/product/[id]/index';
+let root: ReturnType<typeof createRoot> | undefined;
+afterEach(() => { if (root) act(() => root?.unmount()); root = undefined; document.body.innerHTML = ''; vi.clearAllMocks(); });
+it('shows loading until the lookup settles, then shows a real missing-product result', async () => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  let resolve!: (value: null) => void;
+  m.get.mockReturnValue(new Promise<null>(done => { resolve = done; }));
+  m.variants.mockResolvedValue([]);
+  const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
+  await act(async () => root!.render(React.createElement(ProductDetail)));
+  expect(node.textContent).toContain('Loading product');
+  expect(node.textContent).not.toContain('Product Not Found');
+  await act(async () => resolve(null));
+  expect(node.textContent).toContain('Product Not Found');
+  expect(node.textContent).not.toContain('Loading product');
+});
