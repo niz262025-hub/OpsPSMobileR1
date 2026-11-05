@@ -57,6 +57,7 @@ export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
   const { membership, business } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
+  const [detailLoading, setDetailLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [trip, setTrip] = useState<{ id: string; businessId?: string; name: string; destination: string; tripDate: string; notes: string; status: 'planning' | 'open' | 'closed'; createdAt: string } | null>(null);
   const [tripProducts, setTripProducts] = useState<Array<{ id: string; name: string; image: string; status: string; costPrice: number; sellingPrice: number; variants: Array<{ id: string; size: string; stock: number }> }>>([]);
@@ -79,6 +80,8 @@ export default function TripDetailScreen() {
 
   useEffect(() => {
     let active = true;
+    setDetailLoading(true);
+    setTrip(null);
 
     const load = async () => {
       if (!id || !businessId) {
@@ -171,7 +174,7 @@ export default function TripDetailScreen() {
       }
     };
 
-    void load();
+    void load().finally(() => { if (active) setDetailLoading(false); });
     return () => {
       active = false;
     };
@@ -368,6 +371,10 @@ export default function TripDetailScreen() {
     setExpenseReceipt('');
     setExpenseError('');
   };
+
+  if (detailLoading) {
+    return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading trip…</Text></View></SafeAreaView>;
+  }
 
   if (!trip) {
     return (
