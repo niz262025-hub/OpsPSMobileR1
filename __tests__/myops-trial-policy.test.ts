@@ -11,10 +11,10 @@ it('admits only explicit valid trial metadata and rejects exact expiry',()=>{
  for(const trial of [{...response.trial,id:'bad'},{...response.trial,policy_version:2},{...response.trial,expires_at:'bad'},null])expect(()=>opspsAccessFromEntitlement({...response,trial},true)).toThrow();
  expect(()=>opspsAccessFromEntitlement(response,true,Date.parse(response.trial.expires_at))).toThrow();
 });
-it('isolates trial readiness to staging and clears trial metadata on paid upgrade',()=>{
+it('honors the central trial gate and clears trial metadata on paid upgrade',()=>{
  expect(opspsTrialReady('https://ojamkplflqafedmxbdxb.supabase.co','true')).toBe(true);
- expect(opspsTrialReady('https://wrsigjhhbkbomtkaqlpw.supabase.co','true')).toBe(false);
- expect(opspsTrialReady('https://ojamkplflqafedmxbdxb.supabase.co',undefined)).toBe(false);
+ expect(opspsTrialReady('https://wrsigjhhbkbomtkaqlpw.supabase.co','true')).toBe(true);
+ expect(opspsTrialReady('https://any-project.supabase.co',undefined)).toBe(false);
  expect(opspsSessionAccessFields({mode:'paid'},false)).toEqual({});
  expect(opspsSessionAccessFields({mode:'paid'},true)).toMatchObject({access_mode:'paid',trial_id:null,trial_expires_at:null});
 });
