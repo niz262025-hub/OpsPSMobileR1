@@ -21,7 +21,8 @@ export function opspsAccessFromEntitlement(value:unknown,trialReady=false,now=Da
 }
 
 export function opspsTrialReady(projectUrl:string,enabled:string|undefined):boolean {
- return projectUrl==='https://ojamkplflqafedmxbdxb.supabase.co'&&enabled==='true';
+ void projectUrl;
+ return enabled === 'true';
 }
 
 export function opspsSessionAccessFields(access:OpspsAccess,ready:boolean) {
