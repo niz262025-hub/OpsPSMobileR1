@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 
@@ -29,6 +29,7 @@ export default function TripsScreen() {
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const desktop = width >= 900;
+  const compactWeb = Platform.OS === 'web' && !desktop;
 
   useEffect(() => {
     let active = true;
@@ -92,18 +93,18 @@ export default function TripsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <View>
+      <View style={[styles.header, compactWeb && { flexWrap: 'wrap', gap: 12, paddingHorizontal: 16 }]}>
+        <View style={compactWeb ? { flexBasis: '100%', minWidth: 0 } : undefined}>
           <Text style={styles.title}>Trips</Text>
           <Text style={styles.subtitle}>Plan and manage your personal shopper journeys.</Text>
         </View>
-        <Pressable style={styles.createButton} onPress={() => router.push('/trip/create')}>
+        <Pressable accessibilityRole="button" style={[styles.createButton, compactWeb && { minHeight: 44, flexShrink: 0 }]} onPress={() => router.push('/trip/create')}>
           <Plus size={18} color="#FFFFFF" strokeWidth={2.5} />
           <Text style={styles.createButtonText}>Create Trip</Text>
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, compactWeb && { padding: 16 }]} showsVerticalScrollIndicator={false}>
         {desktop ? (
           <View style={styles.table}>
             <View style={[styles.row, styles.tableHeader]}>
