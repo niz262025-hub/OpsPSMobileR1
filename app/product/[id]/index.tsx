@@ -30,10 +30,11 @@ const isReasonableMalaysianPhone = (value: string) => {
 
 export default function ProductDetailScreen() {
   const { id, businessId } = useLocalSearchParams<{ id?: string; businessId?: string }>();
-  const { membership, business, profile, user } = useAuth();
+  const { membership, business, profile, user, ready } = useAuth();
   const routeBusinessId = typeof businessId === 'string' && businessId.trim() ? businessId.trim() : undefined;
   const resolvedBusinessId = routeBusinessId ?? membership?.business_id ?? business?.id ?? undefined;
 
+  const [detailLoading, setDetailLoading] = useState(true);
   const [product, setProduct] = useState<{ id: string; name: string; image: string; sellingPrice: number; businessId?: string; tripId?: string; description?: string } | null>(null);
   const [variants, setVariants] = useState<Array<{ id: string; productId: string; size: string; stock: number }>>([]);
   const [quantity, setQuantity] = useState('1');
@@ -46,7 +47,10 @@ export default function ProductDetailScreen() {
   const [requestStatus, setRequestStatus] = useState<string>('PENDING_AVAILABILITY');
 
   useEffect(() => {
+    if (!ready) return;
     let active = true;
+    setDetailLoading(true);
+    setProduct(null);
 
     const load = async () => {
       if (!id || !resolvedBusinessId) {
@@ -81,11 +85,11 @@ export default function ProductDetailScreen() {
       }
     };
 
-    void load();
+    void load().finally(() => { if (active) setDetailLoading(false); });
     return () => {
       active = false;
     };
-  }, [id, resolvedBusinessId]);
+  }, [id, resolvedBusinessId, ready]);
 
   const activeVariant = useMemo(
     () => variants.find((variant) => variant.size === selectedSize) ?? variants[0] ?? null,
@@ -146,6 +150,10 @@ export default function ProductDetailScreen() {
     setRequestStatus(order.requestStatus ?? 'PENDING_AVAILABILITY');
     setFormError('');
   };
+
+  if (!ready || detailLoading) {
+    return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading product…</Text></View></SafeAreaView>;
+  }
 
   if (!product) {
     return (
