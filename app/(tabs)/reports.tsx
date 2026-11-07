@@ -1,28 +1,27 @@
+import { reportMonthRange } from '../../services/reportDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { buildReport, exportExcel, exportPdf, ReportType, type ReportDataset, type ReportRow } from '../../services/reporting';
 import { getDataSource } from '../../services/repository';
+import {requireMyopsFeature} from '../../services/myopsFeatures';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 const types: ReportType[] = ['sales', 'orders', 'trip_profit', 'purchases', 'expenses', 'customer_payments', 'inventory'];
 const labels: Record<ReportType, string> = { sales: 'Sales', orders: 'Orders', trip_profit: 'Trip Profit', purchases: 'Purchases', expenses: 'Expenses', customer_payments: 'Customer Payments', inventory: 'Inventory' };
 
-function monthRange() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  return { from, to: now.toISOString().slice(0, 10) };
-}
 
 export default function ReportsScreen() {
   const { business, membership } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
-  const defaults = useMemo(() => monthRange(), []);
+  const defaults = useMemo(() => reportMonthRange(), []);
   const [type, setType] = useState<ReportType>('sales');
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
   const [dataset, setDataset] = useState<ReportDataset | null>(null);
   const [loading, setLoading] = useState(true);
+  const [featureBusy,setFeatureBusy]=useState(false);
+  const [featureMessage,setFeatureMessage]=useState<string|null>(null);
   const [result, setResult] = useState<{ rows: ReportRow[]; summary: Record<string, string | number> }>({ rows: [], summary: { Rows: 0 } });
 
   useEffect(() => {
@@ -138,19 +137,30 @@ export default function ReportsScreen() {
     return () => { active = false; };
   }, [businessId, defaults]);
 
-  const generate = () => {
+  const generate = async () => {
     if (!dataset) {
       setResult({ rows: [], summary: { Rows: 0 } });
       return;
     }
-    const next = buildReport(type, dataset, from, to, businessId);
-    setResult(next);
+    setFeatureBusy(true);setFeatureMessage(null);
+    try {
+      if(!['sales','orders'].includes(type))await requireMyopsFeature('advanced_reporting');
+      const next = buildReport(type, dataset, from, to, businessId);
+      setResult(next);
+    }catch(error){setResult({rows:[],summary:{Rows:0}});setFeatureMessage(error instanceof Error?error.message:'Feature access could not be verified.');}
+    finally{setFeatureBusy(false);}
+  };
+  const downloadReport=async(format:'pdf'|'excel')=>{
+    setFeatureBusy(true);setFeatureMessage(null);
+    try{if(format==='pdf')await exportPdf(type,result,from,to);else await exportExcel(type,result,from,to);}
+    catch(error){setFeatureMessage(error instanceof Error?error.message:'Export could not be completed.');}
+    finally{setFeatureBusy(false);}
   };
 
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>Reports</Text><Text style={styles.subtitle}>Generated from the current OpsPS database.</Text>{loading ? <Text style={styles.empty}>Loading report data…</Text> : <>
-    <View style={styles.card}><Text style={styles.label}>Date From</Text><TextInput value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>Date To</Text><TextInput value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>Report Type</Text><View style={styles.actions}>{types.map((entry) => <Pressable key={entry} style={[styles.option, type === entry && styles.selected]} onPress={() => setType(entry)}><Text style={styles.optionText}>{labels[entry]}</Text></Pressable>)}</View><Pressable style={styles.primary} onPress={generate}><Text style={styles.primaryText}>Generate Report</Text></Pressable></View>
-    <View style={styles.summary}><Text style={styles.sectionTitle}>{labels[type]} Summary</Text>{Object.entries(result.summary).map(([key, value]) => <View key={key} style={styles.summaryRow}><Text style={styles.label}>{key}</Text><Text style={styles.value}>{String(value)}</Text></View>)}</View>
-    <View style={styles.actions}><Pressable style={styles.export} onPress={() => exportPdf(type, result, from, to)}><Text style={styles.exportText}>Download PDF</Text></Pressable><Pressable style={styles.export} onPress={() => exportExcel(type, result, from, to)}><Text style={styles.exportText}>Download Excel</Text></Pressable></View>
+    <View style={styles.card}><Text style={styles.label}>Date From</Text><TextInput value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>Date To</Text><TextInput value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>Report Type</Text><View style={styles.actions}>{types.map((entry) => <Pressable key={entry} style={[styles.option, type === entry && styles.selected]} onPress={() => setType(entry)}><Text style={styles.optionText}>{labels[entry]}</Text></Pressable>)}</View><Pressable disabled={featureBusy} style={styles.primary} onPress={generate}><Text style={styles.primaryText}>Generate Report</Text></Pressable></View>
+    {featureMessage && <Text accessibilityRole="alert" style={styles.empty}>{featureMessage}</Text>}<View style={styles.summary}><Text style={styles.sectionTitle}>{labels[type]} Summary</Text>{Object.entries(result.summary).map(([key, value]) => <View key={key} style={styles.summaryRow}><Text style={styles.label}>{key}</Text><Text style={styles.value}>{String(value)}</Text></View>)}</View>
+    <View style={styles.actions}><Pressable disabled={featureBusy} style={styles.export} onPress={() => downloadReport('pdf')}><Text style={styles.exportText}>Download PDF</Text></Pressable><Pressable disabled={featureBusy} style={styles.export} onPress={() => downloadReport('excel')}><Text style={styles.exportText}>Download Excel</Text></Pressable></View>
     <Text style={styles.sectionTitle}>Report Data ({result.rows.length})</Text>{result.rows.map((row, index) => <View key={index} style={styles.row}>{Object.entries(row).map(([key, value]) => <Text key={key} style={styles.cell}>{key}: {String(value)}</Text>)}</View>)}{!result.rows.length && <Text style={styles.empty}>No records in this date range.</Text>}</>}
   </ScrollView></SafeAreaView>;
 }

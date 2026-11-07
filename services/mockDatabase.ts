@@ -15,6 +15,7 @@ export type RequestStatus =
   | 'PAYMENT_REQUIRED'
   | 'PAYMENT_RECEIVED'
   | 'PACKING'
+  | 'READY_TO_SHIP'
   | 'SHIPPED'
   | 'DELIVERED'
   | 'PAID'

@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { isAdminRole } from '../services/adminFoundation';
+import { returnToMyops } from '../services/myopsNavigation';
 
 export default function MyopsLaunchPage() {
   const { currentUser, ready } = useAuth();
@@ -25,7 +26,7 @@ export default function MyopsLaunchPage() {
           <>
             <Text style={styles.title}>OpsPS tak dapat dibuka</Text>
             <Text style={styles.message}>Sesi MYOPS tiada atau akses pakej tidak aktif. Kembali ke MYOPS dan cuba buka OpsPS semula.</Text>
-            <Pressable style={styles.button} onPress={() => { void Linking.openURL('https://www.myops.com.my/'); }}>
+            <Pressable style={styles.button} onPress={returnToMyops}>
               <Text style={styles.buttonText}>Kembali ke MYOPS</Text>
             </Pressable>
           </>

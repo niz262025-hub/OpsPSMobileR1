@@ -1,5 +1,1 @@
-import { Redirect } from 'expo-router';
-
-export default function ForgotPasswordRedirect() {
-  return <Redirect href="/" />;
-}
+export { default } from '../components/MyopsEntry';

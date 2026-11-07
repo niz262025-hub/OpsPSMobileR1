@@ -1,3 +1,5 @@
+import { reportDate } from './reportDate';
+import {requireMyopsFeature} from './myopsFeatures';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib/dist/pdf-lib.esm.js';
 import * as XLSX from 'xlsx';
 
@@ -56,7 +58,7 @@ export type ReportDataset = {
 const title = (type: ReportType) => type.replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const money = (value: number) => Number(value.toFixed(2));
 const inRange = (value: string | null | undefined, from: string, to: string) => {
-  const nextValue = (value ?? '').slice(0, 10);
+  const nextValue = reportDate(value);
   if (!nextValue) {
     return true;
   }
@@ -154,7 +156,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
         const payment = scopedPayments.find((entry) => entry.order_id === order.id && (entry.payment_status === 'paid' || entry.status === 'paid' || entry.verified));
 
         const base = {
-          Date: (order.orderDate ?? '').slice(0, 10),
+          Date: reportDate(order.orderDate),
           'Order ID': order.id,
           Customer: order.customerName,
           Phone: order.customerPhone ?? '',
@@ -173,7 +175,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
 
         if (type === 'customer_payments') {
           return {
-            'Payment Date': payment?.created_at ? payment.created_at.slice(0, 10) : (order.orderDate ?? '').slice(0, 10),
+            'Payment Date': payment?.created_at ? reportDate(payment.created_at) : reportDate(order.orderDate),
             'Order ID': order.id,
             Customer: order.customerName,
             Trip: order.tripName ?? trip?.name ?? order.tripId ?? '',
@@ -181,7 +183,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
             'Payment Mode': order.paymentMode ?? payment?.payment_method ?? '',
             'Payment Status': payment?.payment_status ?? order.paymentStatus ?? '',
             Receipt: payment?.id ? 'Attached' : 'None',
-            'Verified Date': payment?.verified ? (payment.created_at ?? '').slice(0, 10) : '',
+            'Verified Date': payment?.verified ? reportDate(payment.created_at) : '',
           } satisfies ReportRow;
         }
 
@@ -212,7 +214,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
         const variant = entry.product_id ? Array.from(variantMap.values()).find((item) => item.productId === entry.product_id) : undefined;
         return {
           'Purchase ID': entry.id,
-          Date: (entry.created_at ?? '').slice(0, 10),
+          Date: reportDate(entry.created_at),
           Trip: trip?.name ?? entry.trip_id ?? '',
           'Order ID': entry.order_id ?? '',
           Customer: '',
@@ -235,7 +237,7 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
     rows = scopedFinance
       .filter((entry) => entry.type === 'expense' && inRange(entry.created_at ?? '', from, to))
       .map((entry): ReportRow => ({
-        Date: (entry.created_at ?? '').slice(0, 10),
+        Date: reportDate(entry.created_at),
         Description: entry.description,
         Category: entry.category ?? 'General',
         'Payment Method': entry.payment_method ?? '',
@@ -290,7 +292,8 @@ export function buildReport(type: ReportType, dataset: ReportDataset, from: stri
   return { rows, summary: summarize(rows, type) };
 }
 
-export function exportExcel(type: ReportType, result: { rows: ReportRow[]; summary: ReportRow }, from: string, to: string) {
+export async function exportExcel(type: ReportType, result: { rows: ReportRow[]; summary: ReportRow }, from: string, to: string) {
+  await requireMyopsFeature('export');
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([result.summary]), `${title(type)} Summary`);
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(result.rows), `${title(type)} Details`);
@@ -299,24 +302,41 @@ export function exportExcel(type: ReportType, result: { rows: ReportRow[]; summa
 }
 
 export async function exportPdf(type: ReportType, result: { rows: ReportRow[]; summary: ReportRow }, from: string, to: string) {
+  await requireMyopsFeature('export');
   const pdf = await PDFDocument.create();
   let page = pdf.addPage([842, 595]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   let y = 560;
   const write = (text: string, size = 10) => {
-    page.drawText(text.slice(0, 130), { x: 28, y, size, font, color: rgb(0.12, 0.16, 0.22) });
-    y -= size + 8;
-    if (y < 30) {
-      page = pdf.addPage([842, 595]);
-      y = 560;
+    const maxWidth = 786;
+    const lines: string[] = [];
+    let line = '';
+    for (const word of text.split(/\s+/)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) { line = candidate; continue; }
+      if (line) lines.push(line);
+      line = '';
+      for (const character of word) {
+        if (line && font.widthOfTextAtSize(line + character, size) > maxWidth) { lines.push(line); line = ''; }
+        line += character;
+      }
+    }
+    if (line || !lines.length) lines.push(line);
+    for (const nextLine of lines) {
+      if (y - size < 30) { page = pdf.addPage([842, 595]); y = 560; }
+      page.drawText(nextLine, { x: 28, y, size, font, color: rgb(0.12, 0.16, 0.22) });
+      y -= size + 8;
     }
   };
 
   write(`OpsPS - ${title(type)} Report`, 18);
   write(`Date Range: ${from} to ${to}`);
-  write(`Generated: ${new Date().toISOString().slice(0, 10)}`);
+  write(`Generated: ${reportDate(new Date())}`);
   write(`Summary: ${Object.entries(result.summary).map(([key, value]) => `${key}: ${value}`).join(' | ')}`);
-  result.rows.forEach((row) => write(Object.entries(row).map(([key, value]) => `${key}: ${value}`).join(' | '), 7));
+  result.rows.forEach((row, index) => {
+    write(`Record ${index + 1}`, 10);
+    Object.entries(row).forEach(([key, value]) => write(`${key}: ${value}`, 9));
+  });
   const bytes = await pdf.save();
   download(new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' }), fileName(type, from, to, 'pdf'));
 }

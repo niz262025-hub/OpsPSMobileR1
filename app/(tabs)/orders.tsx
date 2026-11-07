@@ -19,6 +19,7 @@ function getOrderDisplayStatus(order: { requestStatus?: string; status?: string;
     PAYMENT_REQUIRED: 'Payment Required',
     PAYMENT_RECEIVED: 'Payment Received',
     PACKING: 'Packing',
+    READY_TO_SHIP: 'Ready to ship',
     SHIPPED: 'Shipped',
     DELIVERED: 'Delivered',
     PAID: 'Paid',

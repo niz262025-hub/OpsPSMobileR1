@@ -1,166 +1,61 @@
-import React, { useState } from 'react';
-import {
-  View,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, ScrollView, StyleSheet, Text, TouchableOpacity, TextInput, SafeAreaView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Send, PackageCheck } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
-import { getDataSource } from '../../services/repository';
+import { getDataSource, type ShipmentRecord } from '../../services/repository';
 import { THEME, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../theme';
-import { StatusBadge } from '../../components/StatusBadge';
 
 export default function ShippingGenerateScreen() {
-  const params = useLocalSearchParams<{ orderId?: string; businessId?: string }>();
+  const { orderId = '' } = useLocalSearchParams<{ orderId?: string }>();
   const { membership, business } = useAuth();
-  const resolvedBusinessId = String(params.businessId ?? membership?.business_id ?? business?.id ?? '');
-  const orderId = String(params.orderId ?? '');
-  const [recipient, setRecipient] = useState('');
+  const businessId = membership?.business_id ?? business?.id;
+  const [recipient, setRecipient] = useState<{name:string;phone:string;address:string}|null>(null);
   const [weight, setWeight] = useState('');
-  const [length, setLength] = useState('');
-  const [width, setWidth] = useState('');
-  const [height, setHeight] = useState('');
-  const [courier, setCourier] = useState<string>('');
-  const [shippingLabel, setShippingLabel] = useState<{ trackingNumber: string; awbNumber: string; status: string } | null>(null);
-
-  const couriers = ['J&T Express', 'Pos Laju', 'Skynet', 'Lazada Logistics', 'GD Express'];
-
-  const handleGenerateLabel = async () => {
-    if (!recipient || !weight || !courier) {
-      alert('Please fill in all required fields');
-      return;
+  const [courier, setCourier] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [shipment, setShipment] = useState<ShipmentRecord|null>(null);
+  useEffect(() => {
+    let active = true;
+    if (businessId && orderId) void getDataSource('production').orders.getForBusiness(businessId, orderId).then(order => {
+      if (active && order) setRecipient({name:order.customerName,phone:order.customerPhone??'',address:order.deliveryAddress??''});
+    }).catch(() => { if(active) setMessage('Order could not be loaded.'); });
+    return () => { active=false; };
+  },[businessId,orderId]);
+  const submit = async () => {
+    const parcelWeight=Number(weight);
+    if (!recipient?.name || !recipient.phone || !recipient.address || !courier || !Number.isFinite(parcelWeight) || parcelWeight<=0 || parcelWeight>9999) {
+      setMessage('Recipient details, courier and a valid parcel weight are required.');return;
     }
-
-    if (!orderId || !resolvedBusinessId) {
-      Alert.alert('Shipping unavailable', 'Select an order before creating a shipping label.');
-      return;
-    }
-
+    if (!businessId || busy) return;
+    setBusy(true);setMessage('');
     try {
-      const created = await getDataSource('production').shipments.create({
-        businessId: resolvedBusinessId,
-        orderId,
-        courier,
-        recipientName: recipient,
-        recipientPhone: 'N/A',
-        deliveryAddress: 'Shipping label created from order details',
-        postcode: '',
-        city: '',
-        state: '',
-        parcelWeight: Number(weight) || 0,
-        quantity: 1,
-        parcelType: 'Parcel',
-        shippingCost: 0,
-      });
-
-      if (!created) {
-        Alert.alert('Unable to create shipping record', 'Confirm the order is paid and belongs to the active business.');
-        return;
-      }
-
-      const trackingNum = created.trackingNumber ?? created.shipmentId ?? `OPSPS-${created.id.slice(0, 8).toUpperCase()}`;
-      const awbNum = created.shipmentId ?? created.id.slice(0, 12).toUpperCase();
-
-      setShippingLabel({
-        trackingNumber: trackingNum,
-        awbNumber: awbNum,
-        status: created.status,
-      });
-    } catch (error) {
-      console.error('Shipping creation failed', error);
-      Alert.alert('Shipping unavailable', 'The order could not be submitted to Supabase.');
-    }
+      const result=await getDataSource('production').shipments.create({businessId,orderId,courier,parcelWeight});
+      if(result) setShipment(result);
+      else setMessage('Dispatch could not be saved. Check payment, packing and available stock, then retry.');
+    } catch {setMessage('Dispatch could not be saved. Please retry.');}
+    finally {setBusy(false);}
   };
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.5} />
-        </TouchableOpacity>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerLabel}>Shipping</Text>
-          <Text style={styles.headerTitle}>Generate label</Text>
-        </View>
-        <PackageCheck size={20} color="#FFFFFF" />
-      </View>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-        {!shippingLabel && (
-          <View>
-            <Text style={styles.sectionTitle}>Recipient information</Text>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Recipient name *</Text>
-              <TextInput style={styles.input} placeholder="Enter recipient name" value={recipient} onChangeText={setRecipient} placeholderTextColor={THEME.text.light} />
-            </View>
-
-            <Text style={styles.sectionTitle}>Parcel details</Text>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Weight (kg) *</Text>
-              <TextInput style={styles.input} placeholder="Enter weight" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-            </View>
-
-            <Text style={styles.subLabel}>Dimensions (optional)</Text>
-            <View style={styles.dimensionsRow}>
-              <TextInput style={[styles.input, styles.dimensionInput]} placeholder="Length" value={length} onChangeText={setLength} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-              <TextInput style={[styles.input, styles.dimensionInput]} placeholder="Width" value={width} onChangeText={setWidth} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-              <TextInput style={[styles.input, styles.dimensionInput]} placeholder="Height" value={height} onChangeText={setHeight} keyboardType="decimal-pad" placeholderTextColor={THEME.text.light} />
-            </View>
-
-            <Text style={styles.sectionTitle}>Courier</Text>
-            <View style={styles.courierGrid}>
-              {couriers.map((item) => (
-                <TouchableOpacity key={item} style={[styles.courierOption, courier === item && styles.courierOptionActive]} onPress={() => setCourier(item)}>
-                  <Text style={[styles.courierText, courier === item && styles.courierTextActive]}>{item}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity style={styles.generateButton} onPress={handleGenerateLabel}>
-              <Send size={18} color="#FFFFFF" strokeWidth={2} />
-              <Text style={styles.generateButtonText}>Generate label</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {shippingLabel && (
-          <View>
-            <View style={styles.successCard}>
-              <StatusBadge status="shipped" label="Label generated" />
-              <Text style={styles.successText}>Shipping record created in Supabase. Courier booking is still handled outside this app flow.</Text>
-            </View>
-
-            <View style={styles.labelDetails}>
-              <View style={styles.detailRow}><Text style={styles.detailLabel}>Recipient</Text><Text style={styles.detailValue}>{recipient}</Text></View>
-              <View style={styles.detailRow}><Text style={styles.detailLabel}>Courier</Text><Text style={styles.detailValue}>{courier}</Text></View>
-              <View style={styles.detailRow}><Text style={styles.detailLabel}>Weight</Text><Text style={styles.detailValue}>{weight} kg</Text></View>
-              {(length || width || height) && <View style={styles.detailRow}><Text style={styles.detailLabel}>Dimensions</Text><Text style={styles.detailValue}>{length}×{width}×{height} cm</Text></View>}
-            </View>
-
-            <View style={styles.labelBox}>
-              <Text style={styles.labelBoxTitle}>Tracking number</Text>
-              <Text style={styles.trackingNumber}>{shippingLabel.trackingNumber}</Text>
-              <Text style={styles.labelBoxTitle}>AWB number</Text>
-              <Text style={styles.awbNumber}>{shippingLabel.awbNumber}</Text>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.copyButton}><Text style={styles.copyButtonText}>Copy tracking</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.newLabelButton} onPress={() => { setShippingLabel(null); setRecipient(''); setWeight(''); setCourier(''); setLength(''); setWidth(''); setHeight(''); }}><Text style={styles.newLabelButtonText}>Generate another</Text></TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={styles.safeArea}><ScrollView contentContainerStyle={styles.contentContainer}>
+    <TouchableOpacity accessibilityRole="button" onPress={()=>router.replace(`/order/${orderId}`)}><Text>Back to order</Text></TouchableOpacity>
+    <Text style={styles.sectionTitle}>Manual dispatch</Text>
+    {message ? <Text accessibilityRole="alert">{message}</Text> : null}
+    {shipment ? <View>
+      <Text style={styles.sectionTitle}>Manual dispatch recorded</Text>
+      <Text>Dispatch and stock movement saved. Book the courier separately; no courier label or tracking number has been generated.</Text>
+      <Text>Recipient: {shipment.recipientName}</Text><Text>Phone: {shipment.recipientPhone}</Text><Text>Address: {shipment.deliveryAddress}</Text>
+      <Text>Courier: {shipment.courier}</Text><Text>Weight: {shipment.parcelWeight} kg</Text>
+      <Text>Tracking: {shipment.trackingNumber ?? 'Not available — book courier separately'}</Text>
+      <Text>AWB: {shipment.shipmentId ?? 'Not available'}</Text>
+    </View> : <View>
+      <Text style={styles.label}>Recipient from order</Text><Text>{recipient?.name ?? 'Loading order…'}</Text><Text>{recipient?.phone}</Text><Text>{recipient?.address}</Text>
+      <Text style={styles.label}>Weight (kg)</Text><TextInput accessibilityLabel="Parcel weight" style={styles.input} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" />
+      <Text style={styles.label}>Courier</Text>
+      {['J&T Express','Pos Laju','Skynet','Lazada Logistics','GD Express'].map(name=><TouchableOpacity key={name} accessibilityRole="button" accessibilityState={{selected:courier===name}} style={[styles.courierOption,courier===name&&styles.courierOptionActive]} onPress={()=>setCourier(name)}><Text>{name}</Text></TouchableOpacity>)}
+      <TouchableOpacity accessibilityRole="button" disabled={busy} style={styles.generateButton} onPress={()=>void submit()}><Text style={styles.generateButtonText}>{busy?'Saving…':'Record manual dispatch'}</Text></TouchableOpacity>
+    </View>}
+  </ScrollView></SafeAreaView>;
 }
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,

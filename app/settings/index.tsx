@@ -164,7 +164,7 @@ export default function SettingsScreen() {
         <Section title="Account">
           {field(user.name, (value) => setUser({ ...user, name: value }), 'Name')}
           {field(user.email, (value) => setUser({ ...user, email: value }), 'Email')}
-          <Pressable style={styles.secondary} onPress={async () => { await logout(); void Linking.openURL('https://www.myops.com.my/'); }}>
+          <Pressable style={styles.secondary} onPress={async () => { await logout(); }}>
             <Text style={styles.secondaryText}>Logout</Text>
           </Pressable>
         </Section>
