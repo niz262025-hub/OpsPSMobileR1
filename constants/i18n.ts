@@ -1,11 +1,53 @@
-export type Language = 'BM' | 'EN' | 'HI' | 'ZH';
+export type Language = 'BM' | 'MS' | 'EN' | 'HI' | 'ZH' | 'TA';
+
+export const FALLBACK_LANGUAGE: Language = 'EN';
+
+export const LANGUAGE_ALIASES: Record<string, Language> = {
+  BM: 'MS',
+  bm: 'MS',
+  MS: 'MS',
+  ms: 'MS',
+  'ms-MY': 'MS',
+  'ms-my': 'MS',
+  EN: 'EN',
+  en: 'EN',
+  'en-US': 'EN',
+  'en-GB': 'EN',
+  HI: 'HI',
+  hi: 'HI',
+  'hi-IN': 'HI',
+  'hi-in': 'HI',
+  ZH: 'ZH',
+  zh: 'ZH',
+  'zh-CN': 'ZH',
+  'zh-cn': 'ZH',
+  'zh-Hans': 'ZH',
+  'zh-hans': 'ZH',
+  TA: 'TA',
+  ta: 'TA',
+  'ta-IN': 'TA',
+  'ta-in': 'TA',
+};
+
+export function normalizeLanguagePreference(
+  value: string | null | undefined,
+): Language {
+  if (!value) return FALLBACK_LANGUAGE;
+
+  return (
+    LANGUAGE_ALIASES[value]
+    ?? LANGUAGE_ALIASES[value.toLowerCase()]
+    ?? LANGUAGE_ALIASES[value.toUpperCase()]
+    ?? FALLBACK_LANGUAGE
+  );
+}
 
 export const LANGUAGES: {
-  code: Language;
+  code: Exclude<Language, 'BM'>;
   label: string;
 }[] = [
   {
-    code: 'BM',
+    code: 'MS',
     label: 'Bahasa Melayu',
   },
   {
@@ -20,193 +62,344 @@ export const LANGUAGES: {
     code: 'ZH',
     label: '中文',
   },
+  {
+    code: 'TA',
+    label: 'தமிழ்',
+  },
 ];
 
-export const translations = {
-  BM: {
-    common: {
-      appName: 'OpsPS',
-      appSubtitle: 'Personal Shopper System',
-      login: 'Log Masuk',
-      logout: 'Log Keluar',
-      register: 'Daftar',
-      save: 'Simpan',
-      cancel: 'Batal',
-      delete: 'Padam',
-      edit: 'Edit',
-      add: 'Tambah',
-      back: 'Kembali',
-      next: 'Seterusnya',
-      confirm: 'Sahkan',
-      search: 'Cari',
-      filter: 'Tapis',
-      close: 'Tutup',
-      loading: 'Memuatkan...',
-      noData: 'Tiada data',
-      viewAll: 'Lihat Semua',
-      today: 'Hari Ini',
-      total: 'Jumlah',
-      status: 'Status',
-      date: 'Tarikh',
-      amount: 'Jumlah',
-      quantity: 'Kuantiti',
-      price: 'Harga',
-      profit: 'Keuntungan',
-    },
-
-    landing: {
-      label: 'PERSONAL SHOPPER SYSTEM',
-      title1: 'Urus Personal Shopper',
-      title2: 'Dalam Satu Aplikasi',
-      description:
-        'Urus produk, order, trip, pembelian, inventory, kewangan dan keuntungan personal shopper dengan lebih pantas dan mudah.',
-      startFree: 'Pilih Plan',
-      freeTrial: 'Tiada percubaan percuma',
-      noCreditCard: 'Tiada kad kredit diperlukan',
-      operationsTitle:
-        'Semua yang Personal Shopper perlukan',
-      operationsSubtitle:
-        'Satu sistem untuk mengurus operasi harian anda.',
-      product: 'Produk & Order',
-      productDescription:
-        'Produk, customer dan order',
-      trip: 'Trip & Pembelian',
-      tripDescription:
-        'Trip dan senarai pembelian',
-      inventory: 'Inventory',
-      inventoryDescription:
-        'Stock, size dan variant',
-      finance: 'Finance & Profit',
-      financeDescription:
-        'Sales, cost dan keuntungan',
-      pricingTitle: 'Pelan OpsPS',
-      pricingSubtitle:
-        'Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.',
-      founder: 'FOUNDER',
-      founderUsers: 'RM29/bulan',
-      founderPrice: 'RM29',
-      founderPriceText:
-        'Founder RM29/bulan',
-      founderPriceDescription:
-        'untuk 100 perniagaan pertama.',
-      becomeFounder: 'Jadi Founder',
-      standard: 'PRO',
-      standardPrice: 'RM49',
-      standardPriceText:
-        'Pro RM49/bulan',
-      standardPriceDescription:
-        'untuk operasi yang berkembang.',
-    },
-
-    auth: {
-      welcome: 'Selamat Datang ke OpsPS',
-      loginTitle: 'Log Masuk',
-      registerTitle: 'Daftar Akaun',
-      email: 'Email',
-      password: 'Kata Laluan',
-      confirmPassword: 'Sahkan Kata Laluan',
-      forgotPassword: 'Lupa Kata Laluan?',
-      loginButton: 'Log Masuk',
-      registerButton: 'Daftar',
-      noAccount: 'Belum mempunyai akaun?',
-      haveAccount: 'Sudah mempunyai akaun?',
-      createAccount: 'Cipta Akaun',
-    },
-
-    dashboard: {
-      title: 'Dashboard',
-      welcome: 'Selamat Datang',
-      profitToday: 'Profit Hari Ini',
-      profitMonth: 'Profit Bulan Ini',
-      pendingOrders: 'Pending Orders',
-      activeTrips: 'Active Trips',
-      sales: 'Sales',
-      expenses: 'Expenses',
-      recentOrders: 'Recent Orders',
-      quickActions: 'Quick Actions',
-    },
-
-    trips: {
-      title: 'Trips',
-      addTrip: 'Tambah Trip',
-      tripName: 'Nama Trip',
-      destination: 'Destinasi',
-      startDate: 'Tarikh Mula',
-      endDate: 'Tarikh Tamat',
-      products: 'Produk',
-      orders: 'Orders',
-      buyList: 'Buy List',
-      active: 'Active',
-      completed: 'Completed',
-      cancelled: 'Cancelled',
-      tripDetail: 'Trip Detail',
-      noTrips: 'Tiada trip lagi',
-    },
-
-    inventory: {
-      title: 'Inventory',
-      addProduct: 'Tambah Produk',
-      productName: 'Nama Produk',
-      category: 'Kategori',
-      variant: 'Variant',
-      size: 'Saiz',
-      stock: 'Stock',
-      lowStock: 'Low Stock',
-      inStock: 'In Stock',
-      outOfStock: 'Out of Stock',
-      costPrice: 'Cost Price',
-      sellingPrice: 'Selling Price',
-    },
-
-    finance: {
-      title: 'Finance',
-      revenue: 'Revenue',
-      cost: 'Cost',
-      grossProfit: 'Gross Profit',
-      expenses: 'Expenses',
-      netProfit: 'Net Profit',
-      pendingPayment: 'Pending Payment',
-      paid: 'Paid',
-    },
-
-    reports: {
-      title: 'Reports',
-      salesReport: 'Sales Report',
-      profitReport: 'Profit Report',
-      inventoryReport: 'Inventory Report',
-      tripReport: 'Trip Report',
-      orderReport: 'Order Report',
-      generateReport: 'Generate Report',
-      export: 'Export',
-    },
-
-    orders: {
-      title: 'Orders',
-      addOrder: 'Tambah Order',
-      orderNumber: 'Order Number',
-      customer: 'Customer',
-      orderDate: 'Order Date',
-      payment: 'Payment',
-      shipping: 'Shipping',
-      pending: 'Pending',
-      ready: 'Ready',
-      shipped: 'Shipped',
-      delivered: 'Delivered',
-      cancelled: 'Cancelled',
-    },
-
-    settings: {
-      title: 'Settings',
-      account: 'Account',
-      language: 'Bahasa',
-      notifications: 'Notifications',
-      subscription: 'Subscription',
-      team: 'Team',
-      security: 'Security',
-      changePassword: 'Change Password',
-    },
+const malayTranslations = {
+  common: {
+    appName: 'OpsPS',
+    appSubtitle: 'Personal Shopper System',
+    login: 'Log Masuk',
+    logout: 'Log Keluar',
+    register: 'Daftar',
+    save: 'Simpan',
+    cancel: 'Batal',
+    delete: 'Padam',
+    edit: 'Edit',
+    add: 'Tambah',
+    back: 'Kembali',
+    next: 'Seterusnya',
+    confirm: 'Sahkan',
+    search: 'Cari',
+    filter: 'Tapis',
+    close: 'Tutup',
+    loading: 'Memuatkan...',
+    noData: 'Tiada data',
+    viewAll: 'Lihat Semua',
+    today: 'Hari Ini',
+    total: 'Jumlah',
+    status: 'Status',
+    date: 'Tarikh',
+    amount: 'Jumlah',
+    quantity: 'Kuantiti',
+    price: 'Harga',
+    profit: 'Keuntungan',
   },
+  landing: {
+    label: 'PERSONAL SHOPPER SYSTEM',
+    title1: 'Urus Personal Shopper',
+    title2: 'Dalam Satu Aplikasi',
+    description:
+      'Urus produk, order, trip, pembelian, inventory, kewangan dan keuntungan personal shopper dengan lebih pantas dan mudah.',
+    startFree: 'Pilih Plan',
+    freeTrial: 'Tiada percubaan percuma',
+    noCreditCard: 'Tiada kad kredit diperlukan',
+    operationsTitle: 'Semua yang Personal Shopper perlukan',
+    operationsSubtitle: 'Satu sistem untuk mengurus operasi harian anda.',
+    product: 'Produk & Order',
+    productDescription: 'Produk, customer dan order',
+    trip: 'Trip & Pembelian',
+    tripDescription: 'Trip dan senarai pembelian',
+    inventory: 'Inventory',
+    inventoryDescription: 'Stock, size dan variant',
+    finance: 'Finance & Profit',
+    financeDescription: 'Sales, cost dan keuntungan',
+    pricingTitle: 'Pelan OpsPS',
+    pricingSubtitle:
+      'Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.',
+    founder: 'FOUNDER',
+    founderUsers: 'RM29/bulan',
+    founderPrice: 'RM29',
+    founderPriceText: 'Founder RM29/bulan',
+    founderPriceDescription: 'untuk 100 perniagaan pertama.',
+    becomeFounder: 'Jadi Founder',
+    standard: 'PRO',
+    standardPrice: 'RM49',
+    standardPriceText: 'Pro RM49/bulan',
+    standardPriceDescription: 'untuk operasi yang berkembang.',
+  },
+  auth: {
+    welcome: 'Selamat Datang ke OpsPS',
+    loginTitle: 'Log Masuk',
+    registerTitle: 'Daftar Akaun',
+    email: 'Email',
+    password: 'Kata Laluan',
+    confirmPassword: 'Sahkan Kata Laluan',
+    forgotPassword: 'Lupa Kata Laluan?',
+    loginButton: 'Log Masuk',
+    registerButton: 'Daftar',
+    noAccount: 'Belum mempunyai akaun?',
+    haveAccount: 'Sudah mempunyai akaun?',
+    createAccount: 'Cipta Akaun',
+  },
+  dashboard: {
+    title: 'Dashboard',
+    welcome: 'Selamat Datang',
+    profitToday: 'Profit Hari Ini',
+    profitMonth: 'Profit Bulan Ini',
+    pendingOrders: 'Pending Orders',
+    activeTrips: 'Active Trips',
+    sales: 'Sales',
+    expenses: 'Expenses',
+    recentOrders: 'Recent Orders',
+    quickActions: 'Quick Actions',
+  },
+  trips: {
+    title: 'Trips',
+    addTrip: 'Tambah Trip',
+    tripName: 'Nama Trip',
+    destination: 'Destinasi',
+    startDate: 'Tarikh Mula',
+    endDate: 'Tarikh Tamat',
+    products: 'Produk',
+    orders: 'Orders',
+    buyList: 'Buy List',
+    active: 'Active',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    tripDetail: 'Trip Detail',
+    noTrips: 'Tiada trip lagi',
+  },
+  inventory: {
+    title: 'Inventory',
+    addProduct: 'Tambah Produk',
+    productName: 'Nama Produk',
+    category: 'Kategori',
+    variant: 'Variant',
+    size: 'Saiz',
+    stock: 'Stock',
+    lowStock: 'Low Stock',
+    inStock: 'In Stock',
+    outOfStock: 'Out of Stock',
+    costPrice: 'Cost Price',
+    sellingPrice: 'Selling Price',
+  },
+  finance: {
+    title: 'Finance',
+    revenue: 'Revenue',
+    cost: 'Cost',
+    grossProfit: 'Gross Profit',
+    expenses: 'Expenses',
+    netProfit: 'Net Profit',
+    pendingPayment: 'Pending Payment',
+    paid: 'Paid',
+  },
+  reports: {
+    title: 'Reports',
+    salesReport: 'Sales Report',
+    profitReport: 'Profit Report',
+    inventoryReport: 'Inventory Report',
+    tripReport: 'Trip Report',
+    orderReport: 'Order Report',
+    generateReport: 'Generate Report',
+    export: 'Export',
+  },
+  orders: {
+    title: 'Orders',
+    addOrder: 'Tambah Order',
+    orderNumber: 'Order Number',
+    customer: 'Customer',
+    orderDate: 'Order Date',
+    payment: 'Payment',
+    shipping: 'Shipping',
+    pending: 'Pending',
+    ready: 'Ready',
+    shipped: 'Shipped',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled',
+  },
+  settings: {
+    title: 'Settings',
+    account: 'Account',
+    language: 'Bahasa',
+    notifications: 'Notifications',
+    subscription: 'Subscription',
+    team: 'Team',
+    security: 'Security',
+    changePassword: 'Change Password',
+  },
+};
 
+const tamilTranslations = {
+  common: {
+    appName: 'OpsPS',
+    appSubtitle: 'தனிப்பட்ட ஷாப்பர் அமைப்பு',
+    login: 'உள்நுழைக',
+    logout: 'வெளியேறு',
+    register: 'பதிவு செய்',
+    save: 'சேமி',
+    cancel: 'ரத்து செய்',
+    delete: 'நீக்கு',
+    edit: 'திருத்து',
+    add: 'சேர்',
+    back: 'பின்',
+    next: 'அடுத்து',
+    confirm: 'உறுதிப்படுத்து',
+    search: 'தேடு',
+    filter: 'வடிகட்டு',
+    close: 'மூடு',
+    loading: 'ஏற்றுகிறது...',
+    noData: 'தரவு இல்லை',
+    viewAll: 'அனைத்தையும் பார்',
+    today: 'இன்று',
+    total: 'மொத்தம்',
+    status: 'நிலை',
+    date: 'தேதி',
+    amount: 'தொகை',
+    quantity: 'அளவு',
+    price: 'விலை',
+    profit: 'லாபம்',
+  },
+  landing: {
+    label: 'PERSONAL SHOPPER SYSTEM',
+    title1: 'தனிப்பட்ட ஷாப்பரை நிர்வகி',
+    title2: 'ஒரே செயலியில்',
+    description:
+      'தனிப்பட்ட ஷாப்பர் தயாரிப்புகள், ஆர்டர்கள், பயணங்கள், கொள்முதல், சரக்கு, நிதி மற்றும் லாபத்தை விரைவாகவும் எளிதாகவும் நிர்வகிக்கவும்.',
+    startFree: 'திட்டத்தைத் தேர்ந்தெடுங்கள்',
+    freeTrial: 'இலவச சோதனை இல்லை',
+    noCreditCard: 'கிரெடிட் கார்டு தேவையில்லை',
+    operationsTitle: 'தனிப்பட்ட ஷாப்பருக்கு தேவையான அனைத்தும்',
+    operationsSubtitle: 'உங்கள் தினசரி செயல்பாடுகளுக்கான ஒரே அமைப்பு.',
+    product: 'தயாரிப்புகள் & ஆர்டர்கள்',
+    productDescription: 'தயாரிப்புகள், வாடிக்கையாளர்கள் மற்றும் ஆர்டர்கள்',
+    trip: 'பயணங்கள் & கொள்முதல்',
+    tripDescription: 'பயணங்கள் மற்றும் கொள்முதல் பட்டியல்கள்',
+    inventory: 'சரக்கு',
+    inventoryDescription: 'மொத்தம், அளவு, மாறுபாடுகள்',
+    finance: 'நிதி & லாபம்',
+    financeDescription: 'விற்பனை, செலவு மற்றும் லாபம்',
+    pricingTitle: 'OpsPS திட்டங்கள்',
+    pricingSubtitle: 'Free RM0 • Founder RM29/மாதம் • Pro RM49/மாதம் • Team +RM10/பயனர்/மாதம்.',
+    founder: 'FOUNDER',
+    founderUsers: 'RM29/மாதம்',
+    founderPrice: 'RM29',
+    founderPriceText: 'Founder RM29/மாதம்',
+    founderPriceDescription: 'முதல் 100 வணிகங்களுக்கு.',
+    becomeFounder: 'Founder ஆகுங்கள்',
+    standard: 'PRO',
+    standardPrice: 'RM49',
+    standardPriceText: 'Pro RM49/மாதம்',
+    standardPriceDescription: 'வளரும் செயல்பாடுகளுக்கு.',
+  },
+  auth: {
+    welcome: 'OpsPSக்கு வரவேற்கிறோம்',
+    loginTitle: 'உள்நுழைக',
+    registerTitle: 'கணக்கை உருவாக்கு',
+    email: 'மின்னஞ்சல்',
+    password: 'கடவுச்சொல்',
+    confirmPassword: 'கடவுச்சொல்லை உறுதிப்படுத்து',
+    forgotPassword: 'கடவுச்சொல்லை மறந்துவிட்டீர்களா?',
+    loginButton: 'உள்நுழைக',
+    registerButton: 'பதிவு செய்',
+    noAccount: 'கணக்கு இல்லையா?',
+    haveAccount: 'ஏற்கனவே கணக்கு உள்ளதா?',
+    createAccount: 'கணக்கை உருவாக்கு',
+  },
+  dashboard: {
+    title: 'டாஷ்போர்டு',
+    welcome: 'வரவேற்கிறோம்',
+    profitToday: 'இன்றைய லாபம்',
+    profitMonth: 'இந்த மாத லாபம்',
+    pendingOrders: 'நிலுவையில் உள்ள ஆர்டர்கள்',
+    activeTrips: 'செயலிலுள்ள பயணங்கள்',
+    sales: 'விற்பனை',
+    expenses: 'செலவுகள்',
+    recentOrders: 'சமீபத்திய ஆர்டர்கள்',
+    quickActions: 'விரைவு செயல்கள்',
+  },
+  trips: {
+    title: 'பயணங்கள்',
+    addTrip: 'பயணத்தை சேர்க்க',
+    tripName: 'பயணத்தின் பெயர்',
+    destination: 'இலக்கு',
+    startDate: 'துவங்கும் தேதி',
+    endDate: 'முடியும் தேதி',
+    products: 'தயாரிப்புகள்',
+    orders: 'ஆர்டர்கள்',
+    buyList: 'கொள்முதல் பட்டியல்',
+    active: 'செயலில்',
+    completed: 'முடிந்தது',
+    cancelled: 'ரத்து செய்யப்பட்டது',
+    tripDetail: 'பயண விவரம்',
+    noTrips: 'இன்னும் பயணங்கள் இல்லை',
+  },
+  inventory: {
+    title: 'சரக்கு',
+    addProduct: 'தயாரிப்பை சேர்க்க',
+    productName: 'தயாரிப்பின் பெயர்',
+    category: 'வகை',
+    variant: 'மாறுபாடு',
+    size: 'அளவு',
+    stock: 'சரக்கு',
+    lowStock: 'குறைந்த சரக்கு',
+    inStock: 'சரக்கில் உள்ளது',
+    outOfStock: 'சரக்கு இல்லை',
+    costPrice: 'செலவு விலை',
+    sellingPrice: 'விற்பனை விலை',
+  },
+  finance: {
+    title: 'நிதி',
+    revenue: 'வருமானம்',
+    cost: 'செலவு',
+    grossProfit: 'மொத்த லாபம்',
+    expenses: 'செலவுகள்',
+    netProfit: 'நிகர லாபம்',
+    pendingPayment: 'நிலுவையில் உள்ள பணம்',
+    paid: 'செலுத்தப்பட்டது',
+  },
+  reports: {
+    title: 'அறிக்கைகள்',
+    salesReport: 'விற்பனை அறிக்கை',
+    profitReport: 'லாப அறிக்கை',
+    inventoryReport: 'சரக்கு அறிக்கை',
+    tripReport: 'பயண அறிக்கை',
+    orderReport: 'ஆர்டர் அறிக்கை',
+    generateReport: 'அறிக்கையை உருவாக்கு',
+    export: 'ஏற்றுமதி',
+  },
+  orders: {
+    title: 'ஆர்டர்கள்',
+    addOrder: 'ஆர்டரை சேர்க்கவும்',
+    orderNumber: 'ஆர்டர் எண்',
+    customer: 'வாடிக்கையாளர்',
+    orderDate: 'ஆர்டர் தேதி',
+    payment: 'கட்டணம்',
+    shipping: 'விநியோகம்',
+    pending: 'நிலுவையில்',
+    ready: 'தயார்',
+    shipped: 'அனுப்பப்பட்டது',
+    delivered: 'வழங்கப்பட்டது',
+    cancelled: 'ரத்து செய்யப்பட்டது',
+  },
+  settings: {
+    title: 'அமைப்புகள்',
+    account: 'கணக்கு',
+    language: 'மொழி',
+    notifications: 'அறிவிப்புகள்',
+    subscription: 'சந்தா',
+    team: 'குழு',
+    security: 'பாதுகாப்பு',
+    changePassword: 'கடவுச்சொல்லை மாற்று',
+  },
+};
+
+export const translations = {
+  BM: malayTranslations,
+  MS: malayTranslations,
   EN: {
     common: {
       appName: 'OpsPS',
@@ -237,7 +430,6 @@ export const translations = {
       price: 'Price',
       profit: 'Profit',
     },
-
     landing: {
       label: 'PERSONAL SHOPPER SYSTEM',
       title1: 'Manage Your Personal Shopper',
@@ -247,41 +439,30 @@ export const translations = {
       startFree: 'Choose Plan',
       freeTrial: 'No free trial',
       noCreditCard: 'No credit card required',
-      operationsTitle:
-        'Everything a Personal Shopper needs',
-      operationsSubtitle:
-        'One system for your daily operations.',
+      operationsTitle: 'Everything a Personal Shopper needs',
+      operationsSubtitle: 'One system for your daily operations.',
       product: 'Products & Orders',
-      productDescription:
-        'Products, customers and orders',
+      productDescription: 'Products, customers and orders',
       trip: 'Trips & Purchases',
-      tripDescription:
-        'Trips and purchase lists',
+      tripDescription: 'Trips and purchase lists',
       inventory: 'Inventory',
-      inventoryDescription:
-        'Stock, sizes and variants',
+      inventoryDescription: 'Stock, sizes and variants',
       finance: 'Finance & Profit',
-      financeDescription:
-        'Sales, costs and profit',
+      financeDescription: 'Sales, costs and profit',
       pricingTitle: 'OpsPS Plans',
       pricingSubtitle:
         'Free RM0 • Founder RM29/month • Pro RM49/month • Team +RM10/user/month.',
       founder: 'FOUNDER',
       founderUsers: 'RM29/month',
       founderPrice: 'RM29',
-      founderPriceText:
-        'Founder RM29/month',
-      founderPriceDescription:
-        'for the first 100 businesses.',
+      founderPriceText: 'Founder RM29/month',
+      founderPriceDescription: 'for the first 100 businesses.',
       becomeFounder: 'Become a Founder',
       standard: 'PRO',
       standardPrice: 'RM49',
-      standardPriceText:
-        'Pro RM49/month',
-      standardPriceDescription:
-        'for growing operations.',
+      standardPriceText: 'Pro RM49/month',
+      standardPriceDescription: 'for growing operations.',
     },
-
     auth: {
       welcome: 'Welcome to OpsPS',
       loginTitle: 'Login',
@@ -296,7 +477,6 @@ export const translations = {
       haveAccount: 'Already have an account?',
       createAccount: 'Create Account',
     },
-
     dashboard: {
       title: 'Dashboard',
       welcome: 'Welcome',
@@ -309,7 +489,6 @@ export const translations = {
       recentOrders: 'Recent Orders',
       quickActions: 'Quick Actions',
     },
-
     trips: {
       title: 'Trips',
       addTrip: 'Add Trip',
@@ -326,7 +505,6 @@ export const translations = {
       tripDetail: 'Trip Detail',
       noTrips: 'No trips yet',
     },
-
     inventory: {
       title: 'Inventory',
       addProduct: 'Add Product',
@@ -341,7 +519,6 @@ export const translations = {
       costPrice: 'Cost Price',
       sellingPrice: 'Selling Price',
     },
-
     finance: {
       title: 'Finance',
       revenue: 'Revenue',
@@ -352,7 +529,6 @@ export const translations = {
       pendingPayment: 'Pending Payment',
       paid: 'Paid',
     },
-
     reports: {
       title: 'Reports',
       salesReport: 'Sales Report',
@@ -363,7 +539,6 @@ export const translations = {
       generateReport: 'Generate Report',
       export: 'Export',
     },
-
     orders: {
       title: 'Orders',
       addOrder: 'Add Order',
@@ -378,7 +553,6 @@ export const translations = {
       delivered: 'Delivered',
       cancelled: 'Cancelled',
     },
-
     settings: {
       title: 'Settings',
       account: 'Account',
@@ -390,7 +564,6 @@ export const translations = {
       changePassword: 'Change Password',
     },
   },
-
   HI: {
     common: {
       appName: 'OpsPS',
@@ -421,7 +594,6 @@ export const translations = {
       price: 'कीमत',
       profit: 'मुनाफा',
     },
-
     landing: {
       label: 'पर्सनल शॉपर सिस्टम',
       title1: 'पर्सनल शॉपर को मैनेज करें',
@@ -431,41 +603,30 @@ export const translations = {
       startFree: 'प्लान चुनें',
       freeTrial: 'कोई free trial नहीं',
       noCreditCard: 'क्रेडिट कार्ड की आवश्यकता नहीं',
-      operationsTitle:
-        'पर्सनल शॉपर के लिए सब कुछ',
-      operationsSubtitle:
-        'आपके दैनिक काम के लिए एक पूरा सिस्टम।',
+      operationsTitle: 'पर्सनल शॉपर के लिए सब कुछ',
+      operationsSubtitle: 'आपके दैनिक काम के लिए एक पूरा सिस्टम।',
       product: 'प्रोडक्ट और ऑर्डर',
-      productDescription:
-        'प्रोडक्ट, ग्राहक और ऑर्डर',
+      productDescription: 'प्रोडक्ट, ग्राहक और ऑर्डर',
       trip: 'ट्रिप और खरीदारी',
-      tripDescription:
-        'ट्रिप और खरीदारी की सूची',
+      tripDescription: 'ट्रिप और खरीदारी की सूची',
       inventory: 'इन्वेंटरी',
-      inventoryDescription:
-        'स्टॉक, साइज़ और वैरिएंट',
+      inventoryDescription: 'स्टॉक, साइज़ और वैरिएंट',
       finance: 'फाइनेंस और प्रॉफिट',
-      financeDescription:
-        'बिक्री, लागत और मुनाफा',
+      financeDescription: 'बिक्री, लागत और मुनाफा',
       pricingTitle: 'OpsPS प्लान',
       pricingSubtitle:
         'Free RM0 • Founder RM29/माह • Pro RM49/माह • Team +RM10/यूज़र/माह.',
       founder: 'FOUNDER',
       founderUsers: 'RM29/माह',
       founderPrice: 'RM29',
-      founderPriceText:
-        'Founder RM29/माह',
-      founderPriceDescription:
-        'पहले 100 businesses के लिए.',
+      founderPriceText: 'Founder RM29/माह',
+      founderPriceDescription: 'पहले 100 businesses के लिए.',
       becomeFounder: 'Founder बनें',
       standard: 'PRO',
       standardPrice: 'RM49',
-      standardPriceText:
-        'Pro RM49/माह',
-      standardPriceDescription:
-        'बढ़ते ops के लिए.',
+      standardPriceText: 'Pro RM49/माह',
+      standardPriceDescription: 'बढ़ते ops के लिए.',
     },
-
     auth: {
       welcome: 'OpsPS में आपका स्वागत है',
       loginTitle: 'लॉग इन',
@@ -480,7 +641,6 @@ export const translations = {
       haveAccount: 'पहले से अकाउंट है?',
       createAccount: 'अकाउंट बनाएं',
     },
-
     dashboard: {
       title: 'डैशबोर्ड',
       welcome: 'स्वागत है',
@@ -493,7 +653,6 @@ export const translations = {
       recentOrders: 'हाल के ऑर्डर',
       quickActions: 'क्विक एक्शन',
     },
-
     trips: {
       title: 'Trips',
       addTrip: 'Trip जोड़ें',
@@ -510,7 +669,6 @@ export const translations = {
       tripDetail: 'Trip Detail',
       noTrips: 'अभी कोई Trip नहीं',
     },
-
     inventory: {
       title: 'Inventory',
       addProduct: 'Product जोड़ें',
@@ -525,7 +683,6 @@ export const translations = {
       costPrice: 'Cost Price',
       sellingPrice: 'Selling Price',
     },
-
     finance: {
       title: 'Finance',
       revenue: 'Revenue',
@@ -536,7 +693,6 @@ export const translations = {
       pendingPayment: 'Pending Payment',
       paid: 'Paid',
     },
-
     reports: {
       title: 'Reports',
       salesReport: 'Sales Report',
@@ -547,7 +703,6 @@ export const translations = {
       generateReport: 'Report बनाएं',
       export: 'Export',
     },
-
     orders: {
       title: 'Orders',
       addOrder: 'Order जोड़ें',
@@ -562,7 +717,6 @@ export const translations = {
       delivered: 'Delivered',
       cancelled: 'Cancelled',
     },
-
     settings: {
       title: 'Settings',
       account: 'Account',
@@ -574,7 +728,6 @@ export const translations = {
       changePassword: 'पासवर्ड बदलें',
     },
   },
-
   ZH: {
     common: {
       appName: 'OpsPS',
@@ -605,51 +758,37 @@ export const translations = {
       price: '价格',
       profit: '利润',
     },
-
     landing: {
       label: '个人购物系统',
       title1: '管理 Personal Shopper',
       title2: '一个应用即可完成',
-      description:
-        '轻松管理产品、订单、Trip、采购、库存、财务和利润。',
+      description: '轻松管理产品、订单、Trip、采购、库存、财务和利润。',
       startFree: '选择方案',
       freeTrial: '无免费试用',
       noCreditCard: '无需信用卡',
-      operationsTitle:
-        'Personal Shopper 所需的一切',
-      operationsSubtitle:
-        '一个系统管理您的日常运营。',
+      operationsTitle: 'Personal Shopper 所需的一切',
+      operationsSubtitle: '一个系统管理您的日常运营。',
       product: '产品与订单',
-      productDescription:
-        '产品、客户和订单',
+      productDescription: '产品、客户和订单',
       trip: 'Trip 与采购',
-      tripDescription:
-        'Trip 和采购清单',
+      tripDescription: 'Trip 和采购清单',
       inventory: '库存',
-      inventoryDescription:
-        '库存、尺寸和 Variant',
+      inventoryDescription: '库存、尺寸和 Variant',
       finance: '财务与利润',
-      financeDescription:
-        '销售、成本和利润',
+      financeDescription: '销售、成本和利润',
       pricingTitle: 'OpsPS 方案',
-      pricingSubtitle:
-        'Free RM0 • Founder RM29/月 • Pro RM49/月 • Team +RM10/用户/月.',
+      pricingSubtitle: 'Free RM0 • Founder RM29/月 • Pro RM49/月 • Team +RM10/用户/月.',
       founder: 'FOUNDER',
       founderUsers: 'RM29/月',
       founderPrice: 'RM29',
-      founderPriceText:
-        'Founder RM29/月',
-      founderPriceDescription:
-        '适用于前 100 家业务。',
+      founderPriceText: 'Founder RM29/月',
+      founderPriceDescription: '适用于前 100 家业务。',
       becomeFounder: '成为 Founder',
       standard: 'PRO',
       standardPrice: 'RM49',
-      standardPriceText:
-        'Pro RM49/月',
-      standardPriceDescription:
-        '适合增长中的业务。',
+      standardPriceText: 'Pro RM49/月',
+      standardPriceDescription: '适合增长中的业务。',
     },
-
     auth: {
       welcome: '欢迎来到 OpsPS',
       loginTitle: '登录',
@@ -664,7 +803,6 @@ export const translations = {
       haveAccount: '已经有账户？',
       createAccount: '创建账户',
     },
-
     dashboard: {
       title: 'Dashboard',
       welcome: '欢迎',
@@ -677,7 +815,6 @@ export const translations = {
       recentOrders: '最近订单',
       quickActions: '快捷操作',
     },
-
     trips: {
       title: 'Trips',
       addTrip: '添加 Trip',
@@ -694,7 +831,6 @@ export const translations = {
       tripDetail: 'Trip 详情',
       noTrips: '暂无 Trip',
     },
-
     inventory: {
       title: '库存',
       addProduct: '添加产品',
@@ -709,7 +845,6 @@ export const translations = {
       costPrice: '成本价',
       sellingPrice: '售价',
     },
-
     finance: {
       title: '财务',
       revenue: '收入',
@@ -720,7 +855,6 @@ export const translations = {
       pendingPayment: '待付款',
       paid: '已付款',
     },
-
     reports: {
       title: '报表',
       salesReport: '销售报表',
@@ -731,7 +865,6 @@ export const translations = {
       generateReport: '生成报表',
       export: '导出',
     },
-
     orders: {
       title: '订单',
       addOrder: '添加订单',
@@ -746,7 +879,6 @@ export const translations = {
       delivered: '已送达',
       cancelled: '已取消',
     },
-
     settings: {
       title: '设置',
       account: '账户',
@@ -758,6 +890,5 @@ export const translations = {
       changePassword: '修改密码',
     },
   },
-} as const;
-
-export type Translation = typeof translations.BM;
+  TA: tamilTranslations,
+};
