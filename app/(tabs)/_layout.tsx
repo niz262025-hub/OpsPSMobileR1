@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Pressable } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Platform, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Redirect, Tabs, router } from 'expo-router';
 import {
   Home,
@@ -19,7 +19,15 @@ const iconProps = {
 };
 
 export default function TabsLayout() {
-  const { currentUser, ready } = useAuth();
+  const { width } = useWindowDimensions();
+  const compactWeb = Platform.OS === 'web' && width < 600;
+  const { currentUser, ready, logout } = useAuth();
+  const [returning, setReturning] = useState(false);
+  const returnToPortal = async () => {
+    if (returning) return;
+    setReturning(true);
+    try { await logout(); } finally { setReturning(false); }
+  };
   const TAB_ICON_SIZE = 24;
   const THEME_PRIMARY = '#5B2BD9';
   const THEME_INACTIVE = '#8E899B';
@@ -37,6 +45,23 @@ export default function TabsLayout() {
   return (
     <Tabs
       initialRouteName="dashboard"
+      tabBar={compactWeb ? ({ state, descriptors, navigation }) => (
+        <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingBottom: 8 }}>
+          {state.routes.filter(route => ['dashboard', 'trips', 'marketplace', 'orders', 'inventory', 'finance', 'reports'].includes(route.name)).map(route => {
+            const options = descriptors[route.key].options;
+            const focused = state.routes[state.index].key === route.key;
+            const color = focused ? THEME_PRIMARY : '#595366';
+            return <Pressable key={route.key} accessibilityRole="tab" accessibilityState={{ selected: focused }}
+              onPress={() => {
+                const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+              }} style={{ width: '25%', minHeight: 60, alignItems: 'center', justifyContent: 'center', padding: 6, gap: 4 }}>
+              {options.tabBarIcon?.({ focused, color, size: 22 })}
+              <Text style={{ color, fontSize: 12, textAlign: 'center' }}>{typeof options.tabBarLabel === 'string' ? options.tabBarLabel : options.title ?? route.name}</Text>
+            </Pressable>;
+          })}
+        </View>
+      ) : undefined}
       screenOptions={{
         tabBarActiveTintColor: THEME_PRIMARY,
         tabBarInactiveTintColor: THEME_INACTIVE,
@@ -57,11 +82,21 @@ export default function TabsLayout() {
           fontSize: 18,
         },
         headerRight: () => (
-          <Pressable onPress={() => router.push('/settings')}>
-            <User
-              {...({ ...iconProps, color: '#FFFFFF', style: { marginRight: 16 } } as any)}
-            />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={returning}
+              onPress={() => void returnToPortal()}
+              style={{ backgroundColor: '#FFFFFF', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 10 }}
+            >
+              <Text style={{ color: THEME_PRIMARY, fontWeight: '600', fontSize: 12 }}>{returning ? 'Kembali…' : 'Kembali ke MYOPS'}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={() => router.push('/settings')}>
+              <User
+                {...({ ...iconProps, color: '#FFFFFF', style: { marginRight: 16 } } as any)}
+              />
+            </Pressable>
+          </View>
         ),
       }}
     >
