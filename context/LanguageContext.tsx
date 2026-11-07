@@ -8,8 +8,10 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  FALLBACK_LANGUAGE,
   Language,
   LANGUAGES,
+  normalizeLanguagePreference,
   translations,
 } from '../constants/i18n';
 
@@ -25,65 +27,68 @@ type LanguageContextValue = {
 
 const LANGUAGE_STORAGE_KEY = '@opsps_language';
 
-const LanguageContext =
-  createContext<LanguageContextValue | undefined>(
-    undefined,
-  );
+const getWebStorage = () => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage;
+  }
+
+  return null;
+};
+
+const readStoredLanguage = async () => {
+  const webStorage = getWebStorage();
+  if (webStorage) {
+    return webStorage.getItem(LANGUAGE_STORAGE_KEY);
+  }
+
+  return AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
+};
+
+const writeStoredLanguage = async (value: string) => {
+  const webStorage = getWebStorage();
+  if (webStorage) {
+    webStorage.setItem(LANGUAGE_STORAGE_KEY, value);
+    return;
+  }
+
+  await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, value);
+};
+
+const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);
 
 export function LanguageProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [language, setLanguageState] =
-    useState<Language>('BM');
-
+  const [language, setLanguageState] = useState<Language>(FALLBACK_LANGUAGE);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    loadLanguage();
+    void loadLanguage();
   }, []);
 
   const loadLanguage = async () => {
     try {
-      const savedLanguage =
-        await AsyncStorage.getItem(
-          LANGUAGE_STORAGE_KEY,
-        );
-
-      if (
-        savedLanguage === 'BM' ||
-        savedLanguage === 'EN' ||
-        savedLanguage === 'HI' ||
-        savedLanguage === 'ZH'
-      ) {
-        setLanguageState(savedLanguage);
-      }
+      const savedLanguage = await readStoredLanguage();
+      const normalized = normalizeLanguagePreference(savedLanguage);
+      setLanguageState(normalized);
     } catch (error) {
-      console.warn(
-        'Unable to load saved language:',
-        error,
-      );
+      console.warn('Unable to load saved language:', error);
+      setLanguageState(FALLBACK_LANGUAGE);
     } finally {
       setReady(true);
     }
   };
 
-  const setLanguage = async (
-    newLanguage: Language,
-  ) => {
-    setLanguageState(newLanguage);
+  const setLanguage = async (newLanguage: Language) => {
+    const normalizedLanguage = normalizeLanguagePreference(newLanguage);
+    setLanguageState(normalizedLanguage);
 
     try {
-      await AsyncStorage.setItem(
-        LANGUAGE_STORAGE_KEY,
-        newLanguage,
-      );
+      await writeStoredLanguage(normalizedLanguage);
     } catch (error) {
-      console.warn(
-        'Unable to save language:',
-        error,
-      );
+      console.warn('Unable to save language:', error);
     }
   };
 
@@ -109,9 +114,7 @@ export function useLanguage(): LanguageContextValue {
   const context = useContext(LanguageContext);
 
   if (!context) {
-    throw new Error(
-      'useLanguage must be used inside LanguageProvider',
-    );
+    throw new Error('useLanguage must be used inside LanguageProvider');
   }
 
   return context;

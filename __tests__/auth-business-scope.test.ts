@@ -171,6 +171,56 @@ describe('auth business scope', () => {
     expect(mockSupabaseClient.auth.signInWithPassword).not.toHaveBeenCalled();
   });
 
+  it('normalizes legacy BM and web locale codes into supported MS/TA storage and falls back to English', async () => {
+    const { LanguageProvider, useLanguage } = await import('../context/LanguageContext');
+    const { normalizeLanguagePreference } = await import('../constants/i18n');
+
+    expect(normalizeLanguagePreference('BM')).toBe('MS');
+    expect(normalizeLanguagePreference('ms')).toBe('MS');
+    expect(normalizeLanguagePreference('zh-CN')).toBe('ZH');
+    expect(normalizeLanguagePreference('ta')).toBe('TA');
+    expect(normalizeLanguagePreference('unknown')).toBe('EN');
+
+    const storageMap = new Map<string, string>();
+    Object.defineProperty(globalThis, 'window', {
+      value: {
+        localStorage: {
+          getItem: (key: string) => storageMap.get(key) ?? null,
+          setItem: (key: string, value: string) => storageMap.set(key, String(value)),
+          removeItem: (key: string) => storageMap.delete(key),
+        },
+        dispatchEvent: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+      configurable: true,
+    });
+
+    storageMap.set('@opsps_language', 'BM');
+
+    let authValue: any;
+    function Harness() {
+      authValue = useLanguage();
+      return null;
+    }
+
+    await act(async () => {
+      create(React.createElement(LanguageProvider, null, React.createElement(Harness)));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(authValue.language).toBe('MS');
+    await act(async () => {
+      await authValue.setLanguage('TA');
+    });
+
+    expect(storageMap.get('@opsps_language')).toBe('TA');
+    expect(authValue.language).toBe('TA');
+  });
+
   it('keeps production runtime free of direct mock/local persistence usage in the audited paths', () => {
     const targetedFiles = [
       'app/(tabs)/dashboard.tsx',
