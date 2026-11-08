@@ -50,7 +50,7 @@ export const OPSPS_PLAN_DEFINITIONS = {
   'standard-monthly': {
     label: 'Standard Monthly',
     billingCycle: 'monthly',
-    notes: 'RM49/month recurring access for active business operations.',
+    notes: 'Subscription selection and manual renewal are managed in MYOPS.',
   },
   'team-user-addon': {
     label: 'Team User Add-on',
@@ -59,179 +59,31 @@ export const OPSPS_PLAN_DEFINITIONS = {
   },
 } as const;
 
-export type MyopsSubscriptionEntitlementId =
-  | 'starter'
-  | 'single_app'
-  | 'two_apps'
-  | 'all_apps'
-  | 'opshub_seller';
-
+// Display metadata only. Central signed MYOPS entitlement remains the access boundary.
+export type MyopsSubscriptionEntitlementId = 'free_trial' | 'founders_lifetime' | 'two_apps' | 'all_apps';
 export type MyopsSubscriptionEntitlement = {
-  id: MyopsSubscriptionEntitlementId;
-  label: string;
-  monthlyPrice: number;
-  currency: 'MYR';
-  appCount: number;
-  limitDescription?: string;
-  trialDays: number;
-  isFree: boolean;
+ id:MyopsSubscriptionEntitlementId;label:string;monthlyPrice:number|null;oneTimePrice?:number;
+ currency:'MYR';appCount:number;trialDays:number;isFree:boolean;
 };
-
-export const MYOPS_SUBSCRIPTION_ENTITLEMENTS: Record<
-  MyopsSubscriptionEntitlementId,
-  MyopsSubscriptionEntitlement
-> = {
-  starter: {
-    id: 'starter',
-    label: 'Starter',
-    monthlyPrice: 9.9,
-    currency: 'MYR',
-    appCount: 1,
-    limitDescription: 'Limited usage; exact app limits are defined by the product feature gate.',
-    trialDays: 14,
-    isFree: false,
-  },
-  single_app: {
-    id: 'single_app',
-    label: 'Single paid app',
-    monthlyPrice: 19.9,
-    currency: 'MYR',
-    appCount: 1,
-    trialDays: 14,
-    isFree: false,
-  },
-  two_apps: {
-    id: 'two_apps',
-    label: 'Any 2 paid apps',
-    monthlyPrice: 29.9,
-    currency: 'MYR',
-    appCount: 2,
-    trialDays: 14,
-    isFree: false,
-  },
-  all_apps: {
-    id: 'all_apps',
-    label: 'All 3 paid apps',
-    monthlyPrice: 39.9,
-    currency: 'MYR',
-    appCount: 3,
-    trialDays: 14,
-    isFree: false,
-  },
-  opshub_seller: {
-    id: 'opshub_seller',
-    label: 'OpsHub seller signup',
-    monthlyPrice: 0,
-    currency: 'MYR',
-    appCount: 0,
-    trialDays: 0,
-    isFree: true,
-  },
+export const MYOPS_SUBSCRIPTION_ENTITLEMENTS:Record<MyopsSubscriptionEntitlementId,MyopsSubscriptionEntitlement>={
+ free_trial:{id:'free_trial',label:'Free Trial',monthlyPrice:0,currency:'MYR',appCount:4,trialDays:7,isFree:true},
+ founders_lifetime:{id:'founders_lifetime',label:'First 100 Subscribers',monthlyPrice:null,oneTimePrice:29,currency:'MYR',appCount:4,trialDays:7,isFree:false},
+ two_apps:{id:'two_apps',label:'Normal Subscription',monthlyPrice:49,currency:'MYR',appCount:2,trialDays:7,isFree:false},
+ all_apps:{id:'all_apps',label:'All Apps',monthlyPrice:79,currency:'MYR',appCount:4,trialDays:7,isFree:false},
 };
-
-export const MYOPS_INTRODUCTORY_PRICING = MYOPS_SUBSCRIPTION_ENTITLEMENTS;
-
-export function getMyopsSubscriptionEntitlement(
-  paidAppCount: number,
-  opts: { isSellerSignup?: boolean } = {}
-): MyopsSubscriptionEntitlement {
-  if (opts.isSellerSignup) {
-    return MYOPS_SUBSCRIPTION_ENTITLEMENTS.opshub_seller;
-  }
-
-  if (paidAppCount <= 0) {
-    return MYOPS_SUBSCRIPTION_ENTITLEMENTS.starter;
-  }
-
-  if (paidAppCount === 1) {
-    return MYOPS_SUBSCRIPTION_ENTITLEMENTS.single_app;
-  }
-
-  if (paidAppCount === 2) {
-    return MYOPS_SUBSCRIPTION_ENTITLEMENTS.two_apps;
-  }
-
-  return MYOPS_SUBSCRIPTION_ENTITLEMENTS.all_apps;
+export const MYOPS_INTRODUCTORY_PRICING=MYOPS_SUBSCRIPTION_ENTITLEMENTS;
+export function getMyopsSubscriptionEntitlement(paidAppCount:number,opts:{isSellerSignup?:boolean;founderLifetime?:boolean}={}):MyopsSubscriptionEntitlement {
+ if(opts.isSellerSignup)throw new Error('OpsHub is separate from MYOPS subscriptions.');
+ if(!Number.isInteger(paidAppCount)||paidAppCount<0||paidAppCount>4)throw new Error('Invalid MYOPS app selection.');
+ if(opts.founderLifetime)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.founders_lifetime;
+ if(paidAppCount===0)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.free_trial;
+ if(paidAppCount===2)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.two_apps;
+ if(paidAppCount>=3)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.all_apps;
+ throw new Error('Choose a current plan in MYOPS; no single-app offer is configured.');
 }
-
-export const getMyopsIntroductoryPrice = (paidAppCount: number, opts?: { isSellerSignup?: boolean }): number =>
-  getMyopsSubscriptionEntitlement(paidAppCount, opts).monthlyPrice;
-
-export const getMyopsEntitlementTier = getMyopsSubscriptionEntitlement;
-export const resolveMyopsSubscriptionPricing = getMyopsSubscriptionEntitlement;
-
-export type MyopsCommissionRateTier = {
-  minimumGmv: number;
-  maximumGmv?: number;
-  rate: number;
-};
-
-export const MYOPS_MARKETPLACE_COMMISSION_TIERS: MyopsCommissionRateTier[] = [
-  { minimumGmv: 0, maximumGmv: 999.99, rate: 0.03 },
-  { minimumGmv: 1000, maximumGmv: 9999.99, rate: 0.02 },
-  { minimumGmv: 10000, rate: 0.015 },
-];
-
-export function getMarketplaceCommissionRate(gmv: number): number {
-  const subtotal = Number(gmv) || 0;
-
-  if (subtotal < 1000) return 0.03;
-  if (subtotal < 10000) return 0.02;
-  return 0.015;
-}
-
-export function createCommissionRateSnapshot(
-  gmv: number,
-  effectiveTimestamp: string = new Date().toISOString()
-): {
-  effectiveAt: string;
-  gmv: number;
-  rate: number;
-  ratePercent: number;
-  currency: 'MYR';
-} {
-  const rate = getMarketplaceCommissionRate(gmv);
-  return {
-    effectiveAt: effectiveTimestamp,
-    gmv: Number(gmv) || 0,
-    rate,
-    ratePercent: Number((rate * 100).toFixed(4)),
-    currency: 'MYR',
-  };
-}
-
-export function calculateMarketplaceCommission(input: {
-  eligibleSubtotal?: number;
-  shipping?: number;
-  tax?: number;
-  refundAmount?: number;
-  gmv?: number;
-  rate?: number;
-  effectiveAt?: string;
-} = {}): {
-  eligibleSubtotal: number;
-  commission: number;
-  rate: number;
-  refundAmount: number;
-  snapshot: ReturnType<typeof createCommissionRateSnapshot>;
-} {
-  const eligibleSubtotal = Math.max(0, Number(input.eligibleSubtotal ?? input.gmv ?? 0) || 0);
-  const refundAmount = Number(input.refundAmount ?? 0) || 0;
-  const gmv = Math.max(0, Number(input.gmv ?? eligibleSubtotal) || 0);
-  const rate = input.rate ?? getMarketplaceCommissionRate(gmv);
-  const commission = Math.max(0, eligibleSubtotal * rate - refundAmount);
-
-  return {
-    eligibleSubtotal,
-    commission,
-    rate,
-    refundAmount,
-    snapshot: createCommissionRateSnapshot(gmv, input.effectiveAt ?? new Date().toISOString()),
-  };
-}
-
-export const calculateSellerCommission = calculateMarketplaceCommission;
-export const getSellerCommissionRate = getMarketplaceCommissionRate;
+export const getMyopsIntroductoryPrice=(count:number,opts?:{isSellerSignup?:boolean;founderLifetime?:boolean}):number|null=>getMyopsSubscriptionEntitlement(count,opts).monthlyPrice;
+export const getMyopsEntitlementTier=getMyopsSubscriptionEntitlement;
+export const resolveMyopsSubscriptionPricing=getMyopsSubscriptionEntitlement;
 
 export function normalizeSubscriptionState(
   value?: string | null

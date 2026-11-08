@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  calculateMarketplaceCommission,
   canAccessAdminSubscriptionControls,
   canAccessFounderSubscriptionControls,
   canInspectSubscriptionState,
-  getMarketplaceCommissionRate,
   getMyopsSubscriptionEntitlement,
   isLifetimeSubscription,
   isSubscriptionActive,
@@ -26,16 +24,14 @@ describe('subscription foundation', () => {
     isLifetime: true,
   };
 
-  it('defines MYOPS introductory pricing and commission tiers for the approved plan mix', () => {
-    expect(getMyopsSubscriptionEntitlement(0)).toMatchObject({ id: 'starter', monthlyPrice: 9.9, trialDays: 14 });
-    expect(getMyopsSubscriptionEntitlement(1)).toMatchObject({ id: 'single_app', monthlyPrice: 19.9, trialDays: 14 });
-    expect(getMyopsSubscriptionEntitlement(2)).toMatchObject({ id: 'two_apps', monthlyPrice: 29.9, trialDays: 14 });
-    expect(getMyopsSubscriptionEntitlement(3)).toMatchObject({ id: 'all_apps', monthlyPrice: 39.9, trialDays: 14 });
-    expect(getMyopsSubscriptionEntitlement(0, { isSellerSignup: true })).toMatchObject({ id: 'opshub_seller', monthlyPrice: 0, isFree: true });
-    expect(getMarketplaceCommissionRate(999.99)).toBeCloseTo(0.03, 6);
-    expect(getMarketplaceCommissionRate(1000)).toBeCloseTo(0.02, 6);
-    expect(getMarketplaceCommissionRate(10000)).toBeCloseTo(0.015, 6);
-    expect(calculateMarketplaceCommission({ eligibleSubtotal: 1000 }).commission).toBeCloseTo(20, 6);
+  it('matches the central seven-day policy and original MYOPS packages',()=>{
+    expect(getMyopsSubscriptionEntitlement(0)).toMatchObject({id:'free_trial',monthlyPrice:0,trialDays:7,appCount:4});
+    expect(getMyopsSubscriptionEntitlement(2)).toMatchObject({id:'two_apps',monthlyPrice:49,trialDays:7});
+    expect(getMyopsSubscriptionEntitlement(4)).toMatchObject({id:'all_apps',monthlyPrice:79,trialDays:7,appCount:4});
+    expect(getMyopsSubscriptionEntitlement(0,{founderLifetime:true})).toMatchObject({id:'founders_lifetime',monthlyPrice:null,oneTimePrice:29});
+    expect(()=>getMyopsSubscriptionEntitlement(1)).toThrow(/MYOPS/);
+    expect(()=>getMyopsSubscriptionEntitlement(0,{isSellerSignup:true})).toThrow(/separate/);
+    for(const count of [-1,1.5,5,NaN])expect(()=>getMyopsSubscriptionEntitlement(count)).toThrow();
   });
 
   it('allows active subscription access', () => {
