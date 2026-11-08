@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
+      - run: node scripts/test-opsps-trial.mjs
       - run: npm run test:database
       - run: npm run test:provisioning
       - run: node scripts/test-production-upgrade.mjs

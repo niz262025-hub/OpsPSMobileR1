@@ -1,3 +1,4 @@
+import { useAppCopy } from '../../context/LanguageContext';
 import { reportMonthRange } from '../../services/reportDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -12,6 +13,7 @@ const labels: Record<ReportType, string> = { sales: 'Sales', orders: 'Orders', t
 
 
 export default function ReportsScreen() {
+  const { tx } = useAppCopy();
   const { business, membership } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const defaults = useMemo(() => reportMonthRange(), []);
@@ -157,11 +159,11 @@ export default function ReportsScreen() {
     finally{setFeatureBusy(false);}
   };
 
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>Reports</Text><Text style={styles.subtitle}>Generated from the current OpsPS database.</Text>{loading ? <Text style={styles.empty}>Loading report data…</Text> : <>
-    <View style={styles.card}><Text style={styles.label}>Date From</Text><TextInput value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>Date To</Text><TextInput value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>Report Type</Text><View style={styles.actions}>{types.map((entry) => <Pressable key={entry} style={[styles.option, type === entry && styles.selected]} onPress={() => setType(entry)}><Text style={styles.optionText}>{labels[entry]}</Text></Pressable>)}</View><Pressable disabled={featureBusy} style={styles.primary} onPress={generate}><Text style={styles.primaryText}>Generate Report</Text></Pressable></View>
-    {featureMessage && <Text accessibilityRole="alert" style={styles.empty}>{featureMessage}</Text>}<View style={styles.summary}><Text style={styles.sectionTitle}>{labels[type]} Summary</Text>{Object.entries(result.summary).map(([key, value]) => <View key={key} style={styles.summaryRow}><Text style={styles.label}>{key}</Text><Text style={styles.value}>{String(value)}</Text></View>)}</View>
-    <View style={styles.actions}><Pressable disabled={featureBusy} style={styles.export} onPress={() => downloadReport('pdf')}><Text style={styles.exportText}>Download PDF</Text></Pressable><Pressable disabled={featureBusy} style={styles.export} onPress={() => downloadReport('excel')}><Text style={styles.exportText}>Download Excel</Text></Pressable></View>
-    <Text style={styles.sectionTitle}>Report Data ({result.rows.length})</Text>{result.rows.map((row, index) => <View key={index} style={styles.row}>{Object.entries(row).map(([key, value]) => <Text key={key} style={styles.cell}>{key}: {String(value)}</Text>)}</View>)}{!result.rows.length && <Text style={styles.empty}>No records in this date range.</Text>}</>}
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>{tx("Reports")}</Text><Text style={styles.subtitle}>{tx("Generated from the current OpsPS database.")}</Text>{loading ? <Text style={styles.empty}>{tx("Loading report data…")}</Text> : <>
+    <View style={styles.card}><Text style={styles.label}>{tx("Date From")}</Text><TextInput value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>{tx("Date To")}</Text><TextInput value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" style={styles.input} /><Text style={styles.label}>{tx("Report Type")}</Text><View style={styles.actions}>{types.map((entry) => <Pressable key={entry} style={[styles.option, type === entry && styles.selected]} onPress={() => setType(entry)}><Text style={styles.optionText}>{labels[entry]}</Text></Pressable>)}</View><Pressable disabled={featureBusy} style={styles.primary} onPress={generate}><Text style={styles.primaryText}>{tx("Generate Report")}</Text></Pressable></View>
+    {featureMessage && <Text accessibilityRole="alert" style={styles.empty}>{featureMessage}</Text>}<View style={styles.summary}><Text style={styles.sectionTitle}>{labels[type]}{tx("Summary")}</Text>{Object.entries(result.summary).map(([key, value]) => <View key={key} style={styles.summaryRow}><Text style={styles.label}>{key}</Text><Text style={styles.value}>{String(value)}</Text></View>)}</View>
+    <View style={styles.actions}><Pressable disabled={featureBusy} style={styles.export} onPress={() => downloadReport('pdf')}><Text style={styles.exportText}>{tx("Download PDF")}</Text></Pressable><Pressable disabled={featureBusy} style={styles.export} onPress={() => downloadReport('excel')}><Text style={styles.exportText}>{tx("Download Excel")}</Text></Pressable></View>
+    <Text style={styles.sectionTitle}>{tx("Report Data (")}{result.rows.length})</Text>{result.rows.map((row, index) => <View key={index} style={styles.row}>{Object.entries(row).map(([key, value]) => <Text key={key} style={styles.cell}>{key}: {String(value)}</Text>)}</View>)}{!result.rows.length && <Text style={styles.empty}>{tx("No records in this date range.")}</Text>}</>}
   </ScrollView></SafeAreaView>;
 }
 

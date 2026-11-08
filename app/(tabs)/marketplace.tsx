@@ -1,3 +1,4 @@
+import { useAppCopy } from '../../context/LanguageContext';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -101,6 +102,7 @@ async function normalizeProductImageUri(uri: string): Promise<string> {
 }
 
 export default function MarketplaceScreen() {
+  const { tx } = useAppCopy();
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
   const { membership, business } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
@@ -529,19 +531,17 @@ export default function MarketplaceScreen() {
         >
           <View style={styles.headingRow}>
             <View>
-              <Text style={styles.eyebrow}>Product operations</Text>
-              <Text style={styles.title}>Marketplace Catalog</Text>
-              <Text style={styles.subtitle}>
-                Upload, price and share products from one place.
-              </Text>
+              <Text style={styles.eyebrow}>{tx("Product operations")}</Text>
+              <Text style={styles.title}>{tx("Marketplace Catalog")}</Text>
+              <Text style={styles.subtitle}>{tx("Upload, price and share products from one place.")}</Text>
             </View>
             <PackagePlus size={28} color={THEME.primary} />
           </View>
 
           <View style={styles.formCard}>
-            <Text style={styles.sectionTitle}>Upload Product</Text>
+            <Text style={styles.sectionTitle}>{tx("Upload Product")}</Text>
 
-            <Text style={styles.label}>Product Photo</Text>
+            <Text style={styles.label}>{tx("Product Photo")}</Text>
 
             {image ? (
               <View style={styles.imagePreviewWrap}>
@@ -553,10 +553,10 @@ export default function MarketplaceScreen() {
 
                 <View style={styles.imageActions}>
                   <Pressable onPress={() => chooseImage(false)}>
-                    <Text style={styles.linkButtonText}>Replace</Text>
+                    <Text style={styles.linkButtonText}>{tx("Replace")}</Text>
                   </Pressable>
                   <Pressable onPress={() => setImage('')}>
-                    <Text style={styles.deleteText}>Remove</Text>
+                    <Text style={styles.deleteText}>{tx("Remove")}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -565,37 +565,37 @@ export default function MarketplaceScreen() {
                 style={styles.imagePickerButton}
                 onPress={() => chooseImage(false)}
               >
-                <Text style={styles.imagePickerText}>Upload Photo</Text>
+                <Text style={styles.imagePickerText}>{tx("Upload Photo")}</Text>
               </Pressable>
             )}
 
             <Field
-              label="Product Name"
+              label={tx("Product Name")}
               value={name}
               onChangeText={setName}
               placeholder="e.g. Premium Cotton Tee"
             />
 
-            <Text style={styles.label}>Category</Text>
+            <Text style={styles.label}>{tx("Category")}</Text>
             <PickerButton value={category} onPress={() => setPicker('category')} />
 
             {category !== 'Other' && (
               <>
-                <Text style={styles.label}>Size</Text>
+                <Text style={styles.label}>{tx("Size")}</Text>
                 <PickerButton value={size} onPress={() => setPicker('size')} />
               </>
             )}
 
             <View style={styles.fieldRow}>
               <Field
-                label="Price (RM)"
+                label={tx("Price (RM)")}
                 value={price}
                 onChangeText={setPrice}
                 placeholder="0"
                 numeric
               />
               <Field
-                label="COGS (RM)"
+                label={tx("COGS (RM)")}
                 value={cost}
                 onChangeText={setCost}
                 placeholder="0"
@@ -603,13 +603,13 @@ export default function MarketplaceScreen() {
               />
             </View>
 
-            <Text style={styles.label}>Trip</Text>
+            <Text style={styles.label}>{tx("Trip")}</Text>
             <View style={styles.tripBox}>
               <Text style={styles.tripText}>{tripLabel}</Text>
             </View>
 
             <Field
-              label="Quantity"
+              label={tx("Quantity")}
               value={stock}
               onChangeText={setStock}
               placeholder="0"
@@ -617,7 +617,7 @@ export default function MarketplaceScreen() {
             />
 
             <Pressable style={styles.primaryButton} onPress={saveProduct}>
-              <Text style={styles.primaryButtonText}>Generate Product Link</Text>
+              <Text style={styles.primaryButtonText}>{tx("Generate Product Link")}</Text>
             </Pressable>
 
             {!!formError && <Text style={styles.formError}>{formError}</Text>}
@@ -625,7 +625,7 @@ export default function MarketplaceScreen() {
 
           {generatedLink && (
             <View style={styles.shareCard}>
-              <Text style={styles.sectionTitle}>Share / Post Product</Text>
+              <Text style={styles.sectionTitle}>{tx("Share / Post Product")}</Text>
 
               {!!generatedImage && (
                 <Image
@@ -635,7 +635,7 @@ export default function MarketplaceScreen() {
                 />
               )}
 
-              <Text style={styles.groupLabel}>Product Link</Text>
+              <Text style={styles.groupLabel}>{tx("Product Link")}</Text>
 
               <View style={styles.linkBox}>
                 <Link size={17} color={THEME.primary} />
@@ -652,16 +652,16 @@ export default function MarketplaceScreen() {
                 </Pressable>
 
                 <Pressable style={styles.secondaryButton} onPress={openGeneratedProduct}>
-                  <Text style={styles.secondaryButtonText}>Open Customer Page</Text>
+                  <Text style={styles.secondaryButtonText}>{tx("Open Customer Page")}</Text>
                 </Pressable>
               </View>
 
               <View style={styles.linkButton}>
                 <Link size={17} color={THEME.primary} />
-                <Text style={styles.linkButtonText}>Product link generated</Text>
+                <Text style={styles.linkButtonText}>{tx("Product link generated")}</Text>
               </View>
 
-              <Text style={styles.groupLabel}>Marketing</Text>
+              <Text style={styles.groupLabel}>{tx("Marketing")}</Text>
 
               <View style={styles.chipRow}>
                 {marketingPlatforms.map((platform) => (
@@ -677,7 +677,7 @@ export default function MarketplaceScreen() {
                 ))}
               </View>
 
-              <Text style={styles.groupLabel}>Direct Link</Text>
+              <Text style={styles.groupLabel}>{tx("Direct Link")}</Text>
 
               <View style={styles.chipRow}>
                 {directPlatforms.map((platform) => (

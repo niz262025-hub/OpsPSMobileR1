@@ -1,3 +1,4 @@
+import { useAppCopy } from '../../context/LanguageContext';
 import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
@@ -22,6 +23,7 @@ function formatDate(date: string) {
 }
 
 export default function TripsScreen() {
+  const { tx } = useAppCopy();
   const { width } = useWindowDimensions();
   const { membership, business } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
@@ -95,12 +97,12 @@ export default function TripsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={[styles.header, compactWeb && { flexWrap: 'wrap', gap: 12, paddingHorizontal: 16 }]}>
         <View style={compactWeb ? { flexBasis: '100%', minWidth: 0 } : undefined}>
-          <Text style={styles.title}>Trips</Text>
-          <Text style={styles.subtitle}>Plan and manage your personal shopper journeys.</Text>
+          <Text style={styles.title}>{tx("Trips")}</Text>
+          <Text style={styles.subtitle}>{tx("Plan and manage your personal shopper journeys.")}</Text>
         </View>
         <Pressable accessibilityRole="button" style={[styles.createButton, compactWeb && { minHeight: 44, flexShrink: 0 }]} onPress={() => router.push('/trip/create')}>
           <Plus size={18} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={styles.createButtonText}>Create Trip</Text>
+          <Text style={styles.createButtonText}>{tx("Create Trip")}</Text>
         </Pressable>
       </View>
 
@@ -120,7 +122,7 @@ export default function TripsScreen() {
                 <Text style={[styles.cellText, styles.countColumn]}>{orderCounts[trip.id] ?? 0}</Text>
                 <Text style={[styles.cellText, styles.countColumn]}>{productCounts[trip.id] ?? 0}</Text>
                 <View style={styles.statusColumn}>{statusBadge(trip.status)}</View>
-                <Pressable style={styles.actionColumn} onPress={() => openTrip(trip.id)}><Text style={styles.actionText}>View</Text></Pressable>
+                <Pressable style={styles.actionColumn} onPress={() => openTrip(trip.id)}><Text style={styles.actionText}>{tx("View")}</Text></Pressable>
               </View>
             ))}
           </View>
@@ -135,11 +137,11 @@ export default function TripsScreen() {
                 {statusBadge(trip.status)}
               </View>
               <View style={styles.cardStats}>
-                <Text style={styles.statText}>Date: {formatDate(trip.tripDate)}</Text>
-                <Text style={styles.statText}>Orders: {orderCounts[trip.id] ?? 0}</Text>
-                <Text style={styles.statText}>Products: {productCounts[trip.id] ?? 0}</Text>
+                <Text style={styles.statText}>{tx("Date:")}{formatDate(trip.tripDate)}</Text>
+                <Text style={styles.statText}>{tx("Orders:")}{orderCounts[trip.id] ?? 0}</Text>
+                <Text style={styles.statText}>{tx("Products:")}{productCounts[trip.id] ?? 0}</Text>
               </View>
-              <Text style={styles.actionText}>View</Text>
+              <Text style={styles.actionText}>{tx("View")}</Text>
             </Pressable>
           ))
         )}

@@ -1,3 +1,4 @@
+import { useAppCopy } from '../../context/LanguageContext';
 import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,6 +48,7 @@ function getOrderDisplayStatus(order: { requestStatus?: string; status?: string;
 }
 
 export default function OrdersScreen() {
+  const { tx } = useAppCopy();
   const { user, profile, membership, business, role } = useAuth();
   const [orders, setOrders] = useState<Array<{ id: string; customerName: string; total: number; requestStatus?: string; status?: string; tripId?: string; productId?: string; businessId?: string }>>([]);
 
@@ -88,13 +90,13 @@ export default function OrdersScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
         <LinearGradient colors={THEME.gradientWarm} style={styles.hero}>
-          <Text style={styles.eyebrow}>OPSPS ORDER HUB</Text>
-          <Text style={styles.title}>Orders</Text>
-          <Text style={styles.subtitle}>Review customer requests and fulfilment status.</Text>
+          <Text style={styles.eyebrow}>{tx("OPSPS ORDER HUB")}</Text>
+          <Text style={styles.title}>{tx("Orders")}</Text>
+          <Text style={styles.subtitle}>{tx("Review customer requests and fulfilment status.")}</Text>
         </LinearGradient>
 
         {orders.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.empty}>No orders found for this account.</Text></View>
+          <View style={styles.emptyCard}><Text style={styles.empty}>{tx("No orders found for this account.")}</Text></View>
         ) : orders.map((order) => {
           const statusLabel = getOrderDisplayStatus(order);
 
@@ -104,7 +106,7 @@ export default function OrdersScreen() {
                 <View style={styles.info}>
                   <Text style={styles.order}>{order.id}</Text>
                   <Text style={styles.customer}>{order.customerName}</Text>
-                  <Text style={styles.meta}>Order · {order.productId ?? 'Product'}</Text>
+                  <Text style={styles.meta}>{tx("Order ·")}{order.productId ?? 'Product'}</Text>
                 </View>
 
                 <View style={styles.amountColumn}>
@@ -117,7 +119,7 @@ export default function OrdersScreen() {
                 event.stopPropagation();
                 router.push(`/order/${order.id}`);
               }}>
-                <Text style={styles.viewButtonText}>View</Text>
+                <Text style={styles.viewButtonText}>{tx("View")}</Text>
               </Pressable>
             </Pressable>
           );

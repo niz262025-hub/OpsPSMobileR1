@@ -58,6 +58,7 @@ export default function ProductDetailScreen() {
           setProduct(null);
           setVariants([]);
           setSelectedSize('');
+          setDetailLoading(false);
         }
         return;
       }
