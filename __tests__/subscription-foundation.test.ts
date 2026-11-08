@@ -4,6 +4,7 @@ import {
   canAccessAdminSubscriptionControls,
   canAccessFounderSubscriptionControls,
   canInspectSubscriptionState,
+  getMyopsSubscriptionEntitlement,
   isLifetimeSubscription,
   isSubscriptionActive,
   normalizeSubscriptionState,
@@ -22,6 +23,16 @@ describe('subscription foundation', () => {
     renewalDate: null,
     isLifetime: true,
   };
+
+  it('matches the central seven-day policy and original MYOPS packages',()=>{
+    expect(getMyopsSubscriptionEntitlement(0)).toMatchObject({id:'free_trial',monthlyPrice:0,trialDays:7,appCount:4});
+    expect(getMyopsSubscriptionEntitlement(2)).toMatchObject({id:'two_apps',monthlyPrice:49,trialDays:7});
+    expect(getMyopsSubscriptionEntitlement(4)).toMatchObject({id:'all_apps',monthlyPrice:79,trialDays:7,appCount:4});
+    expect(getMyopsSubscriptionEntitlement(0,{founderLifetime:true})).toMatchObject({id:'founders_lifetime',monthlyPrice:null,oneTimePrice:29});
+    expect(()=>getMyopsSubscriptionEntitlement(1)).toThrow(/MYOPS/);
+    expect(()=>getMyopsSubscriptionEntitlement(0,{isSellerSignup:true})).toThrow(/separate/);
+    for(const count of [-1,1.5,5,NaN])expect(()=>getMyopsSubscriptionEntitlement(count)).toThrow();
+  });
 
   it('allows active subscription access', () => {
     expect(isSubscriptionActive(activeSubscription)).toBe(true);
