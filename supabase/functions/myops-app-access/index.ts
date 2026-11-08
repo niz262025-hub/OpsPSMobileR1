@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { allowedOpspsOrigins } from './cors.mjs';
 import { sendMyopsRequest } from './transport.ts';
 import { ensureVerifiedMyopsIdentity, validateMyopsAuthority } from './provisioning.ts';
 import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
@@ -16,10 +17,7 @@ type MyopsAppSession = {
 };
 
 function corsHeaders(origin: string | null): HeadersInit {
-  const allowed = (Deno.env.get('OPSPS_ALLOWED_ORIGINS') ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const allowed = allowedOpspsOrigins(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('OPSPS_ALLOWED_ORIGINS') ?? '');
   const headers: Record<string, string> = {
     'Cache-Control': 'no-store',
     'Referrer-Policy': 'no-referrer',
@@ -298,8 +296,7 @@ async function endSession(request: Request, headers: HeadersInit): Promise<Respo
 Deno.serve(async (request) => {
   const origin = request.headers.get('origin');
   const headers = corsHeaders(origin);
-  const allowed = (Deno.env.get('OPSPS_ALLOWED_ORIGINS') ?? '')
-    .split(',').map((value) => value.trim()).filter(Boolean);
+  const allowed = allowedOpspsOrigins(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('OPSPS_ALLOWED_ORIGINS') ?? '');
   if (origin && !allowed.includes(origin)) return json(403, { error: 'Origin is not allowed' }, headers);
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, headers);
