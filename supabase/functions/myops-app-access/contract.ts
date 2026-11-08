@@ -66,3 +66,7 @@ export async function readMyopsJson(response: Response): Promise<Record<string, 
   }
   return body as Record<string, unknown>;
 }
+
+export function assertOpspsAppId(appId: string): void {
+  if (appId !== OPSPS_MYOPS_PRODUCT) throw new Error('OpsPS must use its own MYOPS app identity');
+}

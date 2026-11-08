@@ -1,3 +1,4 @@
+import { useAppCopy } from '../../context/LanguageContext';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -17,6 +18,7 @@ import { StatCard } from '../../components/StatCard';
 import { StatusBadge } from '../../components/StatusBadge';
 
 export default function InventoryScreen() {
+  const { tx } = useAppCopy();
   const { membership, business } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [products, setProducts] = useState<Array<{ id: string; name: string; image?: string; status?: 'ready' | 'preorder'; tripId?: string; businessId?: string; costPrice: number; sellingPrice: number }>>([]);
@@ -154,9 +156,9 @@ export default function InventoryScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heroCard}>
           <View>
-            <Text style={styles.eyebrow}>Stock control</Text>
-            <Text style={styles.heroTitle}>Inventory</Text>
-            <Text style={styles.heroSubtitle}>Review product availability and adjust stock levels in seconds.</Text>
+            <Text style={styles.eyebrow}>{tx("Stock control")}</Text>
+            <Text style={styles.heroTitle}>{tx("Inventory")}</Text>
+            <Text style={styles.heroSubtitle}>{tx("Review product availability and adjust stock levels in seconds.")}</Text>
           </View>
           <View style={styles.heroIcon}>
             <Package2 size={24} color={THEME.primary} />
@@ -164,9 +166,9 @@ export default function InventoryScreen() {
         </View>
 
         <View style={styles.statsContainer}>
-          <StatCard label="Total Products" value={String(inventorySummary.totalProducts)} variant="primary" />
-          <StatCard label="Low Stock" value={String(inventorySummary.lowStock)} variant="warning" />
-          <StatCard label="Out of Stock" value={String(inventorySummary.outOfStock)} />
+          <StatCard label={tx("Total Products")} value={String(inventorySummary.totalProducts)} variant="primary" />
+          <StatCard label={tx("Low Stock")} value={String(inventorySummary.lowStock)} variant="warning" />
+          <StatCard label={tx("Out of Stock")} value={String(inventorySummary.outOfStock)} />
         </View>
 
         <View style={styles.itemsContainer}>
@@ -181,7 +183,7 @@ export default function InventoryScreen() {
                   <View style={styles.itemInfo}>
                     <Text style={styles.itemName}>{product.name}</Text>
                     <View style={styles.itemMeta}>
-                      <Text style={styles.itemStock}>Total: {totalStock} units</Text>
+                      <Text style={styles.itemStock}>{tx("Total:")}{totalStock}{tx("units")}</Text>
                       <StatusBadge status={status as any} />
                     </View>
                   </View>
@@ -195,8 +197,8 @@ export default function InventoryScreen() {
                 {expanded && (
                   <View style={styles.itemDetails}>
                     <View style={styles.sizeHeader}>
-                      <Text style={styles.sizeLabel}>Size</Text>
-                      <Text style={styles.sizeLabel}>Qty</Text>
+                      <Text style={styles.sizeLabel}>{tx("Size")}</Text>
+                      <Text style={styles.sizeLabel}>{tx("Qty")}</Text>
                     </View>
                     {productVariants.map((variant) => (
                       <View key={variant.id} style={styles.sizeRow}>
@@ -234,7 +236,7 @@ export default function InventoryScreen() {
                               void deleteVariant(variant.id, product.id);
                             }}
                           >
-                            <Text style={styles.smallButtonText}>Delete</Text>
+                            <Text style={styles.smallButtonText}>{tx("Delete")}</Text>
                           </TouchableOpacity>
                         </View>
                       </View>

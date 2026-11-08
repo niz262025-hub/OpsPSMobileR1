@@ -50,7 +50,7 @@ export const OPSPS_PLAN_DEFINITIONS = {
   'standard-monthly': {
     label: 'Standard Monthly',
     billingCycle: 'monthly',
-    notes: 'RM49/month recurring access for active business operations.',
+    notes: 'Subscription selection and manual renewal are managed in MYOPS.',
   },
   'team-user-addon': {
     label: 'Team User Add-on',
@@ -58,6 +58,32 @@ export const OPSPS_PLAN_DEFINITIONS = {
     notes: 'Per-user add-on for users needing team access.',
   },
 } as const;
+
+// Display metadata only. Central signed MYOPS entitlement remains the access boundary.
+export type MyopsSubscriptionEntitlementId = 'free_trial' | 'founders_lifetime' | 'two_apps' | 'all_apps';
+export type MyopsSubscriptionEntitlement = {
+ id:MyopsSubscriptionEntitlementId;label:string;monthlyPrice:number|null;oneTimePrice?:number;
+ currency:'MYR';appCount:number;trialDays:number;isFree:boolean;
+};
+export const MYOPS_SUBSCRIPTION_ENTITLEMENTS:Record<MyopsSubscriptionEntitlementId,MyopsSubscriptionEntitlement>={
+ free_trial:{id:'free_trial',label:'Free Trial',monthlyPrice:0,currency:'MYR',appCount:4,trialDays:7,isFree:true},
+ founders_lifetime:{id:'founders_lifetime',label:'First 100 Subscribers',monthlyPrice:null,oneTimePrice:29,currency:'MYR',appCount:4,trialDays:7,isFree:false},
+ two_apps:{id:'two_apps',label:'Normal Subscription',monthlyPrice:49,currency:'MYR',appCount:2,trialDays:7,isFree:false},
+ all_apps:{id:'all_apps',label:'All Apps',monthlyPrice:79,currency:'MYR',appCount:4,trialDays:7,isFree:false},
+};
+export const MYOPS_INTRODUCTORY_PRICING=MYOPS_SUBSCRIPTION_ENTITLEMENTS;
+export function getMyopsSubscriptionEntitlement(paidAppCount:number,opts:{isSellerSignup?:boolean;founderLifetime?:boolean}={}):MyopsSubscriptionEntitlement {
+ if(opts.isSellerSignup)throw new Error('OpsHub is separate from MYOPS subscriptions.');
+ if(!Number.isInteger(paidAppCount)||paidAppCount<0||paidAppCount>4)throw new Error('Invalid MYOPS app selection.');
+ if(opts.founderLifetime)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.founders_lifetime;
+ if(paidAppCount===0)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.free_trial;
+ if(paidAppCount===2)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.two_apps;
+ if(paidAppCount>=3)return MYOPS_SUBSCRIPTION_ENTITLEMENTS.all_apps;
+ throw new Error('Choose a current plan in MYOPS; no single-app offer is configured.');
+}
+export const getMyopsIntroductoryPrice=(count:number,opts?:{isSellerSignup?:boolean;founderLifetime?:boolean}):number|null=>getMyopsSubscriptionEntitlement(count,opts).monthlyPrice;
+export const getMyopsEntitlementTier=getMyopsSubscriptionEntitlement;
+export const resolveMyopsSubscriptionPricing=getMyopsSubscriptionEntitlement;
 
 export function normalizeSubscriptionState(
   value?: string | null

@@ -92,6 +92,7 @@ export default function TripDetailScreen() {
           setTripOrders([]);
           setTripExpenses([]);
           setTripProfit({ salesRevenue: 0, costOfGoods: 0, grossProfit: 0, moneyIn: 0, moneyOut: 0, outstandingRevenue: 0, netProfit: 0 });
+          setDetailLoading(false);
         }
         return;
       }

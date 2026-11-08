@@ -30,6 +30,7 @@ export default function OrderDetailScreen() {
           setOrder(null);
           setItems([]);
           setProductName('Product');
+          setDetailLoading(false);
         }
         return;
       }

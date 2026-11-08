@@ -1,3 +1,4 @@
+import { useAppCopy } from '../../context/LanguageContext';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
@@ -91,6 +92,7 @@ function formatOrderDate(order: { orderDate?: string; createdAt?: string }) {
 }
 
 export default function Dashboard() {
+  const { tx } = useAppCopy();
   const { width } = useWindowDimensions();
   const { currentUser, membership, business } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
@@ -205,31 +207,31 @@ export default function Dashboard() {
         <Text style={styles.welcome}>{currentUser?.name ? `Welcome back, ${currentUser.name}` : 'Welcome back'}</Text>
         <View style={[styles.summaryRow, !desktop && styles.summaryRowMobile]}>
           <View style={[styles.summaryCard, desktop ? styles.summaryCardDesktop : styles.summaryCardMobile]}>
-            <StatCard label="Sales Today" value={formatCurrency(counts.salesToday)} variant="primary" />
+            <StatCard label={tx("Sales Today")} value={formatCurrency(counts.salesToday)} variant="primary" />
           </View>
           <View style={[styles.summaryCard, desktop ? styles.summaryCardDesktop : styles.summaryCardMobile]}>
-            <StatCard label="Sales This Month" value={formatCurrency(counts.salesThisMonth)} variant="secondary" />
+            <StatCard label={tx("Sales This Month")} value={formatCurrency(counts.salesThisMonth)} variant="secondary" />
           </View>
           <View style={[styles.summaryCard, desktop ? styles.summaryCardDesktop : styles.summaryCardMobile]}>
-            <StatCard label="Open Trips" value={String(counts.openTrips)} variant="success" />
+            <StatCard label={tx("Open Trips")} value={String(counts.openTrips)} variant="success" />
           </View>
           <View style={[styles.summaryCard, desktop ? styles.summaryCardDesktop : styles.summaryCardMobile]}>
-            <StatCard label="Pending Orders" value={String(counts.pendingOrders)} variant="warning" />
+            <StatCard label={tx("Pending Orders")} value={String(counts.pendingOrders)} variant="warning" />
           </View>
         </View>
 
         <View style={styles.ordersSection}>
-          <SectionHeader title="Pending Orders — To Deliver" />
+          <SectionHeader title={tx("Pending Orders — To Deliver")} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={[styles.table, { width: tableWidth }]}>
               <View style={[styles.tableRow, styles.tableHeader]}>
-                <Text style={[styles.headerText, styles.orderColumn]}>Order</Text>
-                <Text style={[styles.headerText, styles.customerColumn]}>Customer</Text>
-                <Text style={[styles.headerText, styles.tripColumn]}>Trip</Text>
-                <Text style={[styles.headerText, styles.itemsColumn]}>Items</Text>
-                <Text style={[styles.headerText, styles.amountColumn]}>Amount</Text>
-                <Text style={[styles.headerText, styles.statusColumn]}>Status</Text>
-                <Text style={[styles.headerText, styles.actionColumn]}>Action</Text>
+                <Text style={[styles.headerText, styles.orderColumn]}>{tx("Order")}</Text>
+                <Text style={[styles.headerText, styles.customerColumn]}>{tx("Customer")}</Text>
+                <Text style={[styles.headerText, styles.tripColumn]}>{tx("Trip")}</Text>
+                <Text style={[styles.headerText, styles.itemsColumn]}>{tx("Items")}</Text>
+                <Text style={[styles.headerText, styles.amountColumn]}>{tx("Amount")}</Text>
+                <Text style={[styles.headerText, styles.statusColumn]}>{tx("Status")}</Text>
+                <Text style={[styles.headerText, styles.actionColumn]}>{tx("Action")}</Text>
               </View>
 
               {pendingOrders.map((order) => (
@@ -237,7 +239,7 @@ export default function Dashboard() {
                   <Text style={[styles.cellText, styles.orderColumn, styles.orderId]}>{order.id}</Text>
                   <View style={[styles.customerColumn, styles.customerCell]}>
                     <Text style={[styles.cellText, styles.customerName]}>{order.customer}</Text>
-                    <Text style={styles.dateText}>Date: {order.orderDate}</Text>
+                    <Text style={styles.dateText}>{tx("Date:")}{order.orderDate}</Text>
                   </View>
                   <Text style={[styles.cellText, styles.tripColumn]}>{order.trip}</Text>
                   <Text style={[styles.cellText, styles.itemsColumn]}>{order.items}</Text>
@@ -250,7 +252,7 @@ export default function Dashboard() {
                     accessibilityRole="button"
                     onPress={() => router.push(`/order/${order.id}`)}
                   >
-                    <Text style={styles.viewAction}>View</Text>
+                    <Text style={styles.viewAction}>{tx("View")}</Text>
                   </Pressable>
                 </View>
               ))}

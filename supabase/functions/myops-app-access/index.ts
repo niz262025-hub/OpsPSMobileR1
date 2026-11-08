@@ -2,15 +2,14 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { sendMyopsRequest } from './transport.ts';
 import {assertOpspsPremiumFeature,opspsAccessFromEntitlement,opspsSessionAccessFields,opspsTrialReady} from './trial-policy.ts';
 import { centralCompanyLabels,ensureVerifiedMyopsIdentity, validateMyopsAuthority } from './provisioning.ts';
-import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
+import { assertOpspsAppId, readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
 const VALID_FOR_MS = 20_000;
-const APP_ID = /^[a-z][a-z0-9_-]{1,31}$/;
 const USER_REF = /^[A-Za-z0-9_-]{43}$/;
 // This build contains the tested staging database adapters. Central MYOPS still
 // controls app admission; Production can never enable trials through this gate.
-const trialReady=()=>opspsTrialReady(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('OPSPS_TRIAL_ENFORCEMENT')??'true');
+const trialReady=()=>opspsTrialReady(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('OPSPS_TRIAL_ENFORCEMENT'));
 
 type JsonRecord = Record<string, unknown>;
 type MyopsAppSession = {
@@ -73,12 +72,12 @@ function signingConfig() {
     || parsedOrigin.search
     || parsedOrigin.hash
     || parsedOrigin.pathname !== '/'
-    || !APP_ID.test(appId)
     || !['current', 'next'].includes(version)
     || !privateKey.includes('BEGIN PRIVATE KEY')
   ) {
     throw new Error('MYOPS access is not configured');
   }
+  assertOpspsAppId(appId);
   validateMyopsAuthority(Deno.env.get('SUPABASE_URL') ?? '', parsedOrigin.origin);
   return { origin: parsedOrigin, appId, version, privateKey };
 }

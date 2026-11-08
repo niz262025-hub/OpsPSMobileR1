@@ -12,7 +12,7 @@ export function opspsAccessFromEntitlement(value:unknown,trialReady=false,now=Da
  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('MYOPS access is not active');
  const data=value as Record<string,unknown>;
  if(data.entitled!==true||data.session_active!==true)throw new Error('MYOPS access is not active');
- if((data.access_mode===undefined||data.access_mode==='paid')&&data.trial==null)return {mode:'paid'};
+ if(data.access_mode==='paid'&&data.trial==null)return {mode:'paid'};
  if(data.access_mode!=='trial'||!trialReady)throw new Error('OpsPS trial is not available yet. Manage access in MYOPS.');
  const trial=data.trial as Record<string,unknown>|null;
  if(!trial||!isUuid(trial.id)||trial.policy_version!==1||typeof trial.expires_at!=='string'

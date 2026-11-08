@@ -2,8 +2,9 @@ import {expect,it} from 'vitest';
 import {assertOpspsPremiumFeature,opspsAccessFromEntitlement,opspsSessionAccessFields,opspsTrialReady} from '../supabase/functions/myops-app-access/trial-policy';
 const id='11111111-1111-4111-8111-111111111111';
 const response={entitled:true,session_active:true,access_mode:'trial',trial:{id,expires_at:'2099-01-01T00:00:00Z',policy_version:1}};
-it('preserves existing paid contracts and never silently treats a trial as paid',()=>{
- for(const access_mode of [undefined,'paid'])expect(opspsAccessFromEntitlement({entitled:true,session_active:true,access_mode})).toEqual({mode:'paid'});
+it('requires explicit paid access and never silently treats an unknown mode as paid',()=>{
+ expect(opspsAccessFromEntitlement({entitled:true,session_active:true,access_mode:'paid'})).toEqual({mode:'paid'});
+ expect(()=>opspsAccessFromEntitlement({entitled:true,session_active:true})).toThrow();
  for(const data of [response,{...response,access_mode:undefined},{...response,access_mode:'unknown'},{entitled:false,session_active:true}])expect(()=>opspsAccessFromEntitlement(data)).toThrow();
 });
 it('admits only explicit valid trial metadata and rejects exact expiry',()=>{
@@ -25,4 +26,9 @@ it('denies each premium feature for a verified trial and allows verified paid ac
   expect(()=>assertOpspsPremiumFeature({mode:'paid'},feature)).not.toThrow();
  }
  expect(()=>assertOpspsPremiumFeature({mode:'paid'},'unknown')).toThrow();
+});
+
+it('rejects a trial when the preview gate is disabled even with valid trial metadata',()=>{
+ expect(()=>opspsAccessFromEntitlement(response,false)).toThrow('not available');
+ for(const value of [{...response,entitled:false},{...response,session_active:false}])expect(()=>opspsAccessFromEntitlement(value,true)).toThrow('not active');
 });

@@ -1,3 +1,4 @@
+import { useAppCopy } from '../../context/LanguageContext';
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
@@ -10,6 +11,7 @@ import { calendarDateForPicker, isCalendarDate, localCalendarDate } from '../../
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 
 export default function CreateTripScreen() {
+  const { tx } = useAppCopy();
   const { membership, business } = useAuth();
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [name, setName] = useState('');
@@ -67,15 +69,15 @@ export default function CreateTripScreen() {
         >
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={18} color={THEME.primary} />
-            <Text style={styles.backText}>Back to Trips</Text>
+            <Text style={styles.backText}>{tx("Back to Trips")}</Text>
           </Pressable>
-          <Text style={styles.title}>Create Trip</Text>
-          <Text style={styles.subtitle}>Add a new journey to your personal shopper schedule.</Text>
+          <Text style={styles.title}>{tx("Create Trip")}</Text>
+          <Text style={styles.subtitle}>{tx("Add a new journey to your personal shopper schedule.")}</Text>
 
           <View style={styles.form}>
-            <Field label="Trip Name" value={name} onChangeText={setName} placeholder="e.g. Bangkok Shopping" />
-            <Field label="Shopping Destination / Mall / Event" value={destination} onChangeText={setDestination} placeholder="e.g. ION Orchard" />
-            <Text style={styles.label}>Trip Date</Text>
+            <Field label={tx("Trip Name")} value={name} onChangeText={setName} placeholder="e.g. Bangkok Shopping" />
+            <Field label={tx("Shopping Destination / Mall / Event")} value={destination} onChangeText={setDestination} placeholder="e.g. ION Orchard" />
+            <Text style={styles.label}>{tx("Trip Date")}</Text>
             {Platform.OS === 'web' ? (
               <input type="date" aria-label="Trip Date" value={tripDate} onChange={event => setTripDate(event.target.value)} onInput={event => setTripDate(event.currentTarget.value)}
                 style={{ width: '100%', boxSizing: 'border-box', padding: 14, marginBottom: 16, borderRadius: 10, border: `1px solid ${THEME.border}`, color: THEME.text.primary, backgroundColor: '#FCFCFD', font: 'inherit' }} />
@@ -96,10 +98,10 @@ export default function CreateTripScreen() {
                 }}
               />
             )}
-            <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional notes" multiline />
+            <Field label={tx("Notes")} value={notes} onChangeText={setNotes} placeholder="Optional notes" multiline />
             {!!error && <Text style={styles.error}>{error}</Text>}
             <Pressable onPress={submit} style={styles.submitButton}>
-              <Text style={styles.submitText}>Create Trip</Text>
+              <Text style={styles.submitText}>{tx("Create Trip")}</Text>
             </Pressable>
           </View>
         </ScrollView>

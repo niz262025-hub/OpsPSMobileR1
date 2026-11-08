@@ -1,3 +1,4 @@
+import { createMyopsActivityTracker } from '../services/myopsActivity';
 import React, {
   createContext,
   useContext,
@@ -384,19 +385,29 @@ export function AuthProvider({
     const client = getSupabaseClient();
     if (!client || !session) return;
 
-    let lastInteractionAt = Date.now() - 60_000;
-    const markInteraction = () => { lastInteractionAt = Date.now(); };
+    const activity = createMyopsActivityTracker();
+    let stopped = false;
+    let busy = false;
+    const markInteraction = (event: Event) => { activity.record(event, document.visibilityState === 'visible'); };
     const interactionEvents = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
     if (typeof document !== 'undefined') {
       interactionEvents.forEach((eventName) => document.addEventListener(eventName, markInteraction, { passive: true }));
     }
     const refresh = async () => {
-      const recentActivity = Date.now() - lastInteractionAt < 10_000;
-      const active = await refreshMyopsEntitlement(client, false, recentActivity);
-      if (!active) await client.auth.signOut();
+      if (busy || stopped) return;
+      busy = true;
+      const snapshot = activity.snapshot();
+      try {
+        const active = await refreshMyopsEntitlement(client, false, snapshot.active);
+        if (!stopped) {
+          if (active) activity.acknowledge(snapshot.version);
+          else await client.auth.signOut();
+        }
+      } finally { busy = false; }
     };
     const interval = setInterval(() => { void refresh(); }, 10_000);
     return () => {
+      stopped = true;
       clearInterval(interval);
       if (typeof document !== 'undefined') {
         interactionEvents.forEach((eventName) => document.removeEventListener(eventName, markInteraction));

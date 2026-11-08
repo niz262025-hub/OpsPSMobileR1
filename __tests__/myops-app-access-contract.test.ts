@@ -70,3 +70,9 @@ describe('MYOPS app access contract', () => {
     expect(readSessionIdFromJwt('header.e30.signature')).toBeNull();
   });
 });
+
+it('rejects cross-app signing identities even when they have a valid slug format',async()=>{
+ const {assertOpspsAppId}=await import('../supabase/functions/myops-app-access/contract');
+ expect(()=>assertOpspsAppId('opsp')).not.toThrow();
+ for(const slug of ['opsps','opsfinance','opsflow','opshr','all_apps',''])expect(()=>assertOpspsAppId(slug)).toThrow();
+});

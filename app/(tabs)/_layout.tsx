@@ -1,3 +1,5 @@
+import { LanguageSelector } from '../../components/LanguageSelector';
+import { useAppCopy } from '../../context/LanguageContext';
 import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Redirect, Tabs, router } from 'expo-router';
@@ -19,6 +21,7 @@ const iconProps = {
 };
 
 export default function TabsLayout() {
+  const { tx } = useAppCopy();
   const { width } = useWindowDimensions();
   const compactWeb = Platform.OS === 'web' && width < 600;
   const { currentUser, ready, logout } = useAuth();
@@ -43,6 +46,7 @@ export default function TabsLayout() {
   if (!currentUser || currentUser.role !== 'founder') return <Redirect href="/login" />;
 
   return (
+    <View style={{flex:1}}><View style={{paddingHorizontal:12,backgroundColor:'#FFFFFF'}}><LanguageSelector /></View>
     <Tabs
       initialRouteName="dashboard"
       tabBar={compactWeb ? ({ state, descriptors, navigation }) => (
@@ -89,9 +93,9 @@ export default function TabsLayout() {
               onPress={() => void returnToPortal()}
               style={{ backgroundColor: '#FFFFFF', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 10 }}
             >
-              <Text style={{ color: THEME_PRIMARY, fontWeight: '600', fontSize: 12 }}>{returning ? 'Kembali…' : 'Kembali ke MYOPS'}</Text>
+              <Text style={{ color: THEME_PRIMARY, fontWeight: '600', fontSize: 12 }}>{tx(returning ? 'Kembali…' : 'Kembali ke MYOPS')}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={() => router.push('/settings')}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tx("Settings")} onPress={() => router.push('/settings')}>
               <User
                 {...({ ...iconProps, color: '#FFFFFF', style: { marginRight: 16 } } as any)}
               />
@@ -103,9 +107,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Dashboard',
-          tabBarLabel: 'Dashboard',
-          headerTitle: 'Dashboard',
+          title: tx("Dashboard"),
+          tabBarLabel: tx("Dashboard"),
+          headerTitle: tx("Dashboard"),
           tabBarIcon: ({ color }) => (
             <Home {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),
@@ -115,9 +119,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="trips"
         options={{
-          title: 'Trips',
-          tabBarLabel: 'Trips',
-          headerTitle: 'Trips',
+          title: tx("Trips"),
+          tabBarLabel: tx("Trips"),
+          headerTitle: tx("Trips"),
           tabBarIcon: ({ color }) => (
             <Truck {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),
@@ -127,9 +131,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="marketplace"
         options={{
-          title: 'Marketplace',
-          tabBarLabel: 'Market',
-          headerTitle: 'Marketplace Hub',
+          title: tx("Marketplace"),
+          tabBarLabel: tx("Market"),
+          headerTitle: tx("Marketplace Hub"),
           tabBarIcon: ({ color }) => (
             <Store {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),
@@ -139,9 +143,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Orders',
-          tabBarLabel: 'Orders',
-          headerTitle: 'Orders',
+          title: tx("Orders"),
+          tabBarLabel: tx("Orders"),
+          headerTitle: tx("Orders"),
           tabBarIcon: ({ color }) => (
             <ClipboardList {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),
@@ -151,9 +155,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          title: 'Inventory',
-          tabBarLabel: 'Inventory',
-          headerTitle: 'Inventory',
+          title: tx("Inventory"),
+          tabBarLabel: tx("Inventory"),
+          headerTitle: tx("Inventory"),
           tabBarIcon: ({ color }) => (
             <Package {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),
@@ -163,9 +167,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="finance"
         options={{
-          title: 'Finance',
-          tabBarLabel: 'Finance',
-          headerTitle: 'Finance',
+          title: tx("Finance"),
+          tabBarLabel: tx("Finance"),
+          headerTitle: tx("Finance"),
           tabBarIcon: ({ color }) => (
             <DollarSign {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),
@@ -175,14 +179,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="reports"
         options={{
-          title: 'Reports',
-          tabBarLabel: 'Reports',
-          headerTitle: 'Reports',
+          title: tx("Reports"),
+          tabBarLabel: tx("Reports"),
+          headerTitle: tx("Reports"),
           tabBarIcon: ({ color }) => (
             <BarChart3 {...({ ...iconProps, size: TAB_ICON_SIZE, color } as any)} />
           ),
         }}
       />
-    </Tabs>
+    </Tabs></View>
   );
 }
