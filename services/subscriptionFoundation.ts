@@ -50,7 +50,7 @@ export const OPSPS_PLAN_DEFINITIONS = {
   'standard-monthly': {
     label: 'Standard Monthly',
     billingCycle: 'monthly',
-    notes: 'RM49/month recurring access for active business operations.',
+    notes: 'Current subscription pricing and billing are managed in MYOPS.',
   },
   'team-user-addon': {
     label: 'Team User Add-on',

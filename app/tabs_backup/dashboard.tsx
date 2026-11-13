@@ -74,26 +74,25 @@ export default function Index() {
         <View style={styles.pricingCard}>
           <View style={styles.pricingHeader}>
             <View>
-              <Text style={styles.pricingTitle}>OpsPS Pro</Text>
-              <Text style={styles.pricingSubtitle}>Pelan paling popular</Text>
+              <Text style={styles.pricingTitle}>Langganan MYOPS</Text>
+              <Text style={styles.pricingSubtitle}>Urus akses melalui MYOPS</Text>
             </View>
 
             <View style={styles.launchBadge}>
-              <Text style={styles.launchBadgeText}>100 pengguna pertama</Text>
+              <Text style={styles.launchBadgeText}>MYOPS</Text>
             </View>
           </View>
 
           <View style={styles.priceRow}>
-            <Text style={styles.price}>RM39</Text>
-            <Text style={styles.perMonth}>/bulan</Text>
+            <Text style={styles.price}>Lihat MYOPS</Text>
           </View>
 
           <Text style={styles.pricingDesc}>
-            Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.
+            Harga dan langganan diurus di www.myops.com.my.
           </Text>
 
           <Text style={styles.standardNote}>
-            Tiada percubaan percuma. Pilih plan yang sesuai untuk perniagaan anda.
+            Semak pelan dan kelayakan akses semasa di laman MYOPS.
           </Text>
         </View>
 

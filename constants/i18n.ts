@@ -79,21 +79,21 @@ export const translations = {
       finance: 'Finance & Profit',
       financeDescription:
         'Sales, cost dan keuntungan',
-      pricingTitle: 'Pelan OpsPS',
+      pricingTitle: 'Langganan MYOPS',
       pricingSubtitle:
-        'Free RM0 • Founder RM29/bulan • Pro RM49/bulan • Team +RM10/user/bulan.',
-      founder: 'FOUNDER',
-      founderUsers: 'RM29/bulan',
-      founderPrice: 'RM29',
+        'Lihat harga dan urus langganan di laman MYOPS.',
+      founder: 'MYOPS',
+      founderUsers: 'Urus di MYOPS',
+      founderPrice: 'Lihat MYOPS',
       founderPriceText:
-        'Founder RM29/bulan',
+        'Harga semasa di laman MYOPS',
       founderPriceDescription:
-        'untuk 100 perniagaan pertama.',
-      becomeFounder: 'Jadi Founder',
-      standard: 'PRO',
-      standardPrice: 'RM49',
+        'Langganan dan akses diurus melalui MYOPS.',
+      becomeFounder: 'Buka MYOPS',
+      standard: 'MYOPS',
+      standardPrice: 'Lihat MYOPS',
       standardPriceText:
-        'Pro RM49/bulan',
+        'Harga semasa di laman MYOPS',
       standardPriceDescription:
         'untuk operasi yang berkembang.',
     },
@@ -263,21 +263,21 @@ export const translations = {
       finance: 'Finance & Profit',
       financeDescription:
         'Sales, costs and profit',
-      pricingTitle: 'OpsPS Plans',
+      pricingTitle: 'MYOPS Subscription',
       pricingSubtitle:
-        'Free RM0 • Founder RM29/month • Pro RM49/month • Team +RM10/user/month.',
-      founder: 'FOUNDER',
-      founderUsers: 'RM29/month',
-      founderPrice: 'RM29',
+        'View current pricing and manage subscriptions on the MYOPS website.',
+      founder: 'MYOPS',
+      founderUsers: 'Manage in MYOPS',
+      founderPrice: 'View MYOPS',
       founderPriceText:
-        'Founder RM29/month',
+        'Current pricing on MYOPS',
       founderPriceDescription:
-        'for the first 100 businesses.',
-      becomeFounder: 'Become a Founder',
-      standard: 'PRO',
-      standardPrice: 'RM49',
+        'Subscriptions and access are managed through MYOPS.',
+      becomeFounder: 'Open MYOPS',
+      standard: 'MYOPS',
+      standardPrice: 'View MYOPS',
       standardPriceText:
-        'Pro RM49/month',
+        'Current pricing on MYOPS',
       standardPriceDescription:
         'for growing operations.',
     },
@@ -447,21 +447,21 @@ export const translations = {
       finance: 'फाइनेंस और प्रॉफिट',
       financeDescription:
         'बिक्री, लागत और मुनाफा',
-      pricingTitle: 'OpsPS प्लान',
+      pricingTitle: 'MYOPS सदस्यता',
       pricingSubtitle:
-        'Free RM0 • Founder RM29/माह • Pro RM49/माह • Team +RM10/यूज़र/माह.',
-      founder: 'FOUNDER',
-      founderUsers: 'RM29/माह',
-      founderPrice: 'RM29',
+        'वर्तमान कीमतें और सदस्यता MYOPS वेबसाइट पर देखें।',
+      founder: 'MYOPS',
+      founderUsers: 'MYOPS में प्रबंधित करें',
+      founderPrice: 'MYOPS देखें',
       founderPriceText:
-        'Founder RM29/माह',
+        'वर्तमान कीमतें MYOPS पर',
       founderPriceDescription:
-        'पहले 100 businesses के लिए.',
-      becomeFounder: 'Founder बनें',
-      standard: 'PRO',
-      standardPrice: 'RM49',
+        'सदस्यता और प्रवेश MYOPS में प्रबंधित होते हैं।',
+      becomeFounder: 'MYOPS खोलें',
+      standard: 'MYOPS',
+      standardPrice: 'MYOPS देखें',
       standardPriceText:
-        'Pro RM49/माह',
+        'वर्तमान कीमतें MYOPS पर',
       standardPriceDescription:
         'बढ़ते ops के लिए.',
     },
@@ -631,21 +631,21 @@ export const translations = {
       finance: '财务与利润',
       financeDescription:
         '销售、成本和利润',
-      pricingTitle: 'OpsPS 方案',
+      pricingTitle: 'MYOPS 订阅',
       pricingSubtitle:
-        'Free RM0 • Founder RM29/月 • Pro RM49/月 • Team +RM10/用户/月.',
-      founder: 'FOUNDER',
-      founderUsers: 'RM29/月',
-      founderPrice: 'RM29',
+        '请在 MYOPS 网站查看当前价格并管理订阅。',
+      founder: 'MYOPS',
+      founderUsers: '在 MYOPS 管理',
+      founderPrice: '查看 MYOPS',
       founderPriceText:
-        'Founder RM29/月',
+        '当前价格请查看 MYOPS',
       founderPriceDescription:
-        '适用于前 100 家业务。',
-      becomeFounder: '成为 Founder',
-      standard: 'PRO',
-      standardPrice: 'RM49',
+        '订阅和访问权限通过 MYOPS 管理。',
+      becomeFounder: '打开 MYOPS',
+      standard: 'MYOPS',
+      standardPrice: '查看 MYOPS',
       standardPriceText:
-        'Pro RM49/月',
+        '当前价格请查看 MYOPS',
       standardPriceDescription:
         '适合增长中的业务。',
     },
