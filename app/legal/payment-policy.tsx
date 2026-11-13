@@ -23,7 +23,7 @@ export default function PaymentPolicyScreen() {
 
         <View style={styles.section}>
           <Text style={styles.heading}>Billing</Text>
-          <Text style={styles.text}>Pricing is based on the selected plan and active services in the OpsPS workspace. Users are responsible for reviewing subscription details and confirming current business terms.</Text>
+          <Text style={styles.text}>MYOPS manages OpsPS subscription pricing, checkout and renewals. Review current plans and manage your subscription at www.myops.com.my.</Text>
         </View>
 
         <View style={styles.section}>
