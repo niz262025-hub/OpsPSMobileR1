@@ -1,3 +1,4 @@
+import { MediaGallery } from '../../../components/MediaGallery';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
@@ -195,6 +196,8 @@ export default function ProductDetailScreen() {
             <Text style={styles.metaText}>{sizes.length > 0 ? `${sizes.length} size option${sizes.length > 1 ? 's' : ''}` : 'No size options'}</Text>
           </View>
         </LinearGradient>
+
+        {resolvedBusinessId && product && <MediaGallery kind="products" businessId={resolvedBusinessId} entityId={product.id} onPrimaryChanged={image => setProduct(current => current ? { ...current, image } : current)} editable={membership?.business_id === resolvedBusinessId && ['founder', 'admin'].includes(membership.role ?? '')} />}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Order Details</Text>

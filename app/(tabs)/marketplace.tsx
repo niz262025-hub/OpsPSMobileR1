@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import { getSupabaseClient } from '../../services/supabaseClient';
+import { uploadGalleryImages, validateImage } from '../../services/mediaGallery';
+import React, { useState, useRef } from 'react';
 import {
   Alert,
   Image,
@@ -115,6 +117,9 @@ export default function MarketplaceScreen() {
   const [products, setProducts] = useState<Array<{ id: string; name: string; image?: string; sellingPrice?: number; tripId?: string }>>([]);
   const [tripName, setTripName] = useState('No trip selected');
   const [image, setImage] = useState('');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const saveInFlight = useRef(false);
+  const [savingProduct, setSavingProduct] = useState(false);
 
   const [category, setCategory] =
     useState<ProductCategory>('Clothing');
@@ -215,6 +220,7 @@ export default function MarketplaceScreen() {
    * /product/product-1755841234567
    */
   const saveProduct = async () => {
+    if (saveInFlight.current) return;
     if (!resolvedTripId) {
       setFormError('Please open this product from a real trip.');
       return;
@@ -246,13 +252,14 @@ export default function MarketplaceScreen() {
       return;
     }
 
+    saveInFlight.current = true; setSavingProduct(true);
     try {
       if (!businessId) {
         setFormError('You must belong to a business before creating a product.');
         return;
       }
 
-      const durableImage = image.trim()
+      const durableImage = !imageFiles.length && image.trim()
         ? await normalizeProductImageUri(image)
         : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
           <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
@@ -299,6 +306,7 @@ export default function MarketplaceScreen() {
         return;
       }
 
+      setProducts(current => [...current.filter(entry => entry.id !== product.id), product]);
       const productPath = `/product/${product.id}?businessId=${encodeURIComponent(product.businessId || businessId)}`;
       const appOrigin =
         typeof window !== 'undefined' && window.location?.origin
@@ -312,6 +320,16 @@ export default function MarketplaceScreen() {
       setGeneratedLink(productLink);
       setGeneratedImage(product.image);
       setFormError('');
+      if (imageFiles.length) {
+        try {
+          const client = getSupabaseClient();
+          if (!client) throw new Error('Storage connection unavailable.');
+          await uploadGalleryImages(client, 'products', businessId, product.id, { paths: [], version: 0 }, imageFiles);
+        } catch {
+          setFormError('Product saved, but images were not saved. Open its customer page below to manage images; do not create a duplicate product.');
+        }
+      }
+      setImageFiles([]);
 
       setCopied(false);
 
@@ -337,7 +355,7 @@ export default function MarketplaceScreen() {
         'Product Creation Failed',
         message
       );
-    }
+    } finally { saveInFlight.current = false; setSavingProduct(false); }
   };
 
   const chooseImage = async (camera: boolean) => {
@@ -346,7 +364,8 @@ export default function MarketplaceScreen() {
     if (isWebRuntime) {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*';
+      input.accept = 'image/jpeg,image/png,image/webp';
+      input.multiple = true;
       input.style.position = 'fixed';
       input.style.left = '-9999px';
       input.style.top = '-9999px';
@@ -360,8 +379,14 @@ export default function MarketplaceScreen() {
       };
 
       input.onchange = (event: Event) => {
-        const file = (event.target as HTMLInputElement).files?.[0];
+        const files = Array.from((event.target as HTMLInputElement).files ?? []);
+        const file = files[0];
         cleanup();
+        try {
+          if (files.length > 10) throw new Error('Choose at most ten images.');
+          files.forEach(validateImage);
+          setImageFiles(files);
+        } catch (error) { setFormError(error instanceof Error ? error.message : 'Invalid images.'); return; }
 
         if (!file) {
           return;
@@ -527,6 +552,10 @@ export default function MarketplaceScreen() {
           alwaysBounceVertical={false}
           bounces={false}
         >
+          <View style={{ padding: 12, gap: 8 }}>
+            <Text>Manage product image galleries</Text>
+            {products.map(product => <Pressable key={product.id} accessibilityRole="button" onPress={() => router.push(`/product/${product.id}?businessId=${encodeURIComponent(businessId ?? '')}` as never)}><Text>{product.name} · Edit images</Text></Pressable>)}
+          </View>
           <View style={styles.headingRow}>
             <View>
               <Text style={styles.eyebrow}>Product operations</Text>
@@ -555,7 +584,7 @@ export default function MarketplaceScreen() {
                   <Pressable onPress={() => chooseImage(false)}>
                     <Text style={styles.linkButtonText}>Replace</Text>
                   </Pressable>
-                  <Pressable onPress={() => setImage('')}>
+                  <Pressable onPress={() => { setImage(''); setImageFiles([]); }}>
                     <Text style={styles.deleteText}>Remove</Text>
                   </Pressable>
                 </View>
@@ -565,10 +594,11 @@ export default function MarketplaceScreen() {
                 style={styles.imagePickerButton}
                 onPress={() => chooseImage(false)}
               >
-                <Text style={styles.imagePickerText}>Upload Photo</Text>
+                <Text style={styles.imagePickerText}>Choose 1–10 photos</Text>
               </Pressable>
             )}
 
+            {imageFiles.length > 0 && <Text>{imageFiles.length} images selected; first image will be primary. Manage ordering and replacement after saving.</Text>}
             <Field
               label="Product Name"
               value={name}
@@ -616,8 +646,8 @@ export default function MarketplaceScreen() {
               numeric
             />
 
-            <Pressable style={styles.primaryButton} onPress={saveProduct}>
-              <Text style={styles.primaryButtonText}>Generate Product Link</Text>
+            <Pressable style={styles.primaryButton} disabled={savingProduct} onPress={saveProduct}>
+              <Text style={styles.primaryButtonText}>{savingProduct ? 'Saving product and images…' : 'Generate Product Link'}</Text>
             </Pressable>
 
             {!!formError && <Text style={styles.formError}>{formError}</Text>}

@@ -269,8 +269,8 @@ describe('phase 4a production repository', () => {
     const created = await trips.create({ businessId: 'biz-1', name: 'UAT synthetic trip', destination: 'Mall A', tripDate: '2026-11-14' });
     expect(created).not.toBeNull();
     const tripId = created!.id;
-    await trips.update({ businessId: 'biz-1', tripId, name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', status: 'open' });
-    expect(await trips.getForBusiness('biz-1', tripId)).toMatchObject({ name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', status: 'open' });
+    await trips.update({ businessId: 'biz-1', tripId, name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', budget: 125.5, status: 'open' });
+    expect(await trips.getForBusiness('biz-1', tripId)).toMatchObject({ name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', budget: 125.5, status: 'open' });
     expect(await trips.update({ businessId: 'biz-2', tripId, name: 'Forbidden' })).toBeNull();
     expect(await trips.closeTrip(tripId, 'biz-2')).toBeNull();
     expect(await trips.getForBusiness('biz-2', tripId)).toBeNull();

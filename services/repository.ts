@@ -1,3 +1,4 @@
+import { getProductPrimaryImage } from './productGalleryImage';
 import { trialWriteMessage } from './trialWriteMessage';
 import { getSupabaseClient } from './supabaseClient';
 import {
@@ -80,8 +81,8 @@ export interface BusinessRepository {
 export interface TripRepository {
   listForBusiness(businessId: string): Promise<TripRecord[]>;
   getForBusiness(businessId: string, tripId: string): Promise<TripRecord | null>;
-  create(input: { businessId: string; name: string; destination: string; tripDate: string; notes?: string }): Promise<TripRecord | null>;
-  update(input: { tripId: string; businessId: string; name?: string; destination?: string; tripDate?: string; notes?: string; status?: TripRecord['status'] }): Promise<TripRecord | null>;
+  create(input: { businessId: string; name: string; destination: string; tripDate: string; notes?: string; budget?: number }): Promise<TripRecord | null>;
+  update(input: { tripId: string; businessId: string; name?: string; destination?: string; tripDate?: string; notes?: string; budget?: number; status?: TripRecord['status'] }): Promise<TripRecord | null>;
   closeTrip(tripId: string, businessId: string): Promise<TripRecord | null>;
 }
 
@@ -422,6 +423,7 @@ function mapTripRow(row: any): TripRecord {
     destination: row.destination,
     tripDate: row.trip_date ?? new Date().toISOString().slice(0, 10),
     notes: row.notes ?? '',
+    budget: Number(row.budget ?? 0),
     status: (row.status === 'open' || row.status === 'planning' || row.status === 'closed') ? row.status : 'planning',
     createdAt: row.created_at ?? new Date().toISOString(),
   };
@@ -1851,6 +1853,7 @@ class SupabaseDataSource implements DataSource {
           trip_date: input.tripDate,
           notes: input.notes,
           status: 'planning',
+          budget: input.budget ?? 0,
         })
         .select('*')
         .single();
@@ -1874,11 +1877,12 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      const payload: Record<string, string | Date | null> = {
+      const payload: Record<string, string | number | Date | null> = {
         name: input.name ?? existingTrip.name,
         destination: input.destination ?? existingTrip.destination,
         trip_date: input.tripDate ?? existingTrip.tripDate,
         notes: input.notes ?? existingTrip.notes,
+        budget: input.budget ?? existingTrip.budget ?? 0,
       };
 
       if (input.status) {
@@ -1957,7 +1961,7 @@ class SupabaseDataSource implements DataSource {
         }
       }
 
-      return (productRows as any[]).map((row) => mapProductRow(row, variantMap.get(row.id) ?? []));
+      return Promise.all((productRows as any[]).map(async (row) => ({ ...mapProductRow(row, variantMap.get(row.id) ?? []), image: await getProductPrimaryImage(client, row) })));
     },
     async listPublishedForBusiness(businessId: string) {
       const client = getSupabaseClient();
@@ -1990,7 +1994,7 @@ class SupabaseDataSource implements DataSource {
         }
       }
 
-      return (productRows as any[]).map((row) => mapProductRow(row, variantMap.get(row.id) ?? []));
+      return Promise.all((productRows as any[]).map(async (row) => ({ ...mapProductRow(row, variantMap.get(row.id) ?? []), image: await getProductPrimaryImage(client, row) })));
     },
     async create(input) {
       const client = getSupabaseClient();
@@ -2067,7 +2071,7 @@ class SupabaseDataSource implements DataSource {
         name: input.name ?? existing.name,
         category: input.category ?? existing.category,
         description: input.description ?? existing.description,
-        image_url: input.image ?? existing.image,
+        ...(input.image !== undefined ? { image_url: input.image } : {}),
         trip_id: input.tripId ?? existing.tripId,
         cost_price: Number(input.costPrice ?? existing.costPrice),
         selling_price: Number(input.sellingPrice ?? existing.sellingPrice),
@@ -2133,7 +2137,7 @@ class SupabaseDataSource implements DataSource {
         .eq('product_id', productId)
         .eq('business_id', businessId);
 
-      return mapProductRow(productData, (variantRows ?? []).map((row: any) => ({ size: row.size ?? 'Standard', stock: Number(row.stock ?? 0) })));
+      return { ...mapProductRow(productData, (variantRows ?? []).map((row: any) => ({ size: row.size ?? 'Standard', stock: Number(row.stock ?? 0) }))), image: await getProductPrimaryImage(client, productData) };
     },
     async listVariantsForProduct(productId: string, businessId: string) {
       const client = getSupabaseClient();

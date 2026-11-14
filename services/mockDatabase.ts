@@ -226,6 +226,7 @@ export interface BuyListItem {
 }
 
 export interface TripRecord {
+  budget?: number;
   id: string;
   businessId?: string;
   name: string;
