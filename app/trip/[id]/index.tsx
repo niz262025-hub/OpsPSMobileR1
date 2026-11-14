@@ -400,8 +400,7 @@ export default function TripDetailScreen() {
         {getTripStatusBadge(trip.status)}
       </View>
 
-      <TouchableOpacity accessibilityRole="button" onPress={() => router.push(`/trip/${trip.id}/edit` as never)} style={{ padding: 16 }}><Text>Edit trip details</Text></TouchableOpacity>
-      <Text style={{ paddingHorizontal: 16 }}>Budget: RM{Number(trip.budget ?? 0).toFixed(2)}</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit Trip" onPress={() => router.push(`/trip/${trip.id}/edit` as never)} style={{ alignSelf: 'flex-start', backgroundColor: THEME.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 12, margin: 16 }}><Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Edit Trip</Text></TouchableOpacity>
       <View style={styles.summary}>
         <SummaryItem label="Orders" value={tripOrders.length} />
         <SummaryItem label="Products" value={tripProducts.length} />
