@@ -22,7 +22,9 @@ Stacked on `fix/functional-uat-publication` / PR #23, which is itself based on P
 
 ## Storage and data design
 
-New migration: `supabase/migrations/20261114192000_web_galleries_trip_budget.sql`.
+New migrations, in order: `supabase/migrations/20261114192000_web_galleries_trip_budget.sql`, then `supabase/migrations/20261114195800_media_delete_guard.sql`.
+
+Follow-up acceptance reproduced a customer DELETE escape when an unrelated broad Storage policy existed: DELETE uses USING only, so the general read-capable guard was insufficient for that operation. The second migration adds a restrictive manager-only DELETE guard. Regression now proves customers cannot delete their readable published-product images, managers retain cleanup access, and unrelated buckets remain unaffected. This was reproduced only in isolated PostgreSQL; no hosted exposure is asserted. The earlier migration is unchanged.
 
 - Additive columns: `trips.budget`, plus `gallery_paths` (JSON array) and `gallery_version` on trips/products. No existing records, orders, inventory, publication flags or original image bytes are deleted.
 - Private bucket: `opsps-media`, only JPEG/PNG/WebP, maximum 5 MiB per object. Browser validation enforces the same allowlist and rejects empty files. Ten gallery entries maximum, with unique names and server-validated parent/business scope.
@@ -49,9 +51,9 @@ Real isolated PostgreSQL UPDATE tests reproduced `42P17 infinite recursion detec
 
 ## Hosted rollout gate (not executed here)
 
-This session can inspect repository SQL and run isolated PostgreSQL, but has no live Supabase management connection. **The new migration has not been applied to staging or production.** Live schema drift and actual Storage service behavior remain unverified.
+This session can inspect repository SQL and run isolated PostgreSQL, but has no live Supabase management connection. **Neither new migration has been applied to staging or production by this session.** Live schema drift and actual Storage service behavior remain unverified.
 
-1. An authorized database operator must inspect the existing staging schema/bucket/policies, confirm recovery capability, and apply only the new migration transactionally through the approved Supabase migration process. Do not run the fresh-schema baseline or replay historical migrations on an existing installation. An existing mismatched `opsps-media` bucket fails closed for review instead of being silently changed.
+1. An authorized database operator must inspect the existing staging schema/bucket/policies, confirm recovery capability, and apply the two new migrations, in order, transactionally through the approved Supabase migration process. Do not run the fresh-schema baseline or replay historical migrations on an existing installation. An existing mismatched `opsps-media` bucket fails closed for review instead of being silently changed.
 2. Use the existing approved isolated OpsPS staging database and the exact MYOPS staging portal bindings. This feature branch does not automatically inherit environment variables scoped to `fix/web-first-provisioning`; configure an approved feature-preview target or stage the approved code into that configured staging environment. Verify the exact preview origin is allowed without broadening production CORS or disabling Vercel protection.
 3. In an owner-controlled authorized browser/runner, sign into MYOPS staging and launch OpsPS using the same session. No credentials, cookies, signing keys or launch tickets should be placed in chat, source, reports or logs.
 4. Upload real synthetic JPEG/PNG/WebP fixtures (1 and 10 files) to a trip and a product. Verify all previews, primary/order, replace/remove, refresh persistence, and 11th-file rejection. Verify legacy primary/remove/restore and no publication change after ordinary product editing.

@@ -22,7 +22,8 @@ try{
  GRANT USAGE ON SCHEMA public,auth,storage TO anon,authenticated,service_role;`);
  // Simulate an existing install, then apply only the new additive migration.
  const migration=readFileSync(new URL('../supabase/migrations/20261114192000_web_galleries_trip_budget.sql',import.meta.url),'utf8');
- await db.exec(freshSchema().replace(migration,''));
+ const deleteGuard=readFileSync(new URL('../supabase/migrations/20261114195800_media_delete_guard.sql',import.meta.url),'utf8');
+ await db.exec(freshSchema().replace(migration,'').replace(deleteGuard,''));
 
  await db.query('INSERT INTO auth.users VALUES($1),($2)',[owner,other]);
  await db.query("INSERT INTO businesses(id,name) VALUES($1,'UAT')",[business]);
@@ -33,6 +34,7 @@ try{
  await db.query("INSERT INTO trips(id,business_id,name,destination,trip_date) VALUES($1,$2,'Original','Mall','2026-11-14')",[trip,business]);
  await db.query("INSERT INTO products(id,business_id,trip_id,name,category,image_url,is_published) VALUES($1,$2,$3,'Legacy','Other','https://example.com/legacy.jpg',false)",[product,business,trip]);
  await db.exec(migration);
+ await db.exec(deleteGuard);
  assert.equal((await db.query('SELECT image_url FROM products WHERE id=$1',[product])).rows[0].image_url,'https://example.com/legacy.jpg');
  assert.deepEqual((await db.query('SELECT gallery_paths FROM products WHERE id=$1',[product])).rows[0].gallery_paths,['legacy']);
  assert.deepEqual((await db.query('SELECT budget::text,gallery_paths,gallery_version FROM trips')).rows,[{budget:'0.00',gallery_paths:[],gallery_version:0}]);
@@ -84,6 +86,11 @@ try{
  assert.equal((await db.query('SELECT is_published,image_url FROM products WHERE id=$1',[product])).rows[0].is_published,false);
  assert.equal((await db.query('SELECT image_url FROM products WHERE id=$1',[product])).rows[0].image_url,'https://example.com/legacy.jpg');
  assert.equal((await db.query("UPDATE storage.objects SET name=name WHERE bucket_id='opsps-media' RETURNING id")).rows.length,0);
+ const orphan=`business/${business}/trips/${trip}/90000000-0000-4000-8000-000000000088.png`;
+ await db.query("INSERT INTO storage.objects(bucket_id,name) VALUES('opsps-media',$1)",[orphan]);
+ assert.equal((await db.query("DELETE FROM storage.objects WHERE bucket_id='opsps-media' AND name=$1 RETURNING id",[orphan])).rows.length,1);
+ await db.query("INSERT INTO storage.objects(bucket_id,name) VALUES('unrelated-fixture','unrelated')");
+ assert.equal((await db.query("DELETE FROM storage.objects WHERE bucket_id='unrelated-fixture' RETURNING id")).rows.length,1);
  await db.query("UPDATE trips SET status='closed' WHERE id=$1",[trip]);
  await assert.rejects(db.query("UPDATE trips SET status='open' WHERE id=$1",[trip]),/cannot be reopened/);
  await asUser(other);
@@ -98,6 +105,10 @@ try{
  const customerSession=(await db.query('SELECT supabase_session_id FROM myops_app_sessions WHERE opsps_user_id=$1',[other])).rows[0].supabase_session_id;
  await db.query("UPDATE products SET is_published=true WHERE id=$1",[product]);
  await asUser(other);await db.query("SELECT set_config('request.jwt.claims',$1,false)",[JSON.stringify({session_id:customerSession})]);
+ assert.equal((await db.query("SELECT * FROM storage.objects WHERE bucket_id='opsps-media'")).rows.length,9);
+ // A customer may read published images, never delete them through another
+ // permissive bucket policy. DELETE evaluates USING, not WITH CHECK.
+ assert.equal((await db.query("DELETE FROM storage.objects WHERE bucket_id='opsps-media' RETURNING id")).rows.length,0);
  assert.equal((await db.query("SELECT * FROM storage.objects WHERE bucket_id='opsps-media'")).rows.length,9);
  await assert.rejects(db.query("INSERT INTO storage.objects(bucket_id,name) VALUES('opsps-media',$1)",[paths('products',product)[0]]),/row-level security/);
  await assert.rejects(db.query('SELECT opsps_save_gallery($1,$2,$3,0,$4)',['products',business,product,'[]']),/Authorized/);
