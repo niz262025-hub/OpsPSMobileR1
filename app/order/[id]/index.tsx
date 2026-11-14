@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 
 import { useAuth } from '../../../context/AuthContext';
-import { getDataSource } from '../../../services/repository';
+import { getDataSource, type AvailabilityDecision } from '../../../services/repository';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../../theme';
 import OrderPaymentPanel from '../../../components/OrderPaymentPanel';
 
@@ -12,7 +12,7 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { user, profile, membership, business, role, ready } = useAuth();
   const [detailLoading, setDetailLoading] = useState(true);
-  const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; orderStatus?: string; availabilityStatus?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
+  const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; orderStatus?: string; availabilityStatus?: string; paymentOption?: string; paymentRequestedAt?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
   const [items, setItems] = useState<Array<{ id: string; quantity: number; productVariantId: string }>>([]);
   const [productName, setProductName] = useState('Product');
   const [revision,setRevision]=useState(0);
@@ -48,15 +48,6 @@ export default function OrderDetailScreen() {
 
         if (!nextOrder || !active) {
           return;
-        }
-
-        const stockCheck = nextOrder.businessId && nextOrder.orderStatus === 'pending' ? await repo.orders.checkStockAvailability(nextOrder.businessId, nextOrder.id) : null;
-        if (stockCheck && active) {
-          nextOrder = {
-            ...nextOrder,
-            requestStatus: stockCheck.requestStatus,
-            availabilityStatus: stockCheck.availabilityStatus,
-          };
         }
 
         setOrder(nextOrder);
@@ -101,6 +92,18 @@ export default function OrderDetailScreen() {
     );
   }
 
+  const canConfirm = (role === 'founder' || role === 'admin') && order.orderStatus === 'pending' && order.availabilityStatus !== 'confirmed' && order.paymentStatus === 'pending';
+  const confirmAvailability = async (decision: AvailabilityDecision) => {
+    if (packingBusy || !canConfirm || !order.businessId) return;
+    setPackingBusy(true); setActionError('');
+    try {
+      const updated = await getDataSource('production').orders.confirmAvailability(order.businessId, order.id, decision);
+      if (!updated) throw new Error('Availability could not be saved.');
+      setRevision(value => value + 1);
+    } catch (error) { setActionError(error instanceof Error ? error.message : 'Availability could not be saved.'); }
+    finally { setPackingBusy(false); }
+  };
+  const paymentRequested = order.availabilityStatus === 'confirmed' && Boolean(order.paymentRequestedAt) && order.orderStatus !== 'cancelled';
   const statusLabel = order.requestStatus ?? order.orderStatus ?? order.status ?? order.paymentStatus ?? 'PENDING_AVAILABILITY';
   const startPacking = async () => {
     if (packingBusy || !order.businessId || role !== 'founder') return;
@@ -145,7 +148,14 @@ export default function OrderDetailScreen() {
         {role==='founder' && order.orderStatus==='packing' ? <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={()=>router.push(`/packing/${order.id}`)}><Text style={styles.primaryButtonText}>Continue packing</Text></Pressable>:null}
         {role==='founder' && order.orderStatus==='ready' ? <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={()=>router.push({pathname:'/shipping/generate',params:{orderId:order.id,businessId:order.businessId??''}})}><Text style={styles.primaryButtonText}>Create shipment</Text></Pressable>:null}
         {actionError?<Text accessibilityRole="alert">{actionError}</Text>:null}
-        {order.businessId ? <OrderPaymentPanel businessId={order.businessId} orderId={order.id} total={Number(order.total)} onChanged={()=>setRevision(value=>value+1)}/> : null}
+        {canConfirm ? <View style={styles.card}>
+          <Text style={styles.label}>Confirm Availability</Text>
+          <Text>Confirm supplier availability before requesting customer payment.</Text>
+          {([['PAY_NOW', 'Customer Pay First'], ['PAY_LATER', 'Buy Now, Pay Later'], ['NOT_AVAILABLE', 'Not Available']] as const).map(([decision, label]) => <Pressable key={decision} accessibilityRole="button" disabled={packingBusy} style={styles.primaryButton} onPress={() => void confirmAvailability(decision)}><Text style={styles.primaryButtonText}>{label}</Text></Pressable>)}
+        </View> : null}
+        {order.availabilityStatus !== 'confirmed' && order.orderStatus !== 'cancelled' ? <Text>Awaiting founder availability confirmation. No payment is requested yet.</Text> : null}
+        {order.availabilityStatus === 'confirmed' && !paymentRequested ? <Text>Buy Now, Pay Later: no payment is requested yet.</Text> : null}
+        {order.businessId && paymentRequested ? <OrderPaymentPanel businessId={order.businessId} orderId={order.id} total={Number(order.total)} onChanged={()=>setRevision(value=>value+1)}/> : null}
       </ScrollView>
     </SafeAreaView>
   );

@@ -23,7 +23,7 @@ try{
  await db.query("INSERT INTO profiles(auth_user_id,business_id,full_name,email,role) VALUES($1,$2,'Owner','owner@fixture.invalid','founder')",[owner,business]);
  await db.query("INSERT INTO business_memberships(user_id,business_id,role) VALUES($1,$2,'founder')",[owner,business]);
  await db.query("INSERT INTO trips(id,business_id,name,destination,trip_date) VALUES($1,$2,'UAT','UAT','2026-11-01')",[trip,business]);
- await db.query("INSERT INTO orders(id,business_id,trip_id,customer_name,customer_phone,delivery_address,total) VALUES($1,$2,$3,'Dummy','0100000000','UAT staging',60)",[order,business,trip]);
+ await db.query("INSERT INTO orders(id,business_id,trip_id,customer_name,customer_phone,delivery_address,total,availability_status,payment_requested_at) VALUES($1,$2,$3,'Dummy','0100000000','UAT staging',60,'confirmed',now())",[order,business,trip]);
  await db.query("INSERT INTO payments(id,business_id,order_id,payment_method,payment_status,amount,customer_payment_reference) VALUES($1,$2,$3,'DIRECT_QR','submitted',60,'DUMMY')",[payment,business,order]);
  await assert.rejects(db.query("INSERT INTO payments(business_id,payment_method,payment_status) VALUES($1,'DIRECT_QR','invented')",[business]),/check constraint/);
  await db.query('INSERT INTO myops_identity_links(myops_user_ref,opsps_user_id) VALUES($1,$2)',['A'.repeat(43),owner]);

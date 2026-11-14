@@ -2,6 +2,8 @@ import { trialWriteMessage } from './trialWriteMessage';
 import { getSupabaseClient } from './supabaseClient';
 import {
   addFinanceTransaction,
+  confirmOrderAvailability,
+  setOrderPaymentMode,
   createProduct,
   createTrip,
   deleteFinanceTransaction,
@@ -178,6 +180,8 @@ export interface BuyListItemRecord {
   purchased: boolean;
 }
 
+export type AvailabilityDecision = 'PAY_NOW' | 'PAY_LATER' | 'NOT_AVAILABLE';
+
 export type StockCheckResult = {
   orderId: string;
   businessId: string;
@@ -194,6 +198,7 @@ export interface OrderRepository {
   getForBusiness(businessId: string, orderId: string): Promise<OrderRecord | null>;
   listItemsForOrder(orderId: string, businessId: string): Promise<OrderItemRecord[]>;
   checkStockAvailability(businessId: string, orderId: string): Promise<StockCheckResult | null>;
+  confirmAvailability(businessId: string, orderId: string, decision: AvailabilityDecision): Promise<OrderRecord | null>;
   listBuyListForBusiness(businessId: string): Promise<BuyListItemRecord[]>;
   markBuyListItemBought(businessId: string, itemId: string): Promise<BuyListItemRecord | null>;
   startPacking(businessId: string, orderId: string): Promise<OrderRecord | null>;
@@ -804,6 +809,12 @@ class MockDataSource implements DataSource {
         quantity: entry.quantity,
         packedQuantity: entry.packedQuantity ?? 0,
       }));
+    },
+    async confirmAvailability(businessId, orderId, decision) {
+      if (!getMockDatabaseSnapshot().orders.some(order => order.id === orderId && order.businessId === businessId)) return null;
+      confirmOrderAvailability(orderId, decision !== 'NOT_AVAILABLE');
+      if (decision !== 'NOT_AVAILABLE') setOrderPaymentMode(orderId, decision === 'PAY_NOW' ? 'customer_pays_first' : 'ps_buy_first_pay_later');
+      return this.getForBusiness(businessId, orderId);
     },
     async checkStockAvailability(businessId: string, orderId: string) {
       const order = getMockDatabaseSnapshot().orders.find((entry) => entry.businessId === businessId && entry.id === orderId);
@@ -2321,6 +2332,15 @@ class SupabaseDataSource implements DataSource {
       }
 
       return (data as any[]).map((row) => mapOrderItemRow(row));
+    },
+    async confirmAvailability(businessId, orderId, decision) {
+      const client = getSupabaseClient();
+      if (!client) return null;
+      const { data, error } = await client.rpc('opsps_confirm_availability', {
+        p_business_id: businessId, p_order_id: orderId, p_decision: decision,
+      });
+      if (error) throw new Error(error.message ?? 'Availability could not be saved.');
+      return data ? mapOrderRow(data) : null;
     },
     async checkStockAvailability(businessId: string, orderId: string) {
       const client = getSupabaseClient();
