@@ -45,7 +45,6 @@ export default function EditTrip() {
     {field('Trip name', 'name')}{field('Destination', 'destination')}
     <Text>Trip date</Text>
     {Platform.OS === 'web' ? <input aria-label="Trip date" type="date" disabled={busy} value={draft.tripDate} onChange={event => setDraft(current => ({ ...current, tripDate: event.target.value }))} onInput={event => { const value = event.currentTarget.value; setDraft(current => ({ ...current, tripDate: value })); }} /> : <TextInput accessibilityLabel="Trip date YYYY-MM-DD" value={draft.tripDate} onChangeText={tripDate => setDraft(current => ({ ...current, tripDate }))} />}
-    {field('Budget (RM)', 'budget')}
     <Text>Status: {draft.status === 'closed' ? 'Completed' : draft.status === 'open' ? 'Active' : 'Planning'}</Text>
     {originalStatus !== 'closed' && <>
       <Pressable accessibilityRole="button" disabled={busy} onPress={() => setDraft(current => ({ ...current, status: 'open' }))}><Text>Set Active</Text></Pressable>
