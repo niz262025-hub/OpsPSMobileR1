@@ -107,6 +107,18 @@ describe('Reports dataset calculations', () => {
     expect(result.summary['Net Profit']).toBe(183);
   });
 
+  it('reconciles daily and monthly sales without including another company', () => {
+    const daily = buildReport('sales', sampleDataset, '2025-01-05', '2025-01-05', 'business-1');
+    const monthly = buildReport('sales', sampleDataset, '2025-01-01', '2025-01-31', 'business-1');
+    const foreign = buildReport('sales', sampleDataset, '2025-01-01', '2025-01-31', 'business-2');
+    expect(daily.summary['Total Sales']).toBe(150);
+    expect(daily.summary['Total Orders']).toBe(1);
+    expect(monthly.summary['Total Sales']).toBe(230);
+    expect(monthly.summary['Total Orders']).toBe(2);
+    expect(foreign.summary['Total Sales']).toBe(220);
+    expect(JSON.stringify(monthly.rows)).not.toContain('Mallory');
+  });
+
   it('returns a clean empty result for empty business data', () => {
     const result = buildReport('sales', { orders: [], trips: [], financeTransactions: [], payments: [], products: [], productVariants: [], orderItems: [] }, '2025-01-01', '2025-01-31');
 

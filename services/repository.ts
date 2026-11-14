@@ -2072,7 +2072,9 @@ class SupabaseDataSource implements DataSource {
         cost_price: Number(input.costPrice ?? existing.costPrice),
         selling_price: Number(input.sellingPrice ?? existing.sellingPrice),
         status: input.status ?? existing.status,
-        is_published: typeof input.isPublished === 'boolean' ? input.isPublished : Boolean(existing.status === 'ready'),
+        // Stock readiness and customer visibility are independent. Only an
+        // explicit publishing instruction may change the stored visibility.
+        ...(typeof input.isPublished === 'boolean' ? { is_published: input.isPublished } : {}),
       };
 
       const { data, error } = await client
