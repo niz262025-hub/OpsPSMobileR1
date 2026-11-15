@@ -17,15 +17,15 @@ async function input(label: string, value: string) {
 }
 async function click(text: string) { const target = [...node.querySelectorAll('[role="button"]')].find(el => el.textContent === text)!; expect(target).toBeTruthy(); await act(async () => target.dispatchEvent(new MouseEvent('click', { bubbles: true }))); }
 it('loads saved fields, saves validated edits and opens the trip detail for a fresh read', async () => {
-  await mount(); expect((node.querySelector('[aria-label="Budget (RM)"]') as HTMLInputElement).value).toBe('50');
-  await input('Trip name', 'Edited trip'); await input('Destination', 'New mall'); await input('Budget (RM)', '125.50'); await input('Trip date', '2026-11-15');
+  await mount(); expect(node.querySelector('[aria-label="Budget (RM)"]')).toBeNull();
+  await input('Trip name', 'Edited trip'); await input('Destination', 'New mall'); await input('Trip date', '2026-11-15');
   await click('Set Completed'); await click('Save trip');
-  expect(m.update).toHaveBeenCalledWith({ tripId: 'trip', businessId: 'business', name: 'Edited trip', destination: 'New mall', budget: 125.5, tripDate: '2026-11-15', status: 'closed' });
+  expect(m.update).toHaveBeenCalledWith({ tripId: 'trip', businessId: 'business', name: 'Edited trip', destination: 'New mall', budget: 50, tripDate: '2026-11-15', status: 'closed' });
   expect(m.replace).toHaveBeenCalledWith('/trip/trip');
 });
 it('shows validation and server-save failures without claiming success', async () => {
-  await mount(); await input('Budget (RM)', '-1'); await click('Save trip'); expect(m.update).not.toHaveBeenCalled(); expect(node.textContent).toContain('non-negative');
-  await input('Budget (RM)', '0'); m.update.mockResolvedValue(null); await click('Save trip'); expect(node.textContent).toContain('not saved'); expect(m.replace).not.toHaveBeenCalled();
+  await mount(); await input('Trip name', ''); await click('Save trip'); expect(m.update).not.toHaveBeenCalled(); expect(node.textContent).toContain('trip name');
+  await input('Trip name', 'Corrected trip'); m.update.mockResolvedValue(null); await click('Save trip'); expect(node.textContent).toContain('not saved'); expect(m.replace).not.toHaveBeenCalled();
 });
 it('denies customer editing before a repository request', async () => { m.role = 'customer'; await mount(); expect(node.textContent).toContain('Only an authorized'); expect(m.get).not.toHaveBeenCalled(); });
 it('keeps completed trips completed while allowing detail corrections', async () => {
