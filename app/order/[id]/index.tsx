@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 
 import { useAuth } from '../../../context/AuthContext';
@@ -19,7 +19,7 @@ export default function OrderDetailScreen() {
   const [revision,setRevision]=useState(0);
   const [packingBusy,setPackingBusy]=useState(false),[actionError,setActionError]=useState('');
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!ready) return;
     let active = true;
     setDetailLoading(true);
@@ -75,7 +75,7 @@ export default function OrderDetailScreen() {
     return () => {
       active = false;
     };
-  }, [business?.id, id, membership?.business_id, profile?.id, role, user?.id, revision, ready]);
+  }, [business?.id, id, membership?.business_id, profile?.id, role, user?.id, revision, ready]));
 
   if (!ready || detailLoading) {
     return <SafeAreaView><View accessibilityRole="progressbar"><Text>Loading order…</Text></View></SafeAreaView>;
