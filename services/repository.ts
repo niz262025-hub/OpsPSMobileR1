@@ -439,6 +439,7 @@ function mapProductRow(row: any, fallbackVariants: Array<{ size: string; stock: 
     tripId: row.trip_id ?? '',
     name: row.name,
     image: row.image_url ?? '',
+    isPublished: Boolean(row.is_published),
     costPrice: Number(row.cost_price ?? 0),
     sellingPrice: Number(row.selling_price ?? 0),
     status: row.status === 'preorder' ? 'preorder' : 'ready',
