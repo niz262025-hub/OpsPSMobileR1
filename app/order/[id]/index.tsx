@@ -7,12 +7,13 @@ import { useAuth } from '../../../context/AuthContext';
 import { getDataSource } from '../../../services/repository';
 import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../../theme';
 import OrderPaymentPanel from '../../../components/OrderPaymentPanel';
+import { OrderAvailabilityActions } from '../../../components/OrderAvailabilityActions';
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { user, profile, membership, business, role, ready } = useAuth();
   const [detailLoading, setDetailLoading] = useState(true);
-  const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; orderStatus?: string; availabilityStatus?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
+  const [order, setOrder] = useState<null | { id: string; customerName: string; total: number; requestStatus?: string; status?: string; paymentStatus?: string; orderStatus?: string; availabilityStatus?: string; paymentRequestedAt?: string; customerPhone?: string | null; deliveryAddress?: string | null; productId?: string; tripId?: string; businessId?: string }>(null);
   const [items, setItems] = useState<Array<{ id: string; quantity: number; productVariantId: string }>>([]);
   const [productName, setProductName] = useState('Product');
   const [revision,setRevision]=useState(0);
@@ -50,15 +51,7 @@ export default function OrderDetailScreen() {
           return;
         }
 
-        const stockCheck = nextOrder.businessId && nextOrder.orderStatus === 'pending' ? await repo.orders.checkStockAvailability(nextOrder.businessId, nextOrder.id) : null;
-        if (stockCheck && active) {
-          nextOrder = {
-            ...nextOrder,
-            requestStatus: stockCheck.requestStatus,
-            availabilityStatus: stockCheck.availabilityStatus,
-          };
-        }
-
+        // Stock estimates do not replace the merchant's persisted decision.
         setOrder(nextOrder);
         const nextItems = await repo.orders.listItemsForOrder(id, nextOrder.businessId ?? businessId ?? '');
         setItems(nextItems ?? []);
@@ -145,7 +138,8 @@ export default function OrderDetailScreen() {
         {role==='founder' && order.orderStatus==='packing' ? <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={()=>router.push(`/packing/${order.id}`)}><Text style={styles.primaryButtonText}>Continue packing</Text></Pressable>:null}
         {role==='founder' && order.orderStatus==='ready' ? <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={()=>router.push({pathname:'/shipping/generate',params:{orderId:order.id,businessId:order.businessId??''}})}><Text style={styles.primaryButtonText}>Create shipment</Text></Pressable>:null}
         {actionError?<Text accessibilityRole="alert">{actionError}</Text>:null}
-        {order.businessId ? <OrderPaymentPanel businessId={order.businessId} orderId={order.id} total={Number(order.total)} onChanged={()=>setRevision(value=>value+1)}/> : null}
+        {order.businessId ? <OrderAvailabilityActions businessId={order.businessId} orderId={order.id} canManage={membership?.business_id === order.businessId && ['founder', 'admin'].includes(membership.role ?? '')} pending={order.orderStatus === 'pending' && order.paymentStatus === 'pending' && order.availabilityStatus !== 'confirmed'} onChanged={() => setRevision(value => value + 1)} /> : null}
+        {order.businessId && order.availabilityStatus === 'confirmed' && order.paymentRequestedAt ? <OrderPaymentPanel businessId={order.businessId} orderId={order.id} total={Number(order.total)} onChanged={()=>setRevision(value=>value+1)}/> : null}
       </ScrollView>
     </SafeAreaView>
   );
