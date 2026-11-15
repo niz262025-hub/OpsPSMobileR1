@@ -79,6 +79,8 @@ export default function TripDetailScreen() {
     { id: `cogs-${Date.now()}`, productName: '', quantity: '1', unitCost: '0', notes: '' },
   ]);
 
+  const [detailRevision, setDetailRevision] = useState(0);
+
   useEffect(() => {
     if (!ready) return;
     let active = true;
@@ -180,7 +182,7 @@ export default function TripDetailScreen() {
     return () => {
       active = false;
     };
-  }, [businessId, id, ready]);
+  }, [businessId, id, ready, detailRevision]);
 
   useEffect(() => {
     let active = true;
@@ -295,6 +297,8 @@ export default function TripDetailScreen() {
     }
 
     setTrip(closed);
+    // Reload persisted finance rows and profit after the final expense writes.
+    setDetailRevision(current => current + 1);
     setShowCloseFlow(false);
     setCloseFlowError('');
     setCloseFlowDrafts([createTripExpenseDraft()]);
