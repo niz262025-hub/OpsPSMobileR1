@@ -30,9 +30,9 @@ export default function CustomerHomeScreen() {
   ];
 
   const shortcuts = [
-    { label: 'Browse Products', icon: ShoppingBag },
-    { label: 'Track Orders', icon: Package },
-    { label: 'Payments', icon: WalletCards },
+    { label: 'Browse Products', icon: ShoppingBag, href: '/customer/products' as const },
+    { label: 'Track Orders', icon: Package, href: '/customer/orders' as const },
+    { label: 'Payments', icon: WalletCards, href: '/customer/orders?payments=1' as const },
   ];
 
   return (
@@ -78,8 +78,8 @@ export default function CustomerHomeScreen() {
         <View style={styles.cardPanel}>
           <Text style={styles.sectionTitle}>Quick access</Text>
           <View style={styles.shortcutRow}>
-            {shortcuts.map(({ label, icon: Icon }) => (
-              <Pressable key={label} style={styles.shortcutItem} onPress={() => router.push('/(tabs)/marketplace')}>
+            {shortcuts.map(({ label, icon: Icon, href }) => (
+              <Pressable key={label} accessibilityRole="button" style={styles.shortcutItem} onPress={() => router.push(href)}>
                 <View style={styles.shortcutIconWrap}><Icon size={20} color={THEME.primary} /></View>
                 <Text style={styles.shortcutText}>{label}</Text>
                 <ArrowRight size={14} color={THEME.text.secondary} />
