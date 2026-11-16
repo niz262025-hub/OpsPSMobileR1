@@ -1362,7 +1362,7 @@ describe('phase 4a production repository', () => {
     expect(await getDataSource('production').shipments.create({businessId:'biz-1',orderId:'other-order',courier:'Pos Laju',parcelWeight:1})).toBeNull();
   });
 
-  it('allows anonymous customer ordering for a published product with available stock', async () => {
+  it('requires MYOPS sign-in even when a product is published and stock is available', async () => {
     vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
       userId: '' as any,
       memberships: [],
@@ -1419,9 +1419,7 @@ describe('phase 4a production repository', () => {
       shippingFee: 5,
     });
 
-    expect(created).not.toBeNull();
-    expect(created?.customerName).toBe('Public Buyer');
-    expect(created?.total).toBe(61);
+    expect(created).toBeNull();
   });
 
   it('rejects anonymous public orders when stock is insufficient or quantity is invalid', async () => {

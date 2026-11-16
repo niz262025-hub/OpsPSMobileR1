@@ -1586,43 +1586,6 @@ async function getCurrentProfileId(client: ReturnType<typeof getSupabaseClient>)
   return (data as { id?: string }).id ?? null;
 }
 
-async function ensureCustomerProfile(client: ReturnType<typeof getSupabaseClient>, input: { businessId: string; customerName: string; customerPhone?: string; deliveryAddress?: string; customerId?: string }) {
-  if (!client) {
-    return null;
-  }
-
-  const existingProfileId = await getCurrentProfileId(client);
-  if (existingProfileId) {
-    return existingProfileId;
-  }
-
-  const userId = await getUserIdFromAuth(client);
-  if (!userId) {
-    return null;
-  }
-
-  const profileEmail = `${userId}@customer.opsps.local`;
-  const { data, error } = await client
-    .from('profiles')
-    .insert({
-      business_id: input.businessId,
-      auth_user_id: userId,
-      full_name: input.customerName,
-      email: profileEmail,
-      phone: input.customerPhone ?? null,
-      address: input.deliveryAddress ?? null,
-      role: 'customer',
-    })
-    .select('id')
-    .single();
-
-  if (error || !data) {
-    return null;
-  }
-
-  return (data as { id?: string }).id ?? null;
-}
-
 async function verifyTripBelongsToBusiness(client: ReturnType<typeof getSupabaseClient>, businessId: string, tripId: string): Promise<boolean> {
   if (!client || !tripId || !businessId) {
     return false;
@@ -2319,7 +2282,11 @@ class SupabaseDataSource implements DataSource {
       }
 
       if (!(await hasMembership(client, businessId))) {
-        return [];
+        const profileId = await getCurrentProfileId(client);
+        if (!profileId) return [];
+        const { data: ownOrder, error: ownError } = await client.from('orders').select('id')
+          .eq('id', orderId).eq('business_id', businessId).eq('customer_profile_id', profileId).maybeSingle();
+        if (ownError || !ownOrder) return [];
       }
 
       const { data, error } = await client.from('order_items').select('*').eq('order_id', orderId).eq('business_id', businessId);
@@ -2666,7 +2633,7 @@ class SupabaseDataSource implements DataSource {
     },
     async create(input) {
       const client = getSupabaseClient();
-      if (!client) {
+      if (!client || !await getUserIdFromAuth(client)) {
         return null;
       }
 
@@ -2676,7 +2643,7 @@ class SupabaseDataSource implements DataSource {
       }
 
       const quantity = Number(input.quantity ?? 1);
-      if (!Number.isFinite(quantity) || quantity <= 0) {
+      if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 999) {
         return null;
       }
 
@@ -2724,129 +2691,39 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      const customerProfileId = await ensureCustomerProfile(client, {
-        businessId: input.businessId,
-        customerName: cleanedName,
-        customerPhone: input.customerPhone,
-        deliveryAddress: input.deliveryAddress,
-        customerId: input.customerId,
+      // One server transaction computes prices and writes both parent and item.
+      // A denied item insert rolls the parent back instead of leaving an orphan.
+      const { data, error } = await client.rpc('opsps_create_customer_order', {
+        p_business_id: input.businessId,
+        p_product_id: input.productId,
+        p_variant_id: input.productVariantId,
+        p_quantity: quantity,
+        p_customer_name: cleanedName,
+        p_customer_phone: input.customerPhone ?? '',
+        p_delivery_address: input.deliveryAddress ?? '',
+        p_payment_method: input.paymentMethod ?? 'bank',
+        p_shipping_fee: Number(input.shippingFee ?? 0),
       });
-
-      const subtotal = Number(product.selling_price ?? 0) * quantity;
-      const shippingFee = Number(input.shippingFee ?? 0);
-      const total = subtotal + shippingFee;
-
-      const { data: orderData, error: orderError } = await client
-        .from('orders')
-        .insert({
-          business_id: input.businessId,
-          trip_id: input.tripId || null,
-          product_id: input.productId,
-          customer_profile_id: input.customerProfileId ?? customerProfileId ?? null,
-          customer_name: cleanedName,
-          customer_phone: input.customerPhone ?? null,
-          delivery_address: input.deliveryAddress ?? null,
-          order_date: new Date().toISOString(),
-          subtotal,
-          shipping_fee: shippingFee,
-          total,
-          payment_status: 'pending',
-          order_status: 'pending',
-          request_status: 'PENDING_AVAILABILITY',
-          payment_option: input.paymentMethod ?? 'bank',
-          payment_mode: input.paymentMethod ?? 'bank',
-          availability_status: 'pending',
-        })
-        .select('*')
-        .single();
-
-      if (orderError || !orderData) {
-        return null;
-      }
-
-      const { error: itemsError } = await client.from('order_items').insert({
-        business_id: input.businessId,
-        order_id: orderData.id,
-        product_variant_id: input.productVariantId,
-        quantity,
-        packed_quantity: 0,
-      });
-
-      if (itemsError) {
-        return null;
-      }
-
-      return {
-        ...mapOrderRow(orderData),
-        customerId: input.customerId ?? input.customerProfileId ?? customerProfileId ?? null,
-      };
+      if (error || !data) return null;
+      return mapOrderRow(data);
     },
     async getForCustomer(customerId: string, orderId: string) {
       const client = getSupabaseClient();
-      if (!client) {
-        return null;
-      }
-
+      if (!client) return null;
       const profileId = await getCurrentProfileId(client);
-      const candidates = new Set<string>();
-      if (customerId) candidates.add(customerId);
-      if (profileId) candidates.add(profileId);
-
-      const results = await Promise.all(
-        [...candidates].map(async (candidateId) => {
-          const byCustomerId = await client.from('orders').select('*').eq('customer_id', candidateId).eq('id', orderId).maybeSingle();
-          if (byCustomerId.data && !byCustomerId.error) {
-            return byCustomerId.data;
-          }
-
-          const byProfileId = await client.from('orders').select('*').eq('customer_profile_id', candidateId).eq('id', orderId).maybeSingle();
-          if (byProfileId.data && !byProfileId.error) {
-            return byProfileId.data;
-          }
-
-          return null;
-        })
-      );
-
-      const data = results.find((row) => row) ?? null;
-      if (!data) {
-        return null;
-      }
-
-      return mapOrderRow(data as any);
+      if (!profileId || customerId !== profileId) return null;
+      const { data, error } = await client.from('orders').select('*')
+        .eq('customer_profile_id', profileId).eq('id', orderId).maybeSingle();
+      return error || !data ? null : mapOrderRow(data);
     },
     async listForCustomer(customerId: string) {
       const client = getSupabaseClient();
-      if (!client) {
-        return [];
-      }
-
+      if (!client) return [];
       const profileId = await getCurrentProfileId(client);
-      const candidates = new Set<string>();
-      if (customerId) candidates.add(customerId);
-      if (profileId) candidates.add(profileId);
-
-      const results = await Promise.all(
-        [...candidates].map(async (candidateId) => {
-          const byCustomerId = await client.from('orders').select('*').eq('customer_id', candidateId);
-          const byProfileId = await client.from('orders').select('*').eq('customer_profile_id', candidateId);
-          if (byCustomerId.error || byProfileId.error) {
-            return [];
-          }
-          return [...(byCustomerId.data ?? []), ...(byProfileId.data ?? [])];
-        })
-      );
-
-      const rows = results.flat();
-      const seen = new Set<string>();
-      return rows.filter((row: any) => {
-        const key = row?.id;
-        if (!key || seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      }).map((row: any) => mapOrderRow(row));
+      if (!profileId || customerId !== profileId) return [];
+      // The hosted schema uses customer_profile_id; customer_id never existed.
+      const { data, error } = await client.from('orders').select('*').eq('customer_profile_id', profileId);
+      return error || !data ? [] : data.map((row: any) => mapOrderRow(row));
     },
   };
 
