@@ -24,11 +24,19 @@ try{
  await db.query("INSERT INTO business_memberships(user_id,business_id,role) VALUES($1,$2,'founder')",[owner,business]);
  await db.query("INSERT INTO trips(id,business_id,name,destination,trip_date) VALUES($1,$2,'UAT','UAT','2026-11-01')",[trip,business]);
  await db.query("INSERT INTO orders(id,business_id,trip_id,customer_name,customer_phone,delivery_address,total) VALUES($1,$2,$3,'Dummy','0100000000','UAT staging',60)",[order,business,trip]);
- await db.query("INSERT INTO payments(id,business_id,order_id,payment_method,payment_status,amount,customer_payment_reference) VALUES($1,$2,$3,'DIRECT_QR','submitted',60,'DUMMY')",[payment,business,order]);
+
  await assert.rejects(db.query("INSERT INTO payments(business_id,payment_method,payment_status) VALUES($1,'DIRECT_QR','invented')",[business]),/check constraint/);
  await db.query('INSERT INTO myops_identity_links(myops_user_ref,opsps_user_id) VALUES($1,$2)',['A'.repeat(43),owner]);
  await db.query("INSERT INTO myops_app_sessions(myops_user_ref,opsps_user_id,myops_session_id,supabase_session_id,valid_until) VALUES($1,$2,gen_random_uuid(),$3,now()+interval '10 minutes')",['A'.repeat(43),owner,session]);
+ // Confirm merchant availability before accepting a manual payment.
+ const product='70000000-0000-4000-8000-000000000001',variant='80000000-0000-4000-8000-000000000001';
+ await db.query("INSERT INTO products(id,business_id,trip_id,name,category) VALUES($1,$2,$3,'Dummy','Clothing')",[product,business,trip]);
+ await db.query("INSERT INTO product_variants(id,business_id,product_id,size,stock) VALUES($1,$2,$3,'M',5)",[variant,business,product]);
+ await db.query('INSERT INTO order_items(business_id,order_id,product_variant_id,quantity) VALUES($1,$2,$3,2)',[business,order,variant]);
+ // Confirm that availability is only granted for an order with items.
  await asUser(owner);
+ await db.query("SELECT opsps_confirm_availability($1,$2,'PAY_NOW')",[business,order]);
+ await db.query("INSERT INTO payments(id,business_id,order_id,payment_method,payment_status,amount,customer_payment_reference) VALUES($1,$2,$3,'DIRECT_QR','submitted',60,'DUMMY')",[payment,business,order]);
  await assert.rejects(db.query("UPDATE orders SET payment_status='paid' WHERE id=$1",[order]),/transition not allowed/);
  await assert.rejects(db.query('UPDATE orders SET trip_id=NULL WHERE id=$1',[order]),/ownership fields are immutable/);
  await assert.rejects(db.query('UPDATE orders SET business_id=gen_random_uuid() WHERE id=$1',[order]));
@@ -46,10 +54,6 @@ try{
  assert.deepEqual((await db.query("SELECT amount::text,trip_id,order_id FROM finance_transactions WHERE reference_id=$1",[payment])).rows,[{amount:'60.00',trip_id:trip,order_id:order}]);
  // Packing is scoped, paid-only and cannot rewrite ordered quantity or tenant.
  await db.exec('RESET ROLE');
- const product='70000000-0000-4000-8000-000000000001',variant='80000000-0000-4000-8000-000000000001';
- await db.query("INSERT INTO products(id,business_id,trip_id,name,category) VALUES($1,$2,$3,'Dummy','Clothing')",[product,business,trip]);
- await db.query("INSERT INTO product_variants(id,business_id,product_id,size,stock) VALUES($1,$2,$3,'M',5)",[variant,business,product]);
- await db.query('INSERT INTO order_items(business_id,order_id,product_variant_id,quantity) VALUES($1,$2,$3,2)',[business,order,variant]);
  await asUser(owner);
  await assert.rejects(db.query('SELECT opsps_finish_packing($1,$2)',[business,order]),/Paid packing order required/);
  assert.equal((await db.query('UPDATE order_items SET packed_quantity=2 WHERE order_id=$1 RETURNING id',[order])).rows.length,0);

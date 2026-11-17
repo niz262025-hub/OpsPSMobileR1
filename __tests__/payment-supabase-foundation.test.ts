@@ -379,7 +379,9 @@ describe('phase 4c payment foundation', () => {
       };
     };
 
+    const createOrderRpc = vi.fn(async () => ({ data: orderRow, error: null }));
     vi.mocked(getSupabaseClient).mockReturnValue({
+      rpc: createOrderRpc,
       auth: {
         getUser: vi.fn(async () => ({ data: { user: { id: 'user-1' } }, error: null })),
       },
@@ -439,8 +441,9 @@ describe('phase 4c payment foundation', () => {
     });
 
     expect(createdOrder).not.toBeNull();
-    expect(inserted.orders).not.toHaveProperty('customer_id');
-    expect(inserted.orders).toHaveProperty('customer_profile_id');
+    expect(inserted.orders).toBeUndefined();
+    expect(createOrderRpc).toHaveBeenCalledWith('opsps_create_customer_order', expect.objectContaining({ p_business_id: 'biz-1', p_product_id: 'product-live', p_variant_id: 'variant-live' }));
+    expect(orderRow).toHaveProperty('customer_profile_id');
 
     const createdPayment = await repo.payments.create({
       businessId: 'biz-1',

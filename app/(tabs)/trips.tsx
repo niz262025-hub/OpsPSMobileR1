@@ -12,7 +12,7 @@ type TripStatus = 'planning' | 'open' | 'closed';
 
 function statusBadge(status: TripStatus) {
   const normalized = status === 'planning' ? 'pending' : status === 'open' ? 'in-stock' : 'cancelled';
-  const label = status === 'planning' ? 'Planning' : status === 'open' ? 'Open' : 'Closed';
+  const label = status === 'planning' ? 'Planning' : status === 'open' ? 'Active' : 'Completed';
   return <StatusBadge status={normalized} label={label} />;
 }
 

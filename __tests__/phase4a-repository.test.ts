@@ -269,8 +269,8 @@ describe('phase 4a production repository', () => {
     const created = await trips.create({ businessId: 'biz-1', name: 'UAT synthetic trip', destination: 'Mall A', tripDate: '2026-11-14' });
     expect(created).not.toBeNull();
     const tripId = created!.id;
-    await trips.update({ businessId: 'biz-1', tripId, name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', status: 'open' });
-    expect(await trips.getForBusiness('biz-1', tripId)).toMatchObject({ name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', status: 'open' });
+    await trips.update({ businessId: 'biz-1', tripId, name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', budget: 125.5, status: 'open' });
+    expect(await trips.getForBusiness('biz-1', tripId)).toMatchObject({ name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', budget: 125.5, status: 'open' });
     expect(await trips.update({ businessId: 'biz-2', tripId, name: 'Forbidden' })).toBeNull();
     expect(await trips.closeTrip(tripId, 'biz-2')).toBeNull();
     expect(await trips.getForBusiness('biz-2', tripId)).toBeNull();
@@ -1362,7 +1362,7 @@ describe('phase 4a production repository', () => {
     expect(await getDataSource('production').shipments.create({businessId:'biz-1',orderId:'other-order',courier:'Pos Laju',parcelWeight:1})).toBeNull();
   });
 
-  it('allows anonymous customer ordering for a published product with available stock', async () => {
+  it('requires MYOPS sign-in even when a product is published and stock is available', async () => {
     vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
       userId: '' as any,
       memberships: [],
@@ -1419,9 +1419,7 @@ describe('phase 4a production repository', () => {
       shippingFee: 5,
     });
 
-    expect(created).not.toBeNull();
-    expect(created?.customerName).toBe('Public Buyer');
-    expect(created?.total).toBe(61);
+    expect(created).toBeNull();
   });
 
   it('rejects anonymous public orders when stock is insufficient or quantity is invalid', async () => {

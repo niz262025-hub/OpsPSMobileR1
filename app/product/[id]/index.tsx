@@ -1,3 +1,6 @@
+import { ProductEditor } from '../../../components/ProductEditor';
+import type { Product } from '../../../services/mockDatabase';
+import { MediaGallery } from '../../../components/MediaGallery';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
@@ -35,7 +38,8 @@ export default function ProductDetailScreen() {
   const resolvedBusinessId = routeBusinessId ?? membership?.business_id ?? business?.id ?? undefined;
 
   const [detailLoading, setDetailLoading] = useState(true);
-  const [product, setProduct] = useState<{ id: string; name: string; image: string; sellingPrice: number; businessId?: string; tripId?: string; description?: string } | null>(null);
+  const [detailRevision, setDetailRevision] = useState(0);
+  const [product, setProduct] = useState<Product | null>(null);
   const [variants, setVariants] = useState<Array<{ id: string; productId: string; size: string; stock: number }>>([]);
   const [quantity, setQuantity] = useState('1');
   const [selectedSize, setSelectedSize] = useState('');
@@ -89,7 +93,7 @@ export default function ProductDetailScreen() {
     return () => {
       active = false;
     };
-  }, [id, resolvedBusinessId, ready]);
+  }, [id, resolvedBusinessId, ready, detailRevision]);
 
   const activeVariant = useMemo(
     () => variants.find((variant) => variant.size === selectedSize) ?? variants[0] ?? null,
@@ -195,6 +199,10 @@ export default function ProductDetailScreen() {
             <Text style={styles.metaText}>{sizes.length > 0 ? `${sizes.length} size option${sizes.length > 1 ? 's' : ''}` : 'No size options'}</Text>
           </View>
         </LinearGradient>
+
+        {resolvedBusinessId && <ProductEditor key={`${product.id}:${detailRevision}`} product={product} businessId={resolvedBusinessId} editable={membership?.business_id === resolvedBusinessId && ['founder', 'admin'].includes(membership.role ?? '')} onSaved={() => setDetailRevision(current => current + 1)} />}
+
+        {resolvedBusinessId && product && <MediaGallery kind="products" businessId={resolvedBusinessId} entityId={product.id} onPrimaryChanged={image => setProduct(current => current ? { ...current, image } : current)} editable={membership?.business_id === resolvedBusinessId && ['founder', 'admin'].includes(membership.role ?? '')} />}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Order Details</Text>

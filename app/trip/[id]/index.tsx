@@ -1,3 +1,4 @@
+import { MediaGallery } from '../../../components/MediaGallery';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -23,7 +24,7 @@ type TabType = 'products' | 'orders' | 'buylist' | 'expenses';
 type TripExpenseType = 'Transport' | 'Hotel' | 'Parking' | 'Toll' | 'Other';
 
 function getTripStatusBadge(status: 'planning' | 'open' | 'closed') {
-  const label = status === 'planning' ? 'Planning' : status === 'open' ? 'Open' : 'Closed';
+  const label = status === 'planning' ? 'Planning' : status === 'open' ? 'Active' : 'Completed';
   const badgeStatus = status === 'planning' ? 'pending' : status === 'open' ? 'in-stock' : 'cancelled';
   return <StatusBadge status={badgeStatus} label={label} />;
 }
@@ -59,7 +60,7 @@ export default function TripDetailScreen() {
   const businessId = membership?.business_id ?? business?.id ?? undefined;
   const [detailLoading, setDetailLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('products');
-  const [trip, setTrip] = useState<{ id: string; businessId?: string; name: string; destination: string; tripDate: string; notes: string; status: 'planning' | 'open' | 'closed'; createdAt: string } | null>(null);
+  const [trip, setTrip] = useState<{ id: string; businessId?: string; name: string; destination: string; tripDate: string; notes: string; budget?: number; status: 'planning' | 'open' | 'closed'; createdAt: string } | null>(null);
   const [tripProducts, setTripProducts] = useState<Array<{ id: string; name: string; image: string; status: string; costPrice: number; sellingPrice: number; variants: Array<{ id: string; size: string; stock: number }> }>>([]);
   const [tripOrders, setTripOrders] = useState<Array<{ id: string; customerName: string; tripId?: string; orderStatus?: string; status?: string; total?: number; orderDate?: string; items: Array<{ productVariantId: string; quantity: number; productName?: string; size?: string }> }>>([]);
   const [tripExpenses, setTripExpenses] = useState<Array<{ id: string; description: string; amount: number; category?: string | null; payment_method?: string | null; created_at?: string; }>>([]);
@@ -77,6 +78,8 @@ export default function TripDetailScreen() {
   const [cogsDrafts, setCogsDrafts] = useState<Array<{ id: string; productName: string; quantity: string; unitCost: string; notes: string }>>([
     { id: `cogs-${Date.now()}`, productName: '', quantity: '1', unitCost: '0', notes: '' },
   ]);
+
+  const [detailRevision, setDetailRevision] = useState(0);
 
   useEffect(() => {
     if (!ready) return;
@@ -179,7 +182,7 @@ export default function TripDetailScreen() {
     return () => {
       active = false;
     };
-  }, [businessId, id, ready]);
+  }, [businessId, id, ready, detailRevision]);
 
   useEffect(() => {
     let active = true;
@@ -294,6 +297,8 @@ export default function TripDetailScreen() {
     }
 
     setTrip(closed);
+    // Reload persisted finance rows and profit after the final expense writes.
+    setDetailRevision(current => current + 1);
     setShowCloseFlow(false);
     setCloseFlowError('');
     setCloseFlowDrafts([createTripExpenseDraft()]);
@@ -399,6 +404,7 @@ export default function TripDetailScreen() {
         {getTripStatusBadge(trip.status)}
       </View>
 
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit Trip" onPress={() => router.push(`/trip/${trip.id}/edit` as never)} style={{ alignSelf: 'flex-start', backgroundColor: THEME.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 12, margin: 16 }}><Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Edit Trip</Text></TouchableOpacity>
       <View style={styles.summary}>
         <SummaryItem label="Orders" value={tripOrders.length} />
         <SummaryItem label="Products" value={tripProducts.length} />
@@ -418,11 +424,11 @@ export default function TripDetailScreen() {
         </View>
       )}
 
-      <View style={styles.actionsRow}>
+      {trip.status !== 'closed' && <View style={styles.actionsRow}>
         <TouchableOpacity style={styles.actionButtonPrimary} onPress={handleCloseTrip}>
-          <Text style={styles.actionButtonPrimaryText}>Close Trip</Text>
+          <Text style={styles.actionButtonPrimaryText}>Complete Trip</Text>
         </TouchableOpacity>
-      </View>
+      </View>}
 
       <View style={styles.tabsContainer}>
         {(['products', 'orders', 'buylist', 'expenses'] as TabType[]).map((tab) => (
@@ -439,6 +445,8 @@ export default function TripDetailScreen() {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+        {!!businessId && <MediaGallery kind="trips" businessId={businessId} entityId={trip.id} editable />}
+
         {showCloseFlow && (
           <View style={styles.closeFlowCard}>
             <Text style={styles.sectionLabel}>Close Trip</Text>
