@@ -22,6 +22,7 @@ type BusinessScopedClientInput = {
   orders?: Array<Record<string, unknown>>;
   orderItems?: Array<Record<string, unknown>>;
   shipments?: Array<Record<string, unknown>>;
+  financeTransactions?: Array<Record<string, unknown>>;
 };
 
 function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
@@ -64,6 +65,7 @@ function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
   };
 
   const state = {
+    finance_transactions: (input.financeTransactions ?? []).map((row) => ({ ...row })),
     business_memberships: [...memberships],
     trips: input.trip ? [{ ...trip }] : [],
     products: input.product ? [{ ...product }] : [],
@@ -88,6 +90,9 @@ function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
       select() {
         return builder;
       },
+      order() {
+        return builder;
+      },
       eq(field: string, value: unknown) {
         filters.push([field, value]);
         return builder;
@@ -106,6 +111,10 @@ function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
       },
       insert(payload: Record<string, unknown>) {
         const nextRecord = { ...payload };
+        if (tableName === 'finance_transactions') {
+          nextRecord.created_at = '2026-11-14T00:00:00.000Z';
+          nextRecord.updated_at = nextRecord.created_at;
+        }
         if (!nextRecord.id && tableName) {
           const baseName = tableName.replace(/s$/, '');
           nextRecord.id = `${baseName}-${rows.length + 1}`;
@@ -197,6 +206,9 @@ function buildBusinessScopedClient(input: BusinessScopedClientInput = {}) {
   };
 
   const from = vi.fn((table: string) => {
+    if (table === 'finance_transactions') {
+      return buildTableQuery(state.finance_transactions, table);
+    }
     if (table === 'business_memberships') {
       return buildTableQuery(state.business_memberships as Array<Record<string, unknown>>, table);
     }
@@ -249,6 +261,64 @@ describe('phase 4a production repository', () => {
     expect(trip).not.toBeNull();
     expect(trip?.businessId).toBe('biz-1');
     expect(await repo.trips.listForBusiness('biz-1')).toHaveLength(1);
+  });
+
+  it('reloads edited trip details, closes the trip and retains tenant-scoped history', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient());
+    const trips = getDataSource('production').trips;
+    const created = await trips.create({ businessId: 'biz-1', name: 'UAT synthetic trip', destination: 'Mall A', tripDate: '2026-11-14' });
+    expect(created).not.toBeNull();
+    const tripId = created!.id;
+    await trips.update({ businessId: 'biz-1', tripId, name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', budget: 125.5, status: 'open' });
+    expect(await trips.getForBusiness('biz-1', tripId)).toMatchObject({ name: 'Edited UAT trip', destination: 'Mall B', tripDate: '2026-11-15', notes: 'Synthetic only', budget: 125.5, status: 'open' });
+    expect(await trips.update({ businessId: 'biz-2', tripId, name: 'Forbidden' })).toBeNull();
+    expect(await trips.closeTrip(tripId, 'biz-2')).toBeNull();
+    expect(await trips.getForBusiness('biz-2', tripId)).toBeNull();
+    expect(await trips.closeTrip(tripId, 'biz-1')).toMatchObject({ status: 'closed' });
+    expect(await trips.listForBusiness('biz-1')).toEqual([expect.objectContaining({ id: tripId, name: 'Edited UAT trip', status: 'closed' })]);
+  });
+
+  it.each(['ready', 'preorder'] as const)('preserves publication when editing a %s product without a publishing instruction', async (status) => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient());
+    const products = getDataSource('production').products;
+    const image = 'data:image/png;base64,c3ludGhldGljLWZpeHR1cmU=';
+    const product = await products.create({ businessId: 'biz-1', name: 'Synthetic UAT product', category: 'Other', image, costPrice: 15, sellingPrice: 30, status, stock: 5, isPublished: false });
+    expect(product).not.toBeNull();
+    const productId = product!.id;
+    await products.update({ businessId: 'biz-1', productId, name: 'Edited private product' });
+    expect(await products.listPublishedForBusiness('biz-1')).toHaveLength(0);
+    expect(await products.getProduct(productId, 'biz-1')).toMatchObject({ name: 'Edited private product', image, status, costPrice: 15, sellingPrice: 30 });
+    await products.update({ businessId: 'biz-1', productId, isPublished: true });
+    await products.update({ businessId: 'biz-1', productId, description: 'Edited published product' });
+    expect(await products.listPublishedForBusiness('biz-1')).toEqual([expect.objectContaining({ id: productId, description: 'Edited published product', image })]);
+    await products.update({ businessId: 'biz-1', productId, isPublished: false });
+    expect(await products.listPublishedForBusiness('biz-1')).toHaveLength(0);
+  });
+
+  it('reloads isolated trip expenses and purchase costs and reconciles profit without cross-tenant totals', async () => {
+    vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
+      orders: [
+        { id: 'order-1', business_id: 'biz-1', trip_id: 'trip-1', total: 100 },
+        { id: 'order-2', business_id: 'biz-2', trip_id: 'trip-1', total: 900 },
+      ],
+      financeTransactions: [{ id: 'foreign', business_id: 'biz-2', trip_id: 'trip-1', amount: 800, type: 'expense' }],
+    }));
+    const finance = getDataSource('production').finance;
+    for (const input of [
+      { description: 'Synthetic purchase', amount: 30, type: 'expense' as const, category: 'Cost of Goods' },
+      { description: 'Synthetic transport', amount: 10, type: 'expense' as const, category: 'Trip Expense' },
+      { description: 'Synthetic ledger receipt', amount: 60, type: 'income' as const, category: 'Income' },
+    ]) {
+      expect(await finance.create({ businessId: 'biz-1', tripId: 'trip-1', ...input })).not.toBeNull();
+    }
+    const rows = await finance.listForBusiness('biz-1');
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => row.business_id === 'biz-1')).toBe(true);
+    expect(await finance.getTripSummary('biz-1', 'trip-1')).toMatchObject({ salesRevenue: 100, costOfGoods: 30, grossProfit: 70, moneyIn: 60, moneyOut: 40, outstandingRevenue: 40, netProfit: 60 });
+    expect(await finance.listForBusiness('biz-2')).toEqual([]);
+    expect(await finance.create({ businessId: 'biz-2', description: 'Forbidden', type: 'expense', amount: 1 })).toBeNull();
+    expect(await finance.update(rows[0].id, 'biz-2', { amount: 999 })).toBeNull();
+    expect(await finance.listForBusiness('biz-1')).toEqual(rows);
   });
 
   it('rejects trips for a different business than the authenticated user membership', async () => {
@@ -1292,7 +1362,7 @@ describe('phase 4a production repository', () => {
     expect(await getDataSource('production').shipments.create({businessId:'biz-1',orderId:'other-order',courier:'Pos Laju',parcelWeight:1})).toBeNull();
   });
 
-  it('allows anonymous customer ordering for a published product with available stock', async () => {
+  it('requires MYOPS sign-in even when a product is published and stock is available', async () => {
     vi.mocked(getSupabaseClient).mockReturnValue(buildBusinessScopedClient({
       userId: '' as any,
       memberships: [],
@@ -1349,9 +1419,7 @@ describe('phase 4a production repository', () => {
       shippingFee: 5,
     });
 
-    expect(created).not.toBeNull();
-    expect(created?.customerName).toBe('Public Buyer');
-    expect(created?.total).toBe(61);
+    expect(created).toBeNull();
   });
 
   it('rejects anonymous public orders when stock is insufficient or quantity is invalid', async () => {

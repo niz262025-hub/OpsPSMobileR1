@@ -1,12 +1,12 @@
 import React, { act } from 'react';
 const { createRoot } = require('react-dom/client') as { createRoot: (node: Element) => { render: (node: React.ReactNode) => void; unmount: () => void } };
 import { afterEach, describe, expect, it, vi } from 'vitest';
-const m=vi.hoisted(()=>({auth:{ready:true,currentUser:{role:'customer',name:'Customer'},profile:{id:'customer-1'},logout:vi.fn()},list:vi.fn()}));
+const m=vi.hoisted(()=>({auth:{ready:true,currentUser:{role:'customer',name:'Customer'},profile:{id:'customer-1'},logout:vi.fn()},list:vi.fn(),push:vi.fn()}));
 vi.mock('../context/AuthContext',()=>({useAuth:()=>m.auth}));
 vi.mock('../services/repository',()=>({getDataSource:()=>({orders:{listForCustomer:m.list}})}));
 vi.mock('../components/MyopsEntry',()=>({default:()=>React.createElement('div',null,'central-entry')}));
 vi.mock('lucide-react-native',()=>({ArrowRight:()=>null,Package:()=>null,ShoppingBag:()=>null,Sparkles:()=>null,WalletCards:()=>null}));
-vi.mock('expo-router',()=>({router:{push:vi.fn()}}));
+vi.mock('expo-router',()=>({router:{push:m.push}}));
 vi.mock('expo-linear-gradient',()=>({LinearGradient:({children}:{children:React.ReactNode})=>React.createElement('div',null,children)}));
 import CustomerHome from '../app/customer/index';
 let root: ReturnType<typeof createRoot> | undefined;
@@ -17,6 +17,15 @@ async function render(){
  await act(async()=>root!.render(React.createElement(CustomerHome)));return node;
 }
 describe('real customer dashboard data',()=>{
+ it('opens customer-accessible product, order and payment destinations',async()=>{
+  m.list.mockResolvedValue([]);const node=await render();
+  for(const [label,href] of [['Browse Products','/customer/products'],['Track Orders','/customer/orders'],['Payments','/customer/orders?payments=1']]){
+   const shortcut=[...node.querySelectorAll('[role="button"]')].find(button=>button.textContent===label);
+   expect(shortcut,`${label} is accessible`).toBeTruthy();
+   await act(async()=>shortcut!.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+   expect(m.push).toHaveBeenLastCalledWith(href);
+  }
+ });
  it('loads only the current customer profile and shows an empty account without sample totals',async()=>{
   m.list.mockResolvedValue([]);const node=await render();expect(m.list).toHaveBeenCalledWith('customer-1');
   expect(node.textContent).toContain('Orders0');expect(node.textContent).toContain('Open0');expect(node.textContent).toContain('Paid0');expect(node.textContent).toContain('No orders yet.');expect(node.textContent).not.toContain('Updated today');

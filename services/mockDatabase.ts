@@ -91,6 +91,7 @@ export interface OrderShipment {
 }
 
 export interface Product {
+  isPublished?: boolean;
   id: string;
   businessId?: string;
   tripId: string;
@@ -226,6 +227,7 @@ export interface BuyListItem {
 }
 
 export interface TripRecord {
+  budget?: number;
   id: string;
   businessId?: string;
   name: string;

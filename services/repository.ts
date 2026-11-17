@@ -1,3 +1,4 @@
+import { getProductPrimaryImage } from './productGalleryImage';
 import { trialWriteMessage } from './trialWriteMessage';
 import { getSupabaseClient } from './supabaseClient';
 import {
@@ -80,8 +81,8 @@ export interface BusinessRepository {
 export interface TripRepository {
   listForBusiness(businessId: string): Promise<TripRecord[]>;
   getForBusiness(businessId: string, tripId: string): Promise<TripRecord | null>;
-  create(input: { businessId: string; name: string; destination: string; tripDate: string; notes?: string }): Promise<TripRecord | null>;
-  update(input: { tripId: string; businessId: string; name?: string; destination?: string; tripDate?: string; notes?: string; status?: TripRecord['status'] }): Promise<TripRecord | null>;
+  create(input: { businessId: string; name: string; destination: string; tripDate: string; notes?: string; budget?: number }): Promise<TripRecord | null>;
+  update(input: { tripId: string; businessId: string; name?: string; destination?: string; tripDate?: string; notes?: string; budget?: number; status?: TripRecord['status'] }): Promise<TripRecord | null>;
   closeTrip(tripId: string, businessId: string): Promise<TripRecord | null>;
 }
 
@@ -422,6 +423,7 @@ function mapTripRow(row: any): TripRecord {
     destination: row.destination,
     tripDate: row.trip_date ?? new Date().toISOString().slice(0, 10),
     notes: row.notes ?? '',
+    budget: Number(row.budget ?? 0),
     status: (row.status === 'open' || row.status === 'planning' || row.status === 'closed') ? row.status : 'planning',
     createdAt: row.created_at ?? new Date().toISOString(),
   };
@@ -437,6 +439,7 @@ function mapProductRow(row: any, fallbackVariants: Array<{ size: string; stock: 
     tripId: row.trip_id ?? '',
     name: row.name,
     image: row.image_url ?? '',
+    isPublished: Boolean(row.is_published),
     costPrice: Number(row.cost_price ?? 0),
     sellingPrice: Number(row.selling_price ?? 0),
     status: row.status === 'preorder' ? 'preorder' : 'ready',
@@ -1583,43 +1586,6 @@ async function getCurrentProfileId(client: ReturnType<typeof getSupabaseClient>)
   return (data as { id?: string }).id ?? null;
 }
 
-async function ensureCustomerProfile(client: ReturnType<typeof getSupabaseClient>, input: { businessId: string; customerName: string; customerPhone?: string; deliveryAddress?: string; customerId?: string }) {
-  if (!client) {
-    return null;
-  }
-
-  const existingProfileId = await getCurrentProfileId(client);
-  if (existingProfileId) {
-    return existingProfileId;
-  }
-
-  const userId = await getUserIdFromAuth(client);
-  if (!userId) {
-    return null;
-  }
-
-  const profileEmail = `${userId}@customer.opsps.local`;
-  const { data, error } = await client
-    .from('profiles')
-    .insert({
-      business_id: input.businessId,
-      auth_user_id: userId,
-      full_name: input.customerName,
-      email: profileEmail,
-      phone: input.customerPhone ?? null,
-      address: input.deliveryAddress ?? null,
-      role: 'customer',
-    })
-    .select('id')
-    .single();
-
-  if (error || !data) {
-    return null;
-  }
-
-  return (data as { id?: string }).id ?? null;
-}
-
 async function verifyTripBelongsToBusiness(client: ReturnType<typeof getSupabaseClient>, businessId: string, tripId: string): Promise<boolean> {
   if (!client || !tripId || !businessId) {
     return false;
@@ -1851,6 +1817,7 @@ class SupabaseDataSource implements DataSource {
           trip_date: input.tripDate,
           notes: input.notes,
           status: 'planning',
+          budget: input.budget ?? 0,
         })
         .select('*')
         .single();
@@ -1874,11 +1841,12 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      const payload: Record<string, string | Date | null> = {
+      const payload: Record<string, string | number | Date | null> = {
         name: input.name ?? existingTrip.name,
         destination: input.destination ?? existingTrip.destination,
         trip_date: input.tripDate ?? existingTrip.tripDate,
         notes: input.notes ?? existingTrip.notes,
+        budget: input.budget ?? existingTrip.budget ?? 0,
       };
 
       if (input.status) {
@@ -1957,7 +1925,7 @@ class SupabaseDataSource implements DataSource {
         }
       }
 
-      return (productRows as any[]).map((row) => mapProductRow(row, variantMap.get(row.id) ?? []));
+      return Promise.all((productRows as any[]).map(async (row) => ({ ...mapProductRow(row, variantMap.get(row.id) ?? []), image: await getProductPrimaryImage(client, row) })));
     },
     async listPublishedForBusiness(businessId: string) {
       const client = getSupabaseClient();
@@ -1990,7 +1958,7 @@ class SupabaseDataSource implements DataSource {
         }
       }
 
-      return (productRows as any[]).map((row) => mapProductRow(row, variantMap.get(row.id) ?? []));
+      return Promise.all((productRows as any[]).map(async (row) => ({ ...mapProductRow(row, variantMap.get(row.id) ?? []), image: await getProductPrimaryImage(client, row) })));
     },
     async create(input) {
       const client = getSupabaseClient();
@@ -2067,12 +2035,14 @@ class SupabaseDataSource implements DataSource {
         name: input.name ?? existing.name,
         category: input.category ?? existing.category,
         description: input.description ?? existing.description,
-        image_url: input.image ?? existing.image,
+        ...(input.image !== undefined ? { image_url: input.image } : {}),
         trip_id: input.tripId ?? existing.tripId,
         cost_price: Number(input.costPrice ?? existing.costPrice),
         selling_price: Number(input.sellingPrice ?? existing.sellingPrice),
         status: input.status ?? existing.status,
-        is_published: typeof input.isPublished === 'boolean' ? input.isPublished : Boolean(existing.status === 'ready'),
+        // Stock readiness and customer visibility are independent. Only an
+        // explicit publishing instruction may change the stored visibility.
+        ...(typeof input.isPublished === 'boolean' ? { is_published: input.isPublished } : {}),
       };
 
       const { data, error } = await client
@@ -2131,7 +2101,7 @@ class SupabaseDataSource implements DataSource {
         .eq('product_id', productId)
         .eq('business_id', businessId);
 
-      return mapProductRow(productData, (variantRows ?? []).map((row: any) => ({ size: row.size ?? 'Standard', stock: Number(row.stock ?? 0) })));
+      return { ...mapProductRow(productData, (variantRows ?? []).map((row: any) => ({ size: row.size ?? 'Standard', stock: Number(row.stock ?? 0) }))), image: await getProductPrimaryImage(client, productData) };
     },
     async listVariantsForProduct(productId: string, businessId: string) {
       const client = getSupabaseClient();
@@ -2312,7 +2282,11 @@ class SupabaseDataSource implements DataSource {
       }
 
       if (!(await hasMembership(client, businessId))) {
-        return [];
+        const profileId = await getCurrentProfileId(client);
+        if (!profileId) return [];
+        const { data: ownOrder, error: ownError } = await client.from('orders').select('id')
+          .eq('id', orderId).eq('business_id', businessId).eq('customer_profile_id', profileId).maybeSingle();
+        if (ownError || !ownOrder) return [];
       }
 
       const { data, error } = await client.from('order_items').select('*').eq('order_id', orderId).eq('business_id', businessId);
@@ -2659,7 +2633,7 @@ class SupabaseDataSource implements DataSource {
     },
     async create(input) {
       const client = getSupabaseClient();
-      if (!client) {
+      if (!client || !await getUserIdFromAuth(client)) {
         return null;
       }
 
@@ -2669,7 +2643,7 @@ class SupabaseDataSource implements DataSource {
       }
 
       const quantity = Number(input.quantity ?? 1);
-      if (!Number.isFinite(quantity) || quantity <= 0) {
+      if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 999) {
         return null;
       }
 
@@ -2717,129 +2691,39 @@ class SupabaseDataSource implements DataSource {
         return null;
       }
 
-      const customerProfileId = await ensureCustomerProfile(client, {
-        businessId: input.businessId,
-        customerName: cleanedName,
-        customerPhone: input.customerPhone,
-        deliveryAddress: input.deliveryAddress,
-        customerId: input.customerId,
+      // One server transaction computes prices and writes both parent and item.
+      // A denied item insert rolls the parent back instead of leaving an orphan.
+      const { data, error } = await client.rpc('opsps_create_customer_order', {
+        p_business_id: input.businessId,
+        p_product_id: input.productId,
+        p_variant_id: input.productVariantId,
+        p_quantity: quantity,
+        p_customer_name: cleanedName,
+        p_customer_phone: input.customerPhone ?? '',
+        p_delivery_address: input.deliveryAddress ?? '',
+        p_payment_method: input.paymentMethod ?? 'bank',
+        p_shipping_fee: Number(input.shippingFee ?? 0),
       });
-
-      const subtotal = Number(product.selling_price ?? 0) * quantity;
-      const shippingFee = Number(input.shippingFee ?? 0);
-      const total = subtotal + shippingFee;
-
-      const { data: orderData, error: orderError } = await client
-        .from('orders')
-        .insert({
-          business_id: input.businessId,
-          trip_id: input.tripId || null,
-          product_id: input.productId,
-          customer_profile_id: input.customerProfileId ?? customerProfileId ?? null,
-          customer_name: cleanedName,
-          customer_phone: input.customerPhone ?? null,
-          delivery_address: input.deliveryAddress ?? null,
-          order_date: new Date().toISOString(),
-          subtotal,
-          shipping_fee: shippingFee,
-          total,
-          payment_status: 'pending',
-          order_status: 'pending',
-          request_status: 'PENDING_AVAILABILITY',
-          payment_option: input.paymentMethod ?? 'bank',
-          payment_mode: input.paymentMethod ?? 'bank',
-          availability_status: 'pending',
-        })
-        .select('*')
-        .single();
-
-      if (orderError || !orderData) {
-        return null;
-      }
-
-      const { error: itemsError } = await client.from('order_items').insert({
-        business_id: input.businessId,
-        order_id: orderData.id,
-        product_variant_id: input.productVariantId,
-        quantity,
-        packed_quantity: 0,
-      });
-
-      if (itemsError) {
-        return null;
-      }
-
-      return {
-        ...mapOrderRow(orderData),
-        customerId: input.customerId ?? input.customerProfileId ?? customerProfileId ?? null,
-      };
+      if (error || !data) return null;
+      return mapOrderRow(data);
     },
     async getForCustomer(customerId: string, orderId: string) {
       const client = getSupabaseClient();
-      if (!client) {
-        return null;
-      }
-
+      if (!client) return null;
       const profileId = await getCurrentProfileId(client);
-      const candidates = new Set<string>();
-      if (customerId) candidates.add(customerId);
-      if (profileId) candidates.add(profileId);
-
-      const results = await Promise.all(
-        [...candidates].map(async (candidateId) => {
-          const byCustomerId = await client.from('orders').select('*').eq('customer_id', candidateId).eq('id', orderId).maybeSingle();
-          if (byCustomerId.data && !byCustomerId.error) {
-            return byCustomerId.data;
-          }
-
-          const byProfileId = await client.from('orders').select('*').eq('customer_profile_id', candidateId).eq('id', orderId).maybeSingle();
-          if (byProfileId.data && !byProfileId.error) {
-            return byProfileId.data;
-          }
-
-          return null;
-        })
-      );
-
-      const data = results.find((row) => row) ?? null;
-      if (!data) {
-        return null;
-      }
-
-      return mapOrderRow(data as any);
+      if (!profileId || customerId !== profileId) return null;
+      const { data, error } = await client.from('orders').select('*')
+        .eq('customer_profile_id', profileId).eq('id', orderId).maybeSingle();
+      return error || !data ? null : mapOrderRow(data);
     },
     async listForCustomer(customerId: string) {
       const client = getSupabaseClient();
-      if (!client) {
-        return [];
-      }
-
+      if (!client) return [];
       const profileId = await getCurrentProfileId(client);
-      const candidates = new Set<string>();
-      if (customerId) candidates.add(customerId);
-      if (profileId) candidates.add(profileId);
-
-      const results = await Promise.all(
-        [...candidates].map(async (candidateId) => {
-          const byCustomerId = await client.from('orders').select('*').eq('customer_id', candidateId);
-          const byProfileId = await client.from('orders').select('*').eq('customer_profile_id', candidateId);
-          if (byCustomerId.error || byProfileId.error) {
-            return [];
-          }
-          return [...(byCustomerId.data ?? []), ...(byProfileId.data ?? [])];
-        })
-      );
-
-      const rows = results.flat();
-      const seen = new Set<string>();
-      return rows.filter((row: any) => {
-        const key = row?.id;
-        if (!key || seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      }).map((row: any) => mapOrderRow(row));
+      if (!profileId || customerId !== profileId) return [];
+      // The hosted schema uses customer_profile_id; customer_id never existed.
+      const { data, error } = await client.from('orders').select('*').eq('customer_profile_id', profileId);
+      return error || !data ? [] : data.map((row: any) => mapOrderRow(row));
     },
   };
 
