@@ -11,11 +11,11 @@ begin
   or nullif(trim(p_company_name),'') is null or length(trim(p_company_name))>200 then
   raise exception 'Verified OpsPS company labels required'; end if;
  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('opsps:'||p_user_ref,0));
- -- Verify the project-bound deterministic identity even for an existing link.
- perform public.opsps_provision_myops_identity_v2(p_user_ref,p_user_id,p_project_url);
+ -- Check existing link before creating a tenant; validate retries with v2.
  select opsps_user_id into existing_user from public.myops_identity_links where myops_user_ref=p_user_ref;
  if existing_user is not null then
   if existing_user<>p_user_id then raise exception 'MYOPS identity conflict';end if;
+  perform public.opsps_provision_myops_identity_v2(p_user_ref,p_user_id,p_project_url);
   return existing_user;
  end if;
  linked_user:=public.opsps_provision_myops_identity_v2(p_user_ref,p_user_id,p_project_url);
