@@ -24,11 +24,15 @@ try{
  await db.query("INSERT INTO business_memberships(user_id,business_id,role) VALUES($1,$2,'founder')",[owner,business]);
  await db.query("INSERT INTO trips(id,business_id,name,destination,trip_date) VALUES($1,$2,'UAT','UAT','2026-11-01')",[trip,business]);
  await db.query("INSERT INTO orders(id,business_id,trip_id,customer_name,customer_phone,delivery_address,total) VALUES($1,$2,$3,'Dummy','0100000000','UAT staging',60)",[order,business,trip]);
- await db.query("INSERT INTO payments(id,business_id,order_id,payment_method,payment_status,amount,customer_payment_reference) VALUES($1,$2,$3,'DIRECT_QR','submitted',60,'DUMMY')",[payment,business,order]);
+
  await assert.rejects(db.query("INSERT INTO payments(business_id,payment_method,payment_status) VALUES($1,'DIRECT_QR','invented')",[business]),/check constraint/);
  await db.query('INSERT INTO myops_identity_links(myops_user_ref,opsps_user_id) VALUES($1,$2)',['A'.repeat(43),owner]);
  await db.query("INSERT INTO myops_app_sessions(myops_user_ref,opsps_user_id,myops_session_id,supabase_session_id,valid_until) VALUES($1,$2,gen_random_uuid(),$3,now()+interval '10 minutes')",['A'.repeat(43),owner,session]);
+ // Confirm merchant availability before accepting a manual payment.
+ // The order item was created before merchant availability confirmation.
  await asUser(owner);
+ await db.query("SELECT opsps_confirm_availability($1,$2,'PAY_NOW')",[business,order]);
+ await db.query("INSERT INTO payments(id,business_id,order_id,payment_method,payment_status,amount,customer_payment_reference) VALUES($1,$2,$3,'DIRECT_QR','submitted',60,'DUMMY')",[payment,business,order]);
  await assert.rejects(db.query("UPDATE orders SET payment_status='paid' WHERE id=$1",[order]),/transition not allowed/);
  await assert.rejects(db.query('UPDATE orders SET trip_id=NULL WHERE id=$1',[order]),/ownership fields are immutable/);
  await assert.rejects(db.query('UPDATE orders SET business_id=gen_random_uuid() WHERE id=$1',[order]));
