@@ -12,6 +12,7 @@ import {
   ClipboardList,
 } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
+import { returnToMyops } from '../../services/myopsNavigation';
 
 const iconProps = {
   size: 24,
@@ -21,12 +22,12 @@ const iconProps = {
 export default function TabsLayout() {
   const { width } = useWindowDimensions();
   const compactWeb = Platform.OS === 'web' && width < 600;
-  const { currentUser, ready, logout } = useAuth();
+  const { currentUser, ready } = useAuth();
   const [returning, setReturning] = useState(false);
-  const returnToPortal = async () => {
+  const returnToPortal = () => {
     if (returning) return;
     setReturning(true);
-    try { await logout(); } finally { setReturning(false); }
+    try { returnToMyops(); } finally { setReturning(false); }
   };
   const TAB_ICON_SIZE = 24;
   const THEME_PRIMARY = '#5B2BD9';

@@ -19,6 +19,7 @@ async function render(){
 describe('real customer dashboard data',()=>{
  it('loads only the current customer profile and shows an empty account without sample totals',async()=>{
   m.list.mockResolvedValue([]);const node=await render();expect(m.list).toHaveBeenCalledWith('customer-1');
+  expect(node.textContent).toContain('Kembali ke MYOPS');expect(node.textContent).not.toContain('Logout');expect(node.textContent).not.toContain('Log Keluar');
   expect(node.textContent).toContain('Orders0');expect(node.textContent).toContain('Open0');expect(node.textContent).toContain('Paid0');expect(node.textContent).toContain('No orders yet.');expect(node.textContent).not.toContain('Updated today');
  });
  it('returns founders to their normal central entry instead of showing the customer page',async()=>{

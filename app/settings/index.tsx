@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
+import { returnToMyops } from '../../services/myopsNavigation';
 
 const PRODUCT_SIZE_OPTIONS = {
   Clothing: ['XS', 'S', 'M', 'L', 'XL'],
@@ -14,7 +15,7 @@ import { BORDER_RADIUS, FONT_SIZES, SPACING, THEME } from '../../theme';
 const paymentMethodOptions = ['Bank Transfer', 'QR Payment', 'DuitNow', 'Touch & Go', 'Atome', 'Buy Now Pay Later'];
 
 export default function SettingsScreen() {
-  const { logout, currentUser, business, profile } = useAuth();
+  const { currentUser, business, profile } = useAuth();
   const [businessProfile, setBusinessProfile] = useState({
     businessName: business?.name ?? currentUser?.businessName ?? 'Business',
     phone: business?.phone ?? currentUser?.phone ?? '',
@@ -164,7 +165,7 @@ export default function SettingsScreen() {
         <Section title="Account">
           {field(user.name, (value) => setUser({ ...user, name: value }), 'Name')}
           {field(user.email, (value) => setUser({ ...user, email: value }), 'Email')}
-          <Pressable style={styles.secondary} onPress={async () => { await logout(); }}>
+          <Pressable style={styles.secondary} onPress={() => returnToMyops()}>
             <Text style={styles.secondaryText}>Kembali ke MYOPS</Text>
           </Pressable>
         </Section>
