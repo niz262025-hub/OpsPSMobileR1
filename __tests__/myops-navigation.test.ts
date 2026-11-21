@@ -4,6 +4,16 @@ import { logoutToMyops, myopsPortalUrl, returnToMyops } from '../services/myopsN
 vi.mock('../services/myopsAppAccess', () => ({ endMyopsAppSession: vi.fn() }));
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetAllMocks(); });
 describe('central MYOPS logout', () => {
+  it('returning to MYOPS preserves the local and central session', () => {
+    const replace = vi.fn();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('window', { location: { replace } });
+    vi.stubGlobal('fetch', fetchSpy);
+    returnToMyops();
+    expect(replace).toHaveBeenCalledWith('https://www.myops.com.my/');
+    expect(endMyopsAppSession).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
   it('revokes app session before signout and clears identity before returning directly to MYOPS', async () => {
     const steps: string[] = [];
     vi.mocked(endMyopsAppSession).mockImplementation(async () => { steps.push('revoke'); });

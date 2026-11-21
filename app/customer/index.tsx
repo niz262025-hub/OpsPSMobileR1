@@ -6,10 +6,11 @@ import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { THEME } from '../../theme';
 import MyopsEntry from '../../components/MyopsEntry';
+import { returnToMyops } from '../../services/myopsNavigation';
 import { getDataSource, type OrderRecord } from '../../services/repository';
 
 export default function CustomerHomeScreen() {
-  const { currentUser, logout, ready, profile } = useAuth();
+  const { currentUser, ready, profile } = useAuth();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loadError, setLoadError] = useState('');
   useEffect(() => {
@@ -44,7 +45,7 @@ export default function CustomerHomeScreen() {
               <Text style={styles.eyebrow}>MYOPS CUSTOMER</Text>
               <Text style={styles.title}>Welcome, {currentUser?.name ?? 'Customer'}</Text>
             </View>
-            <Pressable style={styles.logout} onPress={async () => { await logout(); }}>
+            <Pressable style={styles.logout} onPress={() => returnToMyops()}>
               <Text style={styles.logoutText}>Kembali ke MYOPS</Text>
             </Pressable>
           </View>

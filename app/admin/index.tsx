@@ -3,6 +3,7 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'rea
 import { router } from 'expo-router';
 
 import { useAuth } from '../../context/AuthContext';
+import { returnToMyops } from '../../services/myopsNavigation';
 import {
   ADMIN_REQUIRED_ROUTE_KEYS,
   approveSeller,
@@ -14,7 +15,7 @@ import {
 } from '../../services/adminFoundation';
 
 export default function AdminDashboardScreen() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const [summary, setSummary] = useState(() => getAdminDashboardSummary());
   const [pendingSellers, setPendingSellers] = useState(() => listPendingSellers());
   const [liveDataAvailable, setLiveDataAvailable] = useState(false);
@@ -110,7 +111,7 @@ export default function AdminDashboardScreen() {
             <Text style={styles.eyebrow}>OpsPS Admin</Text>
             <Text style={styles.title}>Platform overview</Text>
           </View>
-          <Pressable style={styles.secondary} onPress={async () => { await logout(); }}>
+          <Pressable style={styles.secondary} onPress={() => returnToMyops()}>
             <Text style={styles.secondaryText}>Kembali ke MYOPS</Text>
           </Pressable>
         </View>
