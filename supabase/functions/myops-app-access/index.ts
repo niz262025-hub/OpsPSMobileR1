@@ -148,7 +148,11 @@ async function signMyopsRequest(
         'X-Myops-Signature': signature,
       },
       body: JSON.stringify(body),
-    }, { projectUrl: Deno.env.get('SUPABASE_URL') ?? '', shareToken: Deno.env.get('MYOPS_STAGING_SHARE_TOKEN') });
+    }, {
+      projectUrl: Deno.env.get('SUPABASE_URL') ?? '',
+      shareToken: Deno.env.get('MYOPS_STAGING_SHARE_TOKEN'),
+      automationSecret: Deno.env.get('MYOPS_STAGING_VERCEL_AUTOMATION_SECRET'),
+    });
   } finally {
     clearTimeout(timeoutId);
   }
