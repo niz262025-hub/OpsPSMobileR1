@@ -1,3 +1,5 @@
+import { URL } from 'node:url';
+import { log } from 'node:console';
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
@@ -14,5 +16,5 @@ try {
  await db.query('insert into opsps_central_organization_links values($1,$2,$3,$4,true)',[o,'a'.repeat(43),u,b]);
  await db.exec('set role authenticated');
  await assert.rejects(db.query('select * from opsps_central_organization_links'));
- console.log('OpsPS mapping foreign-key and client ACL PASS');
+ log('OpsPS mapping foreign-key and client ACL PASS');
 } finally { await db.close(); }

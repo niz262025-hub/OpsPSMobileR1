@@ -18,6 +18,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: node scripts/test-organization-mapping.mjs
+      - run: node scripts/test-organization-rls.mjs
       - run: npm run test:database
       - run: npm run test:provisioning
       - run: node scripts/test-production-upgrade.mjs
