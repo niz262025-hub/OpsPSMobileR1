@@ -2,9 +2,10 @@
 begin;
 create function public.opsps_scoped_lookup_allowed(target uuid) returns boolean
 language sql stable security definer set search_path='' as $$
- select not exists(select 1 from public.myops_app_sessions s where s.opsps_user_id=auth.uid()
-   and s.supabase_session_id=nullif(auth.jwt()->>'session_id','')::uuid and s.central_organization_id is not null)
-   or public.opsps_session_allows_business(target);
+ -- A missing, expired, or revoked app session must never become an
+ -- unscoped legacy lookup. The session gate also permits valid legacy
+ -- sessions while enforcing mapping and membership for bound sessions.
+ select public.opsps_session_allows_business(target);
 $$;
 revoke all on function public.opsps_scoped_lookup_allowed(uuid) from public,anon;
 grant execute on function public.opsps_scoped_lookup_allowed(uuid) to authenticated;

@@ -53,5 +53,11 @@ try {
  await db.exec('reset role');await db.query("update myops_app_sessions set access_mode='paid'");
  await db.query("update myops_app_sessions set valid_until=now()-interval '1 second'");await db.exec('set role authenticated');
  assert.equal((await db.query('select * from orders')).rows.length,0);
+ assert.equal((await db.query('select public.user_is_business_member($1) as allowed',[b])).rows[0].allowed,false);
+ await db.exec('reset role'); await db.query("update myops_app_sessions set valid_until=now()+interval '1 minute',revoked_at=now()"); await db.exec('set role authenticated');
+ assert.equal((await db.query('select public.user_is_business_member($1) as allowed',[b])).rows[0].allowed,false);
+ await db.exec('reset role'); await db.query('delete from myops_app_sessions'); await db.exec('set role authenticated');
+ assert.equal((await db.query('select public.user_is_business_member($1) as allowed',[b])).rows[0].allowed,false);
+ assert.equal((await db.query('select public.is_approved_seller_for_business($1) as allowed',[b])).rows[0].allowed,false);
  log('OpsPS bound tenant RLS and mapping revocation PASS');
 } finally {await db.close()}
