@@ -9,7 +9,7 @@ try {
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.user',true),'')::uuid$$;
  create function auth.jwt() returns jsonb language sql stable as $$select jsonb_build_object('session_id',current_setting('test.session',true))$$;
  grant usage on schema public,auth to authenticated;
- create table myops_app_sessions(opsps_user_id uuid,supabase_session_id uuid,myops_user_ref text,revoked_at timestamptz,valid_until timestamptz);
+ create table myops_app_sessions(opsps_user_id uuid,supabase_session_id uuid,myops_user_ref text,revoked_at timestamptz,valid_until timestamptz,access_mode text default 'paid',trial_policy_version integer,trial_expires_at timestamptz);
  create table opsps_central_organization_links(organization_id uuid,myops_user_ref text,opsps_user_id uuid,business_id uuid,enabled boolean);
  create table business_memberships(business_id uuid,user_id uuid,role text);
  create table businesses(id uuid,seller_verification_status text);create schema storage;create table storage.objects(bucket_id text,name text);
@@ -21,7 +21,7 @@ try {
  await db.exec(await readFile(new URL('../supabase/migrations/20261124084502_opsps_bound_storage_gate.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../supabase/migrations/20261124084557_opsps_bound_privileged_lookup.sql',import.meta.url),'utf8'));
  const u='00000000-0000-4000-8000-000000000001',a='00000000-0000-4000-8000-000000000002',b='00000000-0000-4000-8000-000000000003',org='00000000-0000-4000-8000-000000000004',sid='00000000-0000-4000-8000-000000000005';
- await db.query('insert into myops_app_sessions values($1,$2,$3,null,now()+interval \'1 minute\',$4,$5)',[u,sid,'x'.repeat(43),org,a]);
+ await db.query('insert into myops_app_sessions(opsps_user_id,supabase_session_id,myops_user_ref,revoked_at,valid_until,central_organization_id,bound_business_id) values($1,$2,$3,null,now()+interval \'1 minute\',$4,$5)',[u,sid,'x'.repeat(43),org,a]);
  await db.query('insert into opsps_central_organization_links values($1,$2,$3,$4,true)',[org,'x'.repeat(43),u,a]);
  await db.query("insert into business_memberships values($1,$2,'admin'),($3,$2,'admin')",[a,u,b]);
  await db.query("insert into businesses values($1,'APPROVED'),($2,'APPROVED')",[a,b]);
@@ -48,6 +48,9 @@ try {
  await db.exec('reset role');await db.query('delete from business_memberships where business_id=$1',[b]);await db.exec('set role authenticated');
  assert.equal((await db.query('select * from orders')).rows.length,0);
  await db.exec('reset role');await db.query("insert into business_memberships values($1,$2,'admin')",[b,u]);
+ await db.query("update myops_app_sessions set access_mode='trial',trial_policy_version=1,trial_expires_at=now()-interval '1 second'");await db.exec('set role authenticated');
+ assert.equal((await db.query('select * from orders')).rows.length,0);
+ await db.exec('reset role');await db.query("update myops_app_sessions set access_mode='paid'");
  await db.query("update myops_app_sessions set valid_until=now()-interval '1 second'");await db.exec('set role authenticated');
  assert.equal((await db.query('select * from orders')).rows.length,0);
  log('OpsPS bound tenant RLS and mapping revocation PASS');

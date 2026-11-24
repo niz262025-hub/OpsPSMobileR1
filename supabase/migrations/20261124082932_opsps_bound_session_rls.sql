@@ -11,6 +11,7 @@ language sql stable security definer set search_path='' as $$
   where s.opsps_user_id=auth.uid()
     and s.supabase_session_id=nullif(auth.jwt()->>'session_id','')::uuid
     and s.revoked_at is null and s.valid_until>now()
+    and (s.access_mode='paid' or (s.access_mode='trial' and s.trial_policy_version=1 and s.trial_expires_at>now()))
     and (s.central_organization_id is null or (
       target is not null and target=s.bound_business_id and exists (
         select 1 from public.opsps_central_organization_links l
