@@ -24,9 +24,10 @@ describe('OpsPS MYOPS provisioning', () => {
       .mockImplementation(async (_ref, id) => id);
     const store: IdentityStore = { getUser: async () => existing, createUser, provision };
     const ref = 'a'.repeat(43);
+    const project = 'https://ojamkplflqafedmxbdxb.supabase.co';
 
-    await expect(ensureVerifiedStagingIdentity(ref, store)).rejects.toThrow('Temporary provisioning failure');
-    const id = await ensureVerifiedStagingIdentity(ref, store);
+    await expect(ensureVerifiedStagingIdentity(ref, project, store)).rejects.toThrow('Temporary provisioning failure');
+    const id = await ensureVerifiedStagingIdentity(ref, project, store);
 
     expect(createUser).toHaveBeenCalledTimes(1);
     expect(provision).toHaveBeenCalledTimes(2);
