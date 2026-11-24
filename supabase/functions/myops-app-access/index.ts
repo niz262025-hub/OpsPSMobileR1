@@ -3,7 +3,7 @@ import { sendMyopsRequest } from './transport.ts';
 import { allowedOpspsOrigins } from './origins.ts';
 import {assertOpspsPremiumFeature,opspsAccessFromEntitlement,opspsSessionAccessFields,opspsTrialReady} from './trial-policy.ts';
 import { centralCompanyLabels,ensureVerifiedMyopsIdentity, validateMyopsAuthority } from './provisioning.ts';
-import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
+import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt, acceptsLegacyMyopsGrant } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
 const VALID_FOR_MS = 20_000;
@@ -16,6 +16,7 @@ const trialReady=()=>opspsTrialReady(Deno.env.get('SUPABASE_URL')??'',Deno.env.g
 type JsonRecord = Record<string, unknown>;
 type MyopsAppSession = {
   onboarding_profile?: unknown;
+  organization_id?: string;
   session_id: string;
   user_ref: string;
   product: string;
@@ -168,6 +169,12 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     || !USER_REF.test(redeemed.user_ref)
   ) {
     return json(403, { error: 'MYOPS access denied' }, headers);
+  }
+
+  // Never discard a Central organization and fall back to an unscoped local
+  // identity. Tenant-scoped session/RLS integration must land before enabling it.
+  if (!acceptsLegacyMyopsGrant(redeemed)) {
+    return json(403, { error: 'Organization-scoped OpsPS access is not enabled' }, headers);
   }
 
   // Fresh central admission before provisioning or issuing a local session.
