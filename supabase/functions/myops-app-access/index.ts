@@ -1,9 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { resolveScopedWorkspace } from './organization.ts';
 import { sendMyopsRequest } from './transport.ts';
 import { allowedOpspsOrigins } from './origins.ts';
 import {assertOpspsPremiumFeature,opspsAccessFromEntitlement,opspsSessionAccessFields,opspsTrialReady} from './trial-policy.ts';
 import { centralCompanyLabels,ensureVerifiedMyopsIdentity, validateMyopsAuthority } from './provisioning.ts';
-import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt } from './contract.ts';
+import { readMyopsJson, base64UrlEncode, canonicalMyopsRequest, isMyopsTicket, isUuid, OPSPS_MYOPS_PRODUCT, readSessionIdFromJwt, acceptsLegacyMyopsGrant } from './contract.ts';
 
 const PRODUCT = OPSPS_MYOPS_PRODUCT;
 const VALID_FOR_MS = 20_000;
@@ -11,11 +12,13 @@ const APP_ID = /^[a-z][a-z0-9_-]{1,31}$/;
 const USER_REF = /^[A-Za-z0-9_-]{43}$/;
 // This build contains the tested staging database adapters. Central MYOPS still
 // controls app admission; Production can never enable trials through this gate.
+const organizationBindingEnabled=()=>Deno.env.get('SUPABASE_URL')==='https://ojamkplflqafedmxbdxb.supabase.co' && Deno.env.get('OPSPS_BOUND_SECURITY_VALIDATED')==='true';
 const trialReady=()=>opspsTrialReady(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('OPSPS_TRIAL_ENFORCEMENT')??'true');
 
 type JsonRecord = Record<string, unknown>;
 type MyopsAppSession = {
   onboarding_profile?: unknown;
+  organization_id?: string;
   session_id: string;
   user_ref: string;
   product: string;
@@ -170,10 +173,19 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     return json(403, { error: 'MYOPS access denied' }, headers);
   }
 
+  // Never discard a Central organization and fall back to an unscoped local
+  // identity. Tenant-scoped session/RLS integration must land before enabling it.
+  const scoped = !acceptsLegacyMyopsGrant(redeemed);
+  if (scoped && (!organizationBindingEnabled() || !isUuid(redeemed.organization_id))) {
+    return json(403, { error: 'Organization-scoped OpsPS access is not enabled' }, headers);
+  }
+  const organizationId = scoped ? redeemed.organization_id!.toLowerCase() : null;
+
   // Fresh central admission before provisioning or issuing a local session.
   const checked=await readMyopsJson(await signMyopsRequest('/api/app/entitlement',{
-    session_id:redeemed.session_id,product:PRODUCT,activity:true,sensitive:true,
+    session_id:redeemed.session_id,product:PRODUCT,activity:true,sensitive:true,...(organizationId?{organization_id:organizationId}:{}),
   }));
+  if (organizationId && checked.organization_id!==organizationId) return json(403, { error: 'Organization access denied' }, headers);
   const access=opspsAccessFromEntitlement(checked,trialReady());
   const { admin, auth } = makeClients();
   const linkResult = await admin.from('myops_identity_links')
@@ -181,8 +193,28 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     .eq('myops_user_ref', redeemed.user_ref)
     .maybeSingle();
   if (linkResult.error) throw new Error('Unable to check OpsPS identity');
+  let boundBusinessId: string | null = null;
+  if (organizationId) {
+    if (!isUuid(linkResult.data?.opsps_user_id)) return json(403, { error: 'Organization workspace is not linked' }, headers);
+    const mapping = await resolveScopedWorkspace(organizationId, redeemed.user_ref, linkResult.data.opsps_user_id, {
+      async mapping(org, ref) {
+        const result = await admin.from('opsps_central_organization_links').select('opsps_user_id,business_id')
+          .eq('organization_id', org).eq('myops_user_ref', ref).eq('enabled', true).maybeSingle();
+        if (result.error) throw new Error('Unable to check organization mapping');
+        return result.data;
+      },
+      async membership(userId, businessId) {
+        const result = await admin.from('business_memberships').select('business_id')
+          .eq('business_id', businessId).eq('user_id', userId).maybeSingle();
+        if (result.error) throw new Error('Unable to check workspace membership');
+        return !!result.data;
+      },
+    });
+    if (!mapping) return json(403, { error: 'Organization workspace is not linked' }, headers);
+    boundBusinessId = mapping.business_id;
+  }
   let labels: ReturnType<typeof centralCompanyLabels> | null = null;
-  if (!linkResult.data?.opsps_user_id && trialReady()) {
+  if (!organizationId && !linkResult.data?.opsps_user_id && trialReady()) {
     try {
       labels = centralCompanyLabels(redeemed.onboarding_profile);
     } catch {
@@ -244,6 +276,7 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     myops_session_id: redeemed.session_id,
     supabase_session_id: supabaseSessionId,
     valid_until: validUntil,
+    ...(organizationId ? {central_organization_id:organizationId,bound_business_id:boundBusinessId} : {}),
     ...opspsSessionAccessFields(access,trialReady()),
   });
   if (stored.error) throw new Error('Unable to bind OpsPS session');
@@ -269,7 +302,7 @@ async function authenticatedSession(request: Request, headers: HeadersInit) {
     return { response: json(401, { error: 'Authentication required' }, headers) };
   }
   const stored = await admin.from('myops_app_sessions')
-    .select('id, myops_session_id, myops_user_ref')
+    .select(organizationBindingEnabled() ? 'id, myops_session_id, myops_user_ref, central_organization_id, bound_business_id' : 'id, myops_session_id, myops_user_ref')
     .eq('opsps_user_id', user.data.user.id)
     .eq('supabase_session_id', sessionId)
     .is('revoked_at', null)
@@ -283,11 +316,24 @@ async function authenticatedSession(request: Request, headers: HeadersInit) {
 async function refreshEntitlement(request: Request, sensitive: boolean, activity: boolean, headers: HeadersInit): Promise<Response> {
   const current = await authenticatedSession(request, headers);
   if ('response' in current) return current.response;
+  if (current.session.central_organization_id) {
+    if (!organizationBindingEnabled() || !isUuid(current.session.bound_business_id)) return json(403, { error: 'Organization access denied' }, headers);
+    const mapping = await current.admin.from('opsps_central_organization_links').select('business_id')
+      .eq('organization_id', current.session.central_organization_id).eq('myops_user_ref', current.session.myops_user_ref)
+      .eq('opsps_user_id', current.user.id).eq('business_id', current.session.bound_business_id).eq('enabled', true).maybeSingle();
+    if (mapping.error) return json(503, { error: 'Organization access could not be verified' }, headers);
+    if (!mapping.data) return json(403, { error: 'Organization access denied' }, headers);
+    const member = await current.admin.from('business_memberships').select('business_id')
+      .eq('business_id', current.session.bound_business_id).eq('user_id', current.user.id).maybeSingle();
+    if (member.error) return json(503, { error: 'Workspace access could not be verified' }, headers);
+    if (!member.data) return json(403, { error: 'Workspace membership revoked' }, headers);
+  }
   const body = {
     session_id: current.session.myops_session_id,
     product: PRODUCT,
     activity,
     sensitive,
+    ...(current.session.central_organization_id ? {organization_id:current.session.central_organization_id} : {}),
   };
   let checked: JsonRecord;
   try {
@@ -296,7 +342,9 @@ async function refreshEntitlement(request: Request, sensitive: boolean, activity
     return json(503, { error: 'MYOPS access could not be verified' }, headers);
   }
   let access;
-  try {access=opspsAccessFromEntitlement(checked,trialReady());} catch {
+  try {
+    if (current.session.central_organization_id && (!organizationBindingEnabled() || checked.organization_id !== current.session.central_organization_id)) throw new Error('Organization access denied');
+    access=opspsAccessFromEntitlement(checked,trialReady());} catch {
     await current.admin.from('myops_app_sessions')
       .update({ revoked_at: new Date().toISOString(), valid_until: new Date().toISOString() })
       .eq('id', current.session.id);

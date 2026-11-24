@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clearMyopsLaunchTicketFromUrl, extractMyopsLaunchTicket } from '../services/myopsAppAccess';
 import {
+  acceptsLegacyMyopsGrant,
   canonicalJson,
   canonicalMyopsRequest,
   isMyopsTicket,
@@ -69,4 +70,10 @@ describe('MYOPS app access contract', () => {
     expect(readSessionIdFromJwt(`header.${payload}.signature`)).toBe('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
     expect(readSessionIdFromJwt('header.e30.signature')).toBeNull();
   });
+});
+
+it('rejects organization-bound grants until scoped session and RLS are implemented', () => {
+  expect(acceptsLegacyMyopsGrant({})).toBe(true);
+  expect(acceptsLegacyMyopsGrant({ organization_id: '00000000-0000-4000-8000-000000000002' })).toBe(false);
+  expect(acceptsLegacyMyopsGrant({ organization_id: null })).toBe(false);
 });

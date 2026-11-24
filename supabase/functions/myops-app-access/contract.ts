@@ -66,3 +66,9 @@ export async function readMyopsJson(response: Response): Promise<Record<string, 
   }
   return body as Record<string, unknown>;
 }
+
+// An organization-bound Central grant must never fall through to the legacy
+// user-only identity mapping while tenant-scoped RLS is unfinished.
+export function acceptsLegacyMyopsGrant(value: { organization_id?: unknown }): boolean {
+  return value.organization_id === undefined;
+}
