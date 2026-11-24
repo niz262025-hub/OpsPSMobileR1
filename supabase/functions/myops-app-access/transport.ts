@@ -6,7 +6,8 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
   config: { projectUrl: string; shareToken?: string }, send: typeof fetch = fetch): Promise<Response> {
   if (!['/api/app/redeem', '/api/app/entitlement'].includes(path)) throw new Error('Unsupported MYOPS path');
   const headers = new Headers(init.headers);
-  if (config.shareToken) {
+  const shareToken = config.shareToken?.trim();
+  if (shareToken) {
     if (config.projectUrl !== STAGING_PROJECT) throw new Error('Staging transport is restricted');
     try {
       validateMyopsAuthority(config.projectUrl, origin);
@@ -15,7 +16,7 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
     }
     const cookies = new Map<string, string>();
     const bootstrap = new URL('/', origin);
-    bootstrap.searchParams.set('_vercel_share', config.shareToken);
+    bootstrap.searchParams.set('_vercel_share', shareToken);
     let url = bootstrap;
     let complete = false;
     for (let step = 0; step < 4; step++) {
