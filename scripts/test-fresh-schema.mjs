@@ -141,7 +141,8 @@ try {
     const beforeShared = await snapshot();
     await shared.exec(freshSchema({sharedOpsflowStaging:true}));
     assert.deepEqual(await snapshot(), beforeShared);
-    assert.equal((await shared.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='public'")).rows[0].n,25);
+    assert.equal((await shared.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='public'")).rows[0].n,26);
+    assert.equal((await shared.query("SELECT has_table_privilege('authenticated','opsps_central_organization_links','SELECT') allowed")).rows[0].allowed,false);
     assert.equal((await shared.query("SELECT has_table_privilege('anon','profiles','SELECT') allowed")).rows[0].allowed,false);
     await assert.rejects(shared.exec(freshSchema({sharedOpsflowStaging:true})), /verified OpsFlow-only staging schema/);
     await shared.exec('ROLLBACK');
