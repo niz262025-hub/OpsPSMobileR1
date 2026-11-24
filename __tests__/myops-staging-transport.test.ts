@@ -5,6 +5,22 @@ const origin='https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-n
 const config={projectUrl:'https://ojamkplflqafedmxbdxb.supabase.co',shareToken:'dummy-share'};
 const init={method:'POST',headers:{'X-Myops-Signature':'dummy-signature'},body:'{}'};
 describe('OpsPS protected staging transport',()=>{
+ it('uses the automation header only on the exact Step 1 staging broker', async () => {
+  const step1 = 'https://southerndotcom-website-git-fix-centr-db9115-mohd-syaiful-nizam1.vercel.app';
+  const send = vi.fn().mockResolvedValue(new Response('{}'));
+  const options = { ...config, automationSecret: 'fixture-only' };
+  await expect(sendMyopsRequest(origin, '/api/app/redeem', init, options, send)).rejects.toThrow('restricted');
+  await expect(sendMyopsRequest(step1, '/api/app/redeem', init, { ...options, projectUrl: 'production' }, send)).rejects.toThrow('restricted');
+  expect(send).not.toHaveBeenCalled();
+  await sendMyopsRequest(step1, '/api/app/redeem', init, options, send);
+  expect(send).toHaveBeenCalledOnce();
+  const [url, request] = send.mock.calls[0];
+  expect(String(url)).toBe(step1 + '/api/app/redeem');
+  expect(request.method).toBe('POST');
+  expect(request.redirect).toBe('error');
+  expect(request.headers.get('x-vercel-protection-bypass')).toBe('fixture-only');
+  expect(request.headers.get('x-myops-signature')).toBe('dummy-signature');
+ });
  it('keeps the existing signed direct transport when no staging token exists',async()=>{const send=vi.fn().mockResolvedValue(new Response('{}'));await sendMyopsRequest('https://www.myops.com.my','/api/app/redeem',init,{projectUrl:'production'},send);expect(send).toHaveBeenCalledOnce();expect(send.mock.calls[0][1].redirect).toBe('error');});
  it('trims copied Preview tokens without changing their encoded value', async () => {
   const token = 'dummy+/=';
