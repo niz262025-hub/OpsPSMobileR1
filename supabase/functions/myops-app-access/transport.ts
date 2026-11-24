@@ -1,13 +1,18 @@
+const STEP1_ORIGIN = 'https://southerndotcom-website-git-fix-centr-db9115-mohd-syaiful-nizam1.vercel.app';
 const STAGING_PROJECT = 'https://ojamkplflqafedmxbdxb.supabase.co';
 import { validateMyopsAuthority } from './provisioning.ts';
 
 // Deployment protection and application authorization remain separate layers.
 export async function sendMyopsRequest(origin: string, path: string, init: RequestInit,
-  config: { projectUrl: string; shareToken?: string }, send: typeof fetch = fetch): Promise<Response> {
+  config: { projectUrl: string; shareToken?: string; automationSecret?: string }, send: typeof fetch = fetch): Promise<Response> {
   if (!['/api/app/redeem', '/api/app/entitlement'].includes(path)) throw new Error('Unsupported MYOPS path');
   const headers = new Headers(init.headers);
   const shareToken = config.shareToken?.trim();
-  if (shareToken) {
+  const automationSecret = config.automationSecret?.trim();
+  if (automationSecret) {
+    if (config.projectUrl !== STAGING_PROJECT || origin !== STEP1_ORIGIN) throw new Error('Staging transport is restricted');
+    headers.set('x-vercel-protection-bypass', automationSecret);
+  } else if (shareToken) {
     if (config.projectUrl !== STAGING_PROJECT) throw new Error('Staging transport is restricted');
     try {
       validateMyopsAuthority(config.projectUrl, origin);
