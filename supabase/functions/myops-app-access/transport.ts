@@ -1,5 +1,5 @@
 const STAGING_PROJECT = 'https://ojamkplflqafedmxbdxb.supabase.co';
-const STAGING_MYOPS = 'https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-nizam1.vercel.app';
+import { validateMyopsAuthority } from './provisioning.ts';
 
 // Deployment protection and application authorization remain separate layers.
 export async function sendMyopsRequest(origin: string, path: string, init: RequestInit,
@@ -7,7 +7,8 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
   if (!['/api/app/redeem', '/api/app/entitlement'].includes(path)) throw new Error('Unsupported MYOPS path');
   const headers = new Headers(init.headers);
   if (config.shareToken) {
-    if (config.projectUrl !== STAGING_PROJECT || origin !== STAGING_MYOPS) throw new Error('Staging transport is restricted');
+    if (config.projectUrl !== STAGING_PROJECT) throw new Error('Staging transport is restricted');
+    validateMyopsAuthority(config.projectUrl, origin);
     const cookies = new Map<string, string>();
     const bootstrap = new URL('/', origin);
     bootstrap.searchParams.set('_vercel_share', config.shareToken);
@@ -30,7 +31,13 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
         const location = response.headers.get('location');
         if (!location) throw new Error('Invalid staging redirect');
         url = new URL(location, url);
-        if (url.origin !== origin) throw new Error('Staging redirect rejected');
+        if (url.origin !== origin) {
+          console.warn('opsps_staging_redirect_rejected', {
+            requestOrigin: origin, status: response.status, destinationOrigin: url.origin,
+          });
+          await response.body?.cancel();
+          throw new Error('Staging redirect rejected');
+        }
         // Vercel already issued the protection cookie. Avoid an unnecessary
         // homepage fetch before the signed API request.
         if (cookies.size > 0) {
