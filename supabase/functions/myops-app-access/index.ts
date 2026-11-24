@@ -148,7 +148,11 @@ async function signMyopsRequest(
         'X-Myops-Signature': signature,
       },
       body: JSON.stringify(body),
-    }, { projectUrl: Deno.env.get('SUPABASE_URL') ?? '', shareToken: Deno.env.get('MYOPS_STAGING_SHARE_TOKEN') });
+    }, {
+      projectUrl: Deno.env.get('SUPABASE_URL') ?? '',
+      shareToken: Deno.env.get('MYOPS_STAGING_SHARE_TOKEN'),
+      automationSecret: Deno.env.get('MYOPS_STAGING_VERCEL_AUTOMATION_SECRET'),
+    });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -177,6 +181,18 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
     .eq('myops_user_ref', redeemed.user_ref)
     .maybeSingle();
   if (linkResult.error) throw new Error('Unable to check OpsPS identity');
+  let labels: ReturnType<typeof centralCompanyLabels> | null = null;
+  if (!linkResult.data?.opsps_user_id && trialReady()) {
+    try {
+      labels = centralCompanyLabels(redeemed.onboarding_profile);
+    } catch {
+      console.warn('opsps_app_access_failure', 'onboarding_profile_required');
+      return json(422, {
+        error: 'Complete your company profile in MYOPS.',
+        code: 'onboarding_profile_required',
+      }, headers);
+    }
+  }
   const opspsUserId = linkResult.data?.opsps_user_id ?? await ensureVerifiedMyopsIdentity(
     redeemed.user_ref, Deno.env.get('SUPABASE_URL') ?? '', {
       async getUser(id) {
@@ -190,7 +206,6 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
         return result.data.user;
       },
       async provision(userRef, userId) {
-        const labels=trialReady()?centralCompanyLabels(redeemed.onboarding_profile):null;
         const result = await admin.rpc(labels?'opsps_provision_myops_identity_v3':'opsps_provision_myops_identity_v2', { p_user_ref: userRef, p_user_id: userId, p_project_url: Deno.env.get('SUPABASE_URL') ?? '',
           ...(labels?{p_display_name:labels.name,p_company_name:labels.company}:{}) });
         if (result.error || typeof result.data !== 'string') throw new Error('Unable to provision OpsPS tenant');

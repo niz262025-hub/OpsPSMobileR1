@@ -5,7 +5,30 @@ const origin='https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-n
 const config={projectUrl:'https://ojamkplflqafedmxbdxb.supabase.co',shareToken:'dummy-share'};
 const init={method:'POST',headers:{'X-Myops-Signature':'dummy-signature'},body:'{}'};
 describe('OpsPS protected staging transport',()=>{
+ it('uses the automation header only on the exact Step 1 staging broker', async () => {
+  const step1 = 'https://southerndotcom-website-git-fix-centr-db9115-mohd-syaiful-nizam1.vercel.app';
+  const send = vi.fn().mockResolvedValue(new Response('{}'));
+  const options = { ...config, automationSecret: 'fixture-only' };
+  await expect(sendMyopsRequest(origin, '/api/app/redeem', init, options, send)).rejects.toThrow('restricted');
+  await expect(sendMyopsRequest(step1, '/api/app/redeem', init, { ...options, projectUrl: 'production' }, send)).rejects.toThrow('restricted');
+  expect(send).not.toHaveBeenCalled();
+  await sendMyopsRequest(step1, '/api/app/redeem', init, options, send);
+  expect(send).toHaveBeenCalledOnce();
+  const [url, request] = send.mock.calls[0];
+  expect(String(url)).toBe(step1 + '/api/app/redeem');
+  expect(request.method).toBe('POST');
+  expect(request.redirect).toBe('error');
+  expect(request.headers.get('x-vercel-protection-bypass')).toBe('fixture-only');
+  expect(request.headers.get('x-myops-signature')).toBe('dummy-signature');
+ });
  it('keeps the existing signed direct transport when no staging token exists',async()=>{const send=vi.fn().mockResolvedValue(new Response('{}'));await sendMyopsRequest('https://www.myops.com.my','/api/app/redeem',init,{projectUrl:'production'},send);expect(send).toHaveBeenCalledOnce();expect(send.mock.calls[0][1].redirect).toBe('error');});
+ it('trims copied Preview tokens without changing their encoded value', async () => {
+  const token = 'dummy+/=';
+  const send = vi.fn().mockResolvedValueOnce(new Response('', { headers: { 'Set-Cookie': 'stage-cookie=dummy; Path=/' } })).mockResolvedValueOnce(new Response('{}'));
+  await sendMyopsRequest(origin, '/api/app/redeem', init, { ...config, shareToken: '  ' + token + '\n' }, send);
+  expect(new URL(String(send.mock.calls[0][0])).searchParams.get('_vercel_share')).toBe(token);
+  expect(new URL(String(send.mock.calls[1][0])).search).toBe('');
+ });
  it('never sends application signatures during cookie bootstrap',async()=>{const send=vi.fn().mockResolvedValueOnce(new Response('',{status:302,headers:{'Set-Cookie':'stage-cookie=dummy; HttpOnly','Location':'/'}})).mockResolvedValueOnce(new Response('{}'));await sendMyopsRequest(origin,'/api/app/redeem',init,config,send);expect(send).toHaveBeenCalledTimes(2);expect(send.mock.calls[0][1].headers).toEqual({});expect(send.mock.calls[1][1].headers.get('X-Myops-Signature')).toBe('dummy-signature');expect(send.mock.calls[1][1].headers.get('Cookie')).toBe('stage-cookie=dummy');expect(String(send.mock.calls[1][0])).not.toContain('dummy-share');});
  it('supports Edge headers without getSetCookie while retaining the protection cookie',async()=>{const response=new Response('',{status:307,headers:{'Set-Cookie':'stage-cookie=dummy; Expires=Wed, 01 Jan 2030 00:00:00 GMT; Path=/','Location':'/'}});Object.defineProperty(response.headers,'getSetCookie',{value:undefined});const send=vi.fn().mockResolvedValueOnce(response).mockResolvedValueOnce(new Response('{}'));await sendMyopsRequest(origin,'/api/app/redeem',init,config,send);expect(send.mock.calls[1][1].headers.get('Cookie')).toBe('stage-cookie=dummy');});
  it('rejects staging credentials on other projects and production authorities before network access',async()=>{const send=vi.fn();await expect(sendMyopsRequest('https://www.myops.com.my','/api/app/redeem',init,config,send)).rejects.toThrow('restricted');await expect(sendMyopsRequest(origin,'/api/app/redeem',init,{...config,projectUrl:'https://production.supabase.co'},send)).rejects.toThrow('restricted');expect(send).not.toHaveBeenCalled();});
