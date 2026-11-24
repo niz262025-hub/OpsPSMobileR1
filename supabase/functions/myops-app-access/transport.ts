@@ -8,7 +8,11 @@ export async function sendMyopsRequest(origin: string, path: string, init: Reque
   const headers = new Headers(init.headers);
   if (config.shareToken) {
     if (config.projectUrl !== STAGING_PROJECT) throw new Error('Staging transport is restricted');
-    validateMyopsAuthority(config.projectUrl, origin);
+    try {
+      validateMyopsAuthority(config.projectUrl, origin);
+    } catch {
+      throw new Error('Staging transport is restricted');
+    }
     const cookies = new Map<string, string>();
     const bootstrap = new URL('/', origin);
     bootstrap.searchParams.set('_vercel_share', config.shareToken);
