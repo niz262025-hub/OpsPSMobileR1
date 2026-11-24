@@ -44,6 +44,9 @@ try {
  await db.exec('set role authenticated');
  assert.deepEqual((await db.query('select business_id from orders')).rows.map(r=>r.business_id),[b]);
  assert.equal((await db.query('select * from storage.objects')).rows.length,2);
+ assert.equal((await db.query('select public.can_manage_seller_verification($1) as allowed',[b])).rows[0].allowed,true);
+ assert.equal((await db.query('select public.can_manage_seller_verification($1) as allowed',[a])).rows[0].allowed,false);
+ await assert.rejects(db.query("insert into storage.objects values('opsps-media',$1)",[`business/${a}/object`]),/row-level security/);
  await assert.rejects(db.query('insert into orders values($1)',[a]),/row-level security/);
  await db.exec('reset role');await db.query('delete from business_memberships where business_id=$1',[b]);await db.exec('set role authenticated');
  assert.equal((await db.query('select * from orders')).rows.length,0);
@@ -56,6 +59,8 @@ try {
  assert.equal((await db.query('select public.user_is_business_member($1) as allowed',[b])).rows[0].allowed,false);
  await db.exec('reset role'); await db.query("update myops_app_sessions set valid_until=now()+interval '1 minute',revoked_at=now()"); await db.exec('set role authenticated');
  assert.equal((await db.query('select public.user_is_business_member($1) as allowed',[b])).rows[0].allowed,false);
+ await db.exec('reset role'); await db.query("update myops_app_sessions set revoked_at=null,central_organization_id=null,bound_business_id=null"); await db.exec('set role authenticated');
+ assert.equal((await db.query('select public.user_is_business_member($1) as allowed',[b])).rows[0].allowed,true);
  await db.exec('reset role'); await db.query('delete from myops_app_sessions'); await db.exec('set role authenticated');
  assert.equal((await db.query('select public.user_is_business_member($1) as allowed',[b])).rows[0].allowed,false);
  assert.equal((await db.query('select public.is_approved_seller_for_business($1) as allowed',[b])).rows[0].allowed,false);
