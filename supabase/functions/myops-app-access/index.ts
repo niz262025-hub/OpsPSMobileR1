@@ -193,7 +193,7 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
       }, headers);
     }
   }
-  const opspsUserId = linkResult.data?.opsps_user_id ?? await ensureVerifiedMyopsIdentity(
+  const opspsUserId = await ensureVerifiedMyopsIdentity(
     redeemed.user_ref, Deno.env.get('SUPABASE_URL') ?? '', {
       async getUser(id) {
         const result = await admin.auth.admin.getUserById(id);
@@ -201,11 +201,13 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
         return result.data.user;
       },
       async createUser(input) {
+        if (linkResult.data?.opsps_user_id) throw new Error('Linked OpsPS account is unavailable');
         const result = await admin.auth.admin.createUser(input);
         if (result.error) throw new Error('Unable to provision OpsPS identity');
         return result.data.user;
       },
       async provision(userRef, userId) {
+        if (linkResult.data?.opsps_user_id && linkResult.data.opsps_user_id !== userId) throw new Error('OpsPS identity conflict');
         const result = await admin.rpc(labels?'opsps_provision_myops_identity_v3':'opsps_provision_myops_identity_v2', { p_user_ref: userRef, p_user_id: userId, p_project_url: Deno.env.get('SUPABASE_URL') ?? '',
           ...(labels?{p_display_name:labels.name,p_company_name:labels.company}:{}) });
         if (result.error || typeof result.data !== 'string') throw new Error('Unable to provision OpsPS tenant');
