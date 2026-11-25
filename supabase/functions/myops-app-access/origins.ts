@@ -4,6 +4,7 @@ export function allowedOpspsOrigins(projectUrl: string, configured = ''): string
   const origins = configured.split(',').map(value => value.trim()).filter(Boolean);
   if (projectUrl === 'https://ojamkplflqafedmxbdxb.supabase.co') {
     origins.push(OPSPS_GALLERY_STAGING_ORIGIN);
+    origins.push('https://opsp-mobile-r1-git-staging-productio-bc9e86-mohd-syaiful-nizam1.vercel.app');
     origins.push('https://opsp-mobile-r1-plzs0e8yj-mohd-syaiful-nizam1.vercel.app');
   }
   return [...new Set(origins)];
