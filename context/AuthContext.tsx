@@ -275,8 +275,9 @@ export function AuthProvider({
           return;
         }
 
-        const launchUrl = await Linking.getInitialURL();
-        const ticket = launchUrl ? extractMyopsLaunchTicket(launchUrl) : null;
+        const browserTicket = typeof window !== 'undefined' ? extractMyopsLaunchTicket(window.location.href) : null;
+        const launchUrl = browserTicket ? null : await Linking.getInitialURL();
+        const ticket = browserTicket ?? (launchUrl ? extractMyopsLaunchTicket(launchUrl) : null);
         if (ticket) {
           clearMyopsLaunchTicketFromUrl();
           const launchedSession = await redeemMyopsLaunchTicket(client, ticket);
