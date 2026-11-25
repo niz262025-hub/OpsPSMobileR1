@@ -1,0 +1,27 @@
+name: OpsPS staging diagnostics validation
+on:
+  push:
+    branches:
+      - staging/opsps-diagnostic-ci
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fb5113d464eb9912edeabc9f2fbb14e23281023f
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify exact diagnostic revision
+        run: test "$(git rev-parse HEAD)" = fb5113d464eb9912edeabc9f2fbb14e23281023f
+      - name: Run affected access and provisioning tests
+        run: npx vitest run __tests__/myops-provisioning.test.ts __tests__/myops-app-access-contract.test.ts __tests__/myops-staging-transport.test.ts
+      - name: Typecheck with Deno-compatible import extensions
+        run: npx tsc --noEmit --allowImportingTsExtensions
