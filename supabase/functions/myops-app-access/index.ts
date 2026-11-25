@@ -183,6 +183,15 @@ async function redeemTicket(ticket: string, headers: HeadersInit): Promise<Respo
   if (linkResult.error) throw new Error('Unable to check OpsPS identity');
   let labels: ReturnType<typeof centralCompanyLabels> | null = null;
   if (!linkResult.data?.opsps_user_id && trialReady()) {
+    if (Deno.env.get('SUPABASE_URL') === 'https://ojamkplflqafedmxbdxb.supabase.co') {
+      const profile = redeemed.onboarding_profile;
+      const record = asObject(profile) ? profile : null;
+      const validField = (value: unknown, max: number) => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max;
+      console.info('opsps_staging_profile_diagnostic', JSON.stringify({
+        present: profile !== undefined && profile !== null, object: record !== null,
+        display_name_valid: validField(record?.display_name, 100), company_name_valid: validField(record?.company_name, 200),
+      }));
+    }
     try {
       labels = centralCompanyLabels(redeemed.onboarding_profile);
     } catch {
@@ -361,14 +370,15 @@ Deno.serve(async (request) => {
   try {
     if(body.action==='staging_status'&&Object.keys(body).length===1) {
       if(Deno.env.get('SUPABASE_URL')!=='https://ojamkplflqafedmxbdxb.supabase.co')return json(404,{error:'Not found'},headers);
+      const baseline_origin = Deno.env.get('MYOPS_APP_API_ORIGIN') === 'https://southerndotcom-website-git-staging-p-9ff219-mohd-syaiful-nizam1.vercel.app';
       try {
         const probe=await readMyopsJson(await signMyopsRequest('/api/app/entitlement',{session_id:crypto.randomUUID(),product:PRODUCT,activity:false}));
         const ready=probe.entitled===false&&probe.session_active===false;
-        return json(ready?200:503,{ready,signed_transport:ready?'verified':'unavailable',unknown_session:ready?'denied':'unverified'},headers);
+        return json(ready?200:503,{ready,baseline_origin,signed_transport:ready?'verified':'unavailable',unknown_session:ready?'denied':'unverified'},headers);
       }catch(error){
         const message=error instanceof Error?error.message:'';
         const reason=['Staging access unavailable','Invalid staging redirect','Staging redirect rejected'].includes(message)?'deployment_protection':message==='MYOPS access is not configured'?'configuration':'transport_unavailable';
-        return json(503,{ready:false,reason},headers);
+        return json(503,{ready:false,baseline_origin,reason},headers);
       }
     }
     if (body.action === 'redeem') {
