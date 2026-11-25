@@ -28,18 +28,19 @@ export async function redeemMyopsLaunchTicket(
   client: SupabaseClient,
   ticket: string,
 ): Promise<Session | null> {
-  if (!TICKET.test(ticket)) return null;
+  if (!TICKET.test(ticket)) { console.warn('opsps_sso_invalid_ticket'); return null; }
   const { data, error } = await client.functions.invoke('myops-app-access', {
     body: { action: 'redeem', ticket },
   });
   if (error || !data || typeof data.access_token !== 'string' || typeof data.refresh_token !== 'string') {
+    console.warn('opsps_sso_redemption_failed', { status: error?.context instanceof Response ? error.context.status : null });
     return null;
   }
   const result = await client.auth.setSession({
     access_token: data.access_token,
     refresh_token: data.refresh_token,
   });
-  if (result.error || !result.data.session) return null;
+  if (result.error || !result.data.session) { console.warn('opsps_sso_session_failed'); return null; }
   return result.data.session;
 }
 
