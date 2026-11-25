@@ -43,5 +43,10 @@ describe('central MYOPS logout', () => {
     vi.stubEnv('EXPO_PUBLIC_MYOPS_PORTAL_ORIGIN',origin);
     const replace=vi.fn();vi.stubGlobal('window',{location:{replace}});returnToMyops();
     expect(replace).toHaveBeenCalledWith(origin+'/');
+    const baseline='https://southerndotcom-website-git-staging-p-9ff219-mohd-syaiful-nizam1.vercel.app';
+    vi.stubEnv('EXPO_PUBLIC_MYOPS_PORTAL_ORIGIN',baseline);
+    expect(myopsPortalUrl()).toBe(baseline+'/');
+    vi.stubEnv('EXPO_PUBLIC_MYOPS_PORTAL_ORIGIN',baseline+'.evil.test');
+    expect(myopsPortalUrl()).toBe('https://www.myops.com.my/');
   });
 });
