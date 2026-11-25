@@ -1,5 +1,6 @@
 // Only verified central redeem responses may call this server-side adapter.
 const STAGING_PROJECT = 'https://ojamkplflqafedmxbdxb.supabase.co';
+const STEP1_STAGING_MYOPS = 'https://southerndotcom-website-git-fix-centr-db9115-mohd-syaiful-nizam1.vercel.app';
 const PRODUCTION_PROJECT = 'https://wrsigjhhbkbomtkaqlpw.supabase.co';
 const STAGING_MYOPS = 'https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-nizam1.vercel.app';
 export function centralCompanyLabels(value:unknown):{name:string;company:string} {
@@ -11,7 +12,7 @@ export function centralCompanyLabels(value:unknown):{name:string;company:string}
 }
 
 export function validateMyopsAuthority(projectUrl: string, origin: string): void {
-  if (!((projectUrl === STAGING_PROJECT && origin === STAGING_MYOPS)
+  if (!((projectUrl === STAGING_PROJECT && [STAGING_MYOPS, STEP1_STAGING_MYOPS, 'https://southerndotcom-website-git-staging-p-9ff219-mohd-syaiful-nizam1.vercel.app'].includes(origin))
     || (projectUrl === PRODUCTION_PROJECT && origin === 'https://www.myops.com.my'))) {
     throw new Error('OpsPS identity provisioning is unavailable');
   }
