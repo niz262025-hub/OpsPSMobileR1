@@ -151,7 +151,7 @@ CREATE POLICY "business_payment_profiles_customer_select_active"
       FROM public.orders o
       WHERE o.business_id = business_payment_profiles.business_id
         AND (
-          o.customer_id = auth.uid()
+          EXISTS (SELECT 1 FROM public.profiles customer_profile WHERE customer_profile.id = o.customer_profile_id AND customer_profile.auth_user_id = auth.uid())
           OR o.customer_profile_id = (
             SELECT p.id
             FROM public.profiles p
@@ -174,7 +174,7 @@ CREATE POLICY "payments_customer_insert_own_direct_qr"
       WHERE o.id = payments.order_id
         AND o.business_id = payments.business_id
         AND (
-          o.customer_id = auth.uid()
+          EXISTS (SELECT 1 FROM public.profiles customer_profile WHERE customer_profile.id = o.customer_profile_id AND customer_profile.auth_user_id = auth.uid())
           OR o.customer_profile_id = (
             SELECT p.id
             FROM public.profiles p
@@ -197,7 +197,7 @@ CREATE POLICY "payments_customer_select_own"
       WHERE o.id = payments.order_id
         AND o.business_id = payments.business_id
         AND (
-          o.customer_id = auth.uid()
+          EXISTS (SELECT 1 FROM public.profiles customer_profile WHERE customer_profile.id = o.customer_profile_id AND customer_profile.auth_user_id = auth.uid())
           OR o.customer_profile_id = (
             SELECT p.id
             FROM public.profiles p

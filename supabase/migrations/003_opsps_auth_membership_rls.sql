@@ -45,14 +45,18 @@ ALTER TABLE IF EXISTS public.admin_users
   ENABLE ROW LEVEL SECURITY;
 
 -- Founder bootstrap: a user may create their own business and business membership.
-CREATE POLICY IF NOT EXISTS "businesses_insert_self_owned"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "businesses_insert_self_owned"
   ON public.businesses
   FOR INSERT
   WITH CHECK (
     auth.uid() IS NOT NULL
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "businesses_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "businesses_member_select"
   ON public.businesses
   FOR SELECT
   USING (
@@ -63,8 +67,11 @@ CREATE POLICY IF NOT EXISTS "businesses_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "businesses_member_update"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "businesses_member_update"
   ON public.businesses
   FOR UPDATE
   USING (
@@ -85,8 +92,11 @@ CREATE POLICY IF NOT EXISTS "businesses_member_update"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "profiles_select_self_or_member"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "profiles_select_self_or_member"
   ON public.profiles
   FOR SELECT
   USING (
@@ -102,8 +112,11 @@ CREATE POLICY IF NOT EXISTS "profiles_select_self_or_member"
       AND auth.uid() = profiles.auth_user_id
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "profiles_insert_self_or_founder"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "profiles_insert_self_or_founder"
   ON public.profiles
   FOR INSERT
   WITH CHECK (
@@ -116,8 +129,11 @@ CREATE POLICY IF NOT EXISTS "profiles_insert_self_or_founder"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "profiles_update_self_or_founder"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "profiles_update_self_or_founder"
   ON public.profiles
   FOR UPDATE
   USING (
@@ -140,8 +156,11 @@ CREATE POLICY IF NOT EXISTS "profiles_update_self_or_founder"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "memberships_select_self_and_members"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "memberships_select_self_and_members"
   ON public.business_memberships
   FOR SELECT
   USING (
@@ -154,8 +173,11 @@ CREATE POLICY IF NOT EXISTS "memberships_select_self_and_members"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "memberships_insert_self_or_founder"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "memberships_insert_self_or_founder"
   ON public.business_memberships
   FOR INSERT
   WITH CHECK (
@@ -168,8 +190,11 @@ CREATE POLICY IF NOT EXISTS "memberships_insert_self_or_founder"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "memberships_update_self_or_founder"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "memberships_update_self_or_founder"
   ON public.business_memberships
   FOR UPDATE
   USING (
@@ -192,8 +217,11 @@ CREATE POLICY IF NOT EXISTS "memberships_update_self_or_founder"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "memberships_delete_founders_only"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "memberships_delete_founders_only"
   ON public.business_memberships
   FOR DELETE
   USING (
@@ -205,9 +233,12 @@ CREATE POLICY IF NOT EXISTS "memberships_delete_founders_only"
         AND bm.role = 'founder'
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
 -- Business-scoped tables are only readable to members of the owning business.
-CREATE POLICY IF NOT EXISTS "trips_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "trips_member_select"
   ON public.trips
   FOR SELECT
   USING (
@@ -218,8 +249,11 @@ CREATE POLICY IF NOT EXISTS "trips_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "trips_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "trips_member_write"
   ON public.trips
   FOR INSERT
   WITH CHECK (
@@ -231,8 +265,11 @@ CREATE POLICY IF NOT EXISTS "trips_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "trips_member_update"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "trips_member_update"
   ON public.trips
   FOR UPDATE
   USING (
@@ -253,8 +290,11 @@ CREATE POLICY IF NOT EXISTS "trips_member_update"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "products_public_or_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "products_public_or_member_select"
   ON public.products
   FOR SELECT
   USING (
@@ -266,8 +306,11 @@ CREATE POLICY IF NOT EXISTS "products_public_or_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "products_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "products_member_write"
   ON public.products
   FOR INSERT
   WITH CHECK (
@@ -279,8 +322,11 @@ CREATE POLICY IF NOT EXISTS "products_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "products_member_update"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "products_member_update"
   ON public.products
   FOR UPDATE
   USING (
@@ -301,8 +347,11 @@ CREATE POLICY IF NOT EXISTS "products_member_update"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "product_variants_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "product_variants_member_select"
   ON public.product_variants
   FOR SELECT
   USING (
@@ -319,8 +368,11 @@ CREATE POLICY IF NOT EXISTS "product_variants_member_select"
         AND p.is_published = true
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "product_variants_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "product_variants_member_write"
   ON public.product_variants
   FOR INSERT
   WITH CHECK (
@@ -332,8 +384,11 @@ CREATE POLICY IF NOT EXISTS "product_variants_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "product_variants_member_update"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "product_variants_member_update"
   ON public.product_variants
   FOR UPDATE
   USING (
@@ -354,8 +409,11 @@ CREATE POLICY IF NOT EXISTS "product_variants_member_update"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "orders_member_or_customer_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "orders_member_or_customer_select"
   ON public.orders
   FOR SELECT
   USING (
@@ -374,8 +432,11 @@ CREATE POLICY IF NOT EXISTS "orders_member_or_customer_select"
       )
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "orders_member_or_customer_insert"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "orders_member_or_customer_insert"
   ON public.orders
   FOR INSERT
   WITH CHECK (
@@ -395,8 +456,11 @@ CREATE POLICY IF NOT EXISTS "orders_member_or_customer_insert"
       )
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "orders_member_or_customer_update"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "orders_member_or_customer_update"
   ON public.orders
   FOR UPDATE
   USING (
@@ -431,8 +495,11 @@ CREATE POLICY IF NOT EXISTS "orders_member_or_customer_update"
       )
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "order_items_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "order_items_member_select"
   ON public.order_items
   FOR SELECT
   USING (
@@ -443,8 +510,11 @@ CREATE POLICY IF NOT EXISTS "order_items_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "order_items_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "order_items_member_write"
   ON public.order_items
   FOR INSERT
   WITH CHECK (
@@ -455,8 +525,11 @@ CREATE POLICY IF NOT EXISTS "order_items_member_write"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "payments_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "payments_member_select"
   ON public.payments
   FOR SELECT
   USING (
@@ -475,8 +548,11 @@ CREATE POLICY IF NOT EXISTS "payments_member_select"
         AND p.auth_user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "payments_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "payments_member_write"
   ON public.payments
   FOR INSERT
   WITH CHECK (
@@ -488,8 +564,11 @@ CREATE POLICY IF NOT EXISTS "payments_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "shipments_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "shipments_member_select"
   ON public.shipments
   FOR SELECT
   USING (
@@ -500,8 +579,11 @@ CREATE POLICY IF NOT EXISTS "shipments_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "shipments_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "shipments_member_write"
   ON public.shipments
   FOR INSERT
   WITH CHECK (
@@ -513,8 +595,11 @@ CREATE POLICY IF NOT EXISTS "shipments_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "inventory_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "inventory_member_select"
   ON public.inventory_movements
   FOR SELECT
   USING (
@@ -525,8 +610,11 @@ CREATE POLICY IF NOT EXISTS "inventory_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "inventory_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "inventory_member_write"
   ON public.inventory_movements
   FOR INSERT
   WITH CHECK (
@@ -538,8 +626,11 @@ CREATE POLICY IF NOT EXISTS "inventory_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "finance_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "finance_member_select"
   ON public.finance_transactions
   FOR SELECT
   USING (
@@ -550,8 +641,11 @@ CREATE POLICY IF NOT EXISTS "finance_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "finance_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "finance_member_write"
   ON public.finance_transactions
   FOR INSERT
   WITH CHECK (
@@ -563,8 +657,11 @@ CREATE POLICY IF NOT EXISTS "finance_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "subscriptions_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "subscriptions_member_select"
   ON public.subscriptions
   FOR SELECT
   USING (
@@ -575,8 +672,11 @@ CREATE POLICY IF NOT EXISTS "subscriptions_member_select"
         AND bm.user_id = auth.uid()
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "subscriptions_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "subscriptions_member_write"
   ON public.subscriptions
   FOR INSERT
   WITH CHECK (
@@ -588,8 +688,11 @@ CREATE POLICY IF NOT EXISTS "subscriptions_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "admin_users_member_select"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "admin_users_member_select"
   ON public.admin_users
   FOR SELECT
   USING (
@@ -601,8 +704,11 @@ CREATE POLICY IF NOT EXISTS "admin_users_member_select"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "admin_users_member_write"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "admin_users_member_write"
   ON public.admin_users
   FOR INSERT
   WITH CHECK (
@@ -614,6 +720,8 @@ CREATE POLICY IF NOT EXISTS "admin_users_member_write"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
 -- Database-side lifecycle enforcement: allow only the business process states
 -- used by the existing OpsPS UI and mock flow, and disallow arbitrary jumps.
@@ -656,10 +764,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER IF NOT EXISTS trg_validate_order_status_transition
+DO $opsps_baseline$ BEGIN
+CREATE TRIGGER trg_validate_order_status_transition
   BEFORE UPDATE ON public.orders
   FOR EACH ROW
   EXECUTE FUNCTION public.validate_order_status_transition();
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
 CREATE OR REPLACE FUNCTION public.validate_payment_status_transition()
 RETURNS TRIGGER AS $$
@@ -684,10 +795,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER IF NOT EXISTS trg_validate_payment_status_transition
+DO $opsps_baseline$ BEGIN
+CREATE TRIGGER trg_validate_payment_status_transition
   BEFORE UPDATE ON public.orders
   FOR EACH ROW
   EXECUTE FUNCTION public.validate_payment_status_transition();
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
 CREATE OR REPLACE FUNCTION public.validate_shipment_status_transition()
 RETURNS TRIGGER AS $$
@@ -720,7 +834,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER IF NOT EXISTS trg_validate_shipment_status_transition
+DO $opsps_baseline$ BEGIN
+CREATE TRIGGER trg_validate_shipment_status_transition
   BEFORE UPDATE ON public.shipments
   FOR EACH ROW
   EXECUTE FUNCTION public.validate_shipment_status_transition();
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
