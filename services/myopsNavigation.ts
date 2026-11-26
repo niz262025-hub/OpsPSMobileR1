@@ -3,12 +3,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { endMyopsAppSession } from './myopsAppAccess';
 
 const LIVE_PORTAL = 'https://www.myops.com.my/';
-const STAGING_PORTAL = 'https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-nizam1.vercel.app/';
+const STAGING_PORTALS = [
+  'https://southerndotcom-website-git-feat-myop-ca0019-mohd-syaiful-nizam1.vercel.app/',
+  'https://southerndotcom-website-git-staging-p-9ff219-mohd-syaiful-nizam1.vercel.app/',
+];
 
 export function myopsPortalUrl(): string {
   const configured = process.env.EXPO_PUBLIC_MYOPS_PORTAL_ORIGIN;
-  return configured === STAGING_PORTAL || configured === STAGING_PORTAL.slice(0, -1)
-    ? STAGING_PORTAL : LIVE_PORTAL;
+  return STAGING_PORTALS.find(portal => configured === portal || configured === portal.slice(0, -1)) ?? LIVE_PORTAL;
 }
 
 export function returnToMyops(): void {

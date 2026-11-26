@@ -105,7 +105,7 @@ try {
   await db.query('select opsps_provision_myops_identity_v3($1,$2,$3,$4,$5)',[labelsRef,labelUser,labelsProject,'Changed Owner','Changed Company']);
   assert.equal((await db.query('select b.name from businesses b join profiles p on p.business_id=b.id where p.auth_user_id=$1',[labelUser])).rows[0].name,'Central Company');
   assert.equal((await db.query('select full_name from profiles where auth_user_id=$1',[labelUser])).rows[0].full_name,'Central Owner');
-  await assert.rejects(db.query('select opsps_provision_myops_identity_v3($1,$2,$3,$4,$5)',[labelsRef,labelUser,productionProject,'Owner','Company']),/Unverified/);
+  await assert.rejects(db.query('select opsps_provision_myops_identity_v3($1,$2,$3,$4,$5)',[labelsRef,labelUser,productionProject,'Owner','Company']),/Verified staging company labels required/);
   await db.exec('reset role');
   console.log('PASS: central descriptive company labels, retry preserves tenant names, project-bound v3');
   // Existing installations must be refused before any policy/schema changes.
