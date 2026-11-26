@@ -75,10 +75,46 @@ jobs:
           SET LOCAL ROLE authenticated;
           SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true),set_config('request.jwt.claims','{"session_id":"30000000-0000-4000-8000-000000000001"}',true);
           DO $$ BEGIN IF (SELECT count(*) FROM public.trips) <> 1 OR EXISTS(SELECT 1 FROM public.trips WHERE name='Replay B') THEN RAISE EXCEPTION 'A to B tenant isolation failed'; END IF; END $$;
+          DO $ DECLARE n integer; BEGIN
+            BEGIN
+              INSERT INTO public.trips(business_id,name,destination,trip_date) VALUES ('20000000-0000-4000-8000-000000000002','Denied A','Test',current_date);
+              RAISE EXCEPTION 'A to B INSERT unexpectedly permitted';
+            EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+            UPDATE public.trips SET name='Unauthorized' WHERE name='Replay B'; GET DIAGNOSTICS n=ROW_COUNT;
+            IF n<>0 THEN RAISE EXCEPTION 'A to B UPDATE permitted'; END IF;
+            DELETE FROM public.trips WHERE name='Replay B'; GET DIAGNOSTICS n=ROW_COUNT;
+            IF n<>0 THEN RAISE EXCEPTION 'A to B DELETE permitted'; END IF;
+          END $;
           SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',true),set_config('request.jwt.claims','{"session_id":"30000000-0000-4000-8000-000000000002"}',true);
           DO $$ BEGIN IF (SELECT count(*) FROM public.trips) <> 1 OR EXISTS(SELECT 1 FROM public.trips WHERE name='Replay A') THEN RAISE EXCEPTION 'B to A tenant isolation failed'; END IF; END $$;
+          DO $ DECLARE n integer; BEGIN
+            BEGIN
+              INSERT INTO public.trips(business_id,name,destination,trip_date) VALUES ('20000000-0000-4000-8000-000000000001','Denied B','Test',current_date);
+              RAISE EXCEPTION 'B to A INSERT unexpectedly permitted';
+            EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+            UPDATE public.trips SET name='Unauthorized' WHERE name='Replay A'; GET DIAGNOSTICS n=ROW_COUNT;
+            IF n<>0 THEN RAISE EXCEPTION 'B to A UPDATE permitted'; END IF;
+            DELETE FROM public.trips WHERE name='Replay A'; GET DIAGNOSTICS n=ROW_COUNT;
+            IF n<>0 THEN RAISE EXCEPTION 'B to A DELETE permitted'; END IF;
+          END $;
           SELECT set_config('request.jwt.claims','{"session_id":"30000000-0000-4000-8000-000000000099"}',true);
           DO $$ BEGIN IF EXISTS(SELECT 1 FROM public.trips) THEN RAISE EXCEPTION 'Invalid session allowed'; END IF; END $$;
+          RESET ROLE;
+          UPDATE public.myops_app_sessions SET revoked_at=now() WHERE opsps_user_id='10000000-0000-4000-8000-000000000002';
+          SELECT set_config('request.jwt.claims','{"session_id":"30000000-0000-4000-8000-000000000002"}',true);
+          SET LOCAL ROLE authenticated;
+          DO $ BEGIN IF EXISTS(SELECT 1 FROM public.trips) THEN RAISE EXCEPTION 'Revoked session permitted'; END IF; END $;
+          RESET ROLE;
+          UPDATE public.myops_app_sessions SET revoked_at=NULL, valid_until=now()-interval '1 second' WHERE opsps_user_id='10000000-0000-4000-8000-000000000002';
+          SET LOCAL ROLE authenticated;
+          DO $ BEGIN IF EXISTS(SELECT 1 FROM public.trips) THEN RAISE EXCEPTION 'Expired session permitted'; END IF; END $;
+          RESET ROLE;
+          UPDATE public.myops_app_sessions SET valid_until=now()+interval '5 minutes' WHERE opsps_user_id='10000000-0000-4000-8000-000000000002';
+          DELETE FROM public.business_memberships WHERE user_id='10000000-0000-4000-8000-000000000002';
+          SET LOCAL ROLE authenticated;
+          DO $ BEGIN IF EXISTS(SELECT 1 FROM public.trips) THEN RAISE EXCEPTION 'Removed member permitted'; END IF; END $;
+          RESET ROLE;
+          DO $ BEGIN IF (SELECT count(*) FROM public.trips)<>2 OR EXISTS(SELECT 1 FROM public.trips WHERE name='Unauthorized') THEN RAISE EXCEPTION 'Unauthorized data changed'; END IF; END $;
           ROLLBACK;
           SQL
       - name: Cleanup disposable Supabase
