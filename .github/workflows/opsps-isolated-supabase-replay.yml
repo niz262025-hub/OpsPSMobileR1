@@ -44,11 +44,11 @@ jobs:
           DO $$
           DECLARE t text; f text; r text; p text;
           BEGIN
-            FOREACH t IN ARRAY ARRAY['businesses','profiles','business_memberships','trips','products','product_variants','orders','order_items','payments','shipments','inventory_movements','finance_transactions','subscriptions','admin_users','business_payment_profiles','myops_identity_links','myops_app_sessions'] LOOP
+            FOREACH t IN ARRAY ARRAY['businesses','profiles','business_memberships','trips','products','product_variants','orders','order_items','payments','shipments','inventory_movements','finance_transactions','subscriptions','admin_users','business_payment_profiles','myops_identity_links','myops_app_sessions','opsps_trial_bindings','opsps_trial_usage'] LOOP
               IF to_regclass('public.'||t) IS NULL THEN RAISE EXCEPTION 'Missing table %',t; END IF;
               IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=to_regclass('public.'||t)) THEN RAISE EXCEPTION 'RLS disabled %',t; END IF;
             END LOOP;
-            FOREACH t IN ARRAY ARRAY['myops_identity_links','myops_app_sessions'] LOOP
+            FOREACH t IN ARRAY ARRAY['myops_identity_links','myops_app_sessions','opsps_trial_bindings','opsps_trial_usage'] LOOP
               FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
                 FOREACH p IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE'] LOOP
                   IF has_table_privilege(r,'public.'||t,p) THEN RAISE EXCEPTION 'Private table grant % % %',r,t,p; END IF;
@@ -62,6 +62,10 @@ jobs:
             IF NOT has_function_privilege('service_role','public.opsps_provision_myops_identity_v3(text,uuid,text,text,text)','EXECUTE') THEN RAISE EXCEPTION 'Missing service provision grant'; END IF;
             IF EXISTS(SELECT 1 FROM storage.buckets WHERE id IN ('opsps-media','payment-proofs') AND public) OR (SELECT count(*) FROM storage.buckets WHERE id IN ('opsps-media','payment-proofs')) <> 2 THEN RAISE EXCEPTION 'Private buckets missing or public'; END IF;
             IF NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='opsps_myops_session_gate' AND permissive='RESTRICTIVE') OR NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='opsps_media_guard' AND permissive='RESTRICTIVE') THEN RAISE EXCEPTION 'Storage restrictive session guard missing'; END IF;
+            FOREACH t IN ARRAY ARRAY['opsps_media_guard','opsps_media_read','opsps_media_insert','opsps_media_delete','opsps_media_no_overwrite','opsps_media_no_anonymous','opsps_media_delete_guard','payment_proofs_customer_upload_own','payment_proofs_customer_select_own','payment_proofs_business_admin_select','payment_proofs_business_admin_update_delete','payment_proofs_business_admin_delete'] LOOP
+              IF NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname=t) THEN RAISE EXCEPTION 'Missing storage policy %',t; END IF;
+            END LOOP;
+            IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.myops_app_sessions'::regclass AND contype='f') THEN RAISE EXCEPTION 'Session identity foreign key missing'; END IF;
             IF to_regclass('public.myops_app_sessions_active_user_idx') IS NULL THEN RAISE EXCEPTION 'Active session index missing'; END IF;
             IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.orders'::regclass AND NOT tgisinternal) THEN RAISE EXCEPTION 'Order trigger missing'; END IF;
           END $$;
