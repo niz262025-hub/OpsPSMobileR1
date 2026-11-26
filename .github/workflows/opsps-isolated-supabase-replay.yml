@@ -1,5 +1,7 @@
 name: OpsPS isolated Supabase replay
 on:
+  pull_request:
+    branches: ['staging/opsps-replay-ci-base']
   push:
     branches: ['staging/production-baseline']
   workflow_dispatch:
