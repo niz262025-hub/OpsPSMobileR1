@@ -3,7 +3,8 @@
 -- authorization anchored to trusted business_memberships data instead of client
 -- supplied business_id values.
 
-CREATE POLICY IF NOT EXISTS "businesses_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "businesses_member_delete"
   ON public.businesses
   FOR DELETE
   USING (
@@ -15,8 +16,11 @@ CREATE POLICY IF NOT EXISTS "businesses_member_delete"
         AND bm.role = 'founder'
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "profiles_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "profiles_member_delete"
   ON public.profiles
   FOR DELETE
   USING (
@@ -29,8 +33,11 @@ CREATE POLICY IF NOT EXISTS "profiles_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "memberships_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "memberships_member_delete"
   ON public.business_memberships
   FOR DELETE
   USING (
@@ -43,8 +50,11 @@ CREATE POLICY IF NOT EXISTS "memberships_member_delete"
         AND bm.role = 'founder'
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "trips_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "trips_member_delete"
   ON public.trips
   FOR DELETE
   USING (
@@ -56,8 +66,11 @@ CREATE POLICY IF NOT EXISTS "trips_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "products_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "products_member_delete"
   ON public.products
   FOR DELETE
   USING (
@@ -69,8 +82,11 @@ CREATE POLICY IF NOT EXISTS "products_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "product_variants_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "product_variants_member_delete"
   ON public.product_variants
   FOR DELETE
   USING (
@@ -82,8 +98,11 @@ CREATE POLICY IF NOT EXISTS "product_variants_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "orders_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "orders_member_delete"
   ON public.orders
   FOR DELETE
   USING (
@@ -95,8 +114,11 @@ CREATE POLICY IF NOT EXISTS "orders_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "order_items_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "order_items_member_delete"
   ON public.order_items
   FOR DELETE
   USING (
@@ -108,8 +130,11 @@ CREATE POLICY IF NOT EXISTS "order_items_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "payments_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "payments_member_delete"
   ON public.payments
   FOR DELETE
   USING (
@@ -121,8 +146,11 @@ CREATE POLICY IF NOT EXISTS "payments_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "shipments_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "shipments_member_delete"
   ON public.shipments
   FOR DELETE
   USING (
@@ -134,8 +162,11 @@ CREATE POLICY IF NOT EXISTS "shipments_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "inventory_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "inventory_member_delete"
   ON public.inventory_movements
   FOR DELETE
   USING (
@@ -147,8 +178,11 @@ CREATE POLICY IF NOT EXISTS "inventory_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "finance_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "finance_member_delete"
   ON public.finance_transactions
   FOR DELETE
   USING (
@@ -160,8 +194,11 @@ CREATE POLICY IF NOT EXISTS "finance_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "subscriptions_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "subscriptions_member_delete"
   ON public.subscriptions
   FOR DELETE
   USING (
@@ -173,8 +210,11 @@ CREATE POLICY IF NOT EXISTS "subscriptions_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
 
-CREATE POLICY IF NOT EXISTS "admin_users_member_delete"
+DO $opsps_baseline$ BEGIN
+CREATE POLICY "admin_users_member_delete"
   ON public.admin_users
   FOR DELETE
   USING (
@@ -186,3 +226,5 @@ CREATE POLICY IF NOT EXISTS "admin_users_member_delete"
         AND bm.role IN ('founder', 'admin')
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $opsps_baseline$;
